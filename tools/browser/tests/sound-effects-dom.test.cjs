@@ -152,7 +152,11 @@ browserTest('saves, keeps two sounds across a reload, downloads them, and keeps 
         await probe.waitForFunction(expected => {
             const stored = JSON.parse(localStorage.getItem('mothership.sound-effects.library') || 'null');
             return JSON.stringify((stored?.sounds || []).map(sound => sound.name)) === JSON.stringify(expected);
-        }, ['Gold coin', 'Explosion'], { timeout: 15000 });
+        }, ['Gold coin', 'Explosion'], { timeout: 15000 }).catch(async error => {
+            const read = target => target.evaluate(() => localStorage.getItem('mothership.sound-effects.library')).catch(reason => `unreadable: ${reason.message}`);
+            console.log('# sound-effects probe diagnostics', JSON.stringify({ probeSaw: await read(probe), pageHas: await read(page), errors }));
+            throw error;
+        });
         await probe.close();
         // TODO 2026-11-18: remove this snapshot once CI shows why the reload sometimes finds no saved sounds.
         const snapshot = () => page.evaluate(() => {
