@@ -55,7 +55,7 @@ class HomeLandings
     }
 
     /**
-     * @return array{rows: list<array<string, mixed>>, cargo: list<array<string, mixed>>, docked: list<array<string, mixed>>, more: int, truncated: bool, holding: array{available: false, reason: string}}
+     * @return array{rows: list<array<string, mixed>>, cargo: list<array<string, mixed>>, moving: list<array<string, mixed>>, docked: list<array<string, mixed>>, more: int, truncated: bool, holding: array{available: false, reason: string}}
      */
     public function board(HomeSummaryContext $context): array
     {
@@ -84,6 +84,12 @@ class HomeLandings
             0,
             (int) config('dam-home.summary.cargo_rows'),
         );
+        // Uploads under way or failed stay in Cargo even when newer rows push them off the board.
+        $moving = array_slice(
+            array_values(array_filter($rows, fn (array $row): bool => in_array($row['status'], [self::STATUS_STOWING, self::STATUS_FAILED], true))),
+            0,
+            (int) config('dam-home.summary.cargo_rows'),
+        );
         $details = $this->assetDetails(assetIds: array_merge(...array_map(
             fn (array $row): array => $row['asset_ids'] ?? [],
             [...$shown, ...$cargo],
@@ -92,6 +98,7 @@ class HomeLandings
         return [
             'rows'      => array_map(fn (array $row): array => $this->present(row: $row, details: $details), $shown),
             'cargo'     => array_map(fn (array $row): array => $this->present(row: $row, details: $details), $cargo),
+            'moving'    => array_map(fn (array $row): array => $this->present(row: $row, details: $details), $moving),
             'docked'    => $this->docked(files: $scanned, producers: $producers, now: $context->now),
             'more'      => max(0, count($rows) - $boardRows),
             'truncated' => $files->count() > $scanLimit,

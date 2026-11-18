@@ -195,6 +195,21 @@ it('shows an upload being processed once every byte has arrived', function () {
         ->assertJsonPath('board.rows.0.phase', 'processing');
 });
 
+it('keeps every upload under way for Cargo when the board has no room for it', function () {
+    config(['dam-home.summary.board_rows' => 1]);
+
+    foreach (range(1, 2) as $upload) {
+        $tracker = homeTracker($this->homeAdmin, ['state' => UploadTracker::STATE_PROCESSING, 'total_files' => 1]);
+        homeChunkUpload($this->homeAdmin, ['upload_tracker_id' => $tracker->id, 'state' => ChunkUpload::STATE_RECEIVING, 'received_bytes' => 400]);
+    }
+
+    $board = $this->getJson('/admin/home/summary')->assertOk()->json('board');
+
+    expect($board['rows'])->toHaveCount(1)
+        ->and($board['more'])->toBe(1)
+        ->and(array_column($board['moving'], 'status'))->toBe(['stowing', 'stowing']);
+});
+
 it('drops an upload that has gone silent or belongs to someone else', function () {
     homeChunkUpload($this->homeAdmin, ['state' => ChunkUpload::STATE_RECEIVING, 'expires_at' => now()->subMinute()]);
     homeChunkUpload(Admin::factory()->create(), ['state' => ChunkUpload::STATE_RECEIVING]);

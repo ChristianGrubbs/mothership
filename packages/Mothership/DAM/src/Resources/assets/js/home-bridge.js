@@ -140,7 +140,7 @@
             if (lead.state === 'new') {
                 const files = lead.files, label = files === 1 ? 'new file came aboard' : 'new files came aboard';
                 const sentence = state.deckSentence({rows: summary.board.rows, files, size: size(lead.bytes)});
-                deck.innerHTML = `<div class="hm-fig" aria-hidden="true">${files.toLocaleString()}</div><div><h2><span class="hm-sr">${files.toLocaleString()} </span>${label}</h2><p>${esc(sentence)}</p></div><a class="hm-btn hm-act" href="${esc(data.library)}">Review ${plural(files, 'new file')}${icon('arrow')}</a>`;
+                deck.innerHTML = `<div class="hm-fig" aria-hidden="true">${files.toLocaleString()}</div><div><h2><span class="hm-sr">${files.toLocaleString()} </span>${label}</h2><p>${esc(sentence)}</p></div><a class="hm-btn hm-act" href="${esc(`${data.library}?scope=all`)}">Review ${plural(files, 'new file')}${icon('arrow')}</a>`;
                 return;
             }
             if (lead.state === 'first-run') {
@@ -210,7 +210,7 @@
         }
         function paintCargo() {
             const list = $('[data-cargo]'), section = $('[data-cargo-section]'), now = new Date(summary.generated_at);
-            const moving = summary.board.rows.filter(row => ['stowing', 'failed'].includes(row.status));
+            const moving = summary.board.moving || [];
             const cargo = summary.board.cargo || [], fresh = cargo.filter(row => row.status !== 'seen'), seen = cargo.filter(row => row.status === 'seen');
             section.hidden = !moving.length && !cargo.length;
             list.hidden = section.hidden;
@@ -372,10 +372,10 @@
             if (event.target.closest('[data-signal-show]')) loadSignal({reveal: true});
         }, {signal});
 
-        // Shelves show as many pictures as fit, so a change of width recounts the "+N" tile.
+        // Shelves size their tiles to the room they have, so any change of width redraws them.
         let lastFit = null;
         const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => {
-            const fit = [false, true].map(seen => Object.values(state.shelfFit(shelfSize(seen))).join('/')).join(':');
+            const fit = [false, true].map(seen => Object.values(shelfSize(seen)).join('/')).join(':');
             if (lastFit !== null && fit !== lastFit && summary?.board?.rows) paintCargo();
             lastFit = fit;
         }) : null;
