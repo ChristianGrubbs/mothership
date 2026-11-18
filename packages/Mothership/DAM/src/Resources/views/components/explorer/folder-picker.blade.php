@@ -5,17 +5,26 @@
 
         <div class="absolute inset-0 bg-black/50" @click="$emit('close')"></div>
 
-        <div class="relative bg-white dark:bg-cherry-900 rounded-xl shadow-2xl w-[360px] h-[520px] flex flex-col">
+        <div
+            ref="dialog"
+            tabindex="-1"
+            role="dialog"
+            aria-modal="true"
+            :aria-labelledby="'dam-folder-picker-title-' + tabId"
+            class="relative bg-white dark:bg-cherry-900 rounded-xl shadow-2xl w-[360px] max-w-[calc(100vw-2rem)] h-[520px] max-h-[calc(100dvh-2rem)] flex flex-col focus:outline-none"
+            @keydown.tab="trapFocus"
+            @keydown.esc="onEscape"
+        >
 
             <div class="flex items-center justify-between gap-3 px-5 py-4 border-b dark:border-cherry-800">
-                <h3 v-if="title" class="text-base font-semibold text-gray-800 dark:text-white truncate" v-text="title"></h3>
-                <h3 v-else class="text-base font-semibold text-gray-800 dark:text-white truncate">
+                <h3 v-if="title" :id="'dam-folder-picker-title-' + tabId" class="text-base font-semibold text-gray-800 dark:text-white truncate" v-text="title"></h3>
+                <h3 v-else :id="'dam-folder-picker-title-' + tabId" class="text-base font-semibold text-gray-800 dark:text-white truncate">
                     @lang('dam::app.admin.explorer.mass-actions.pick-dest')
                 </h3>
                 <div class="flex items-center gap-2 shrink-0">
 
                     <v-dam-explorer-view-toggle :model-value="viewMode" @update:model-value="setView"></v-dam-explorer-view-toggle>
-                    <button @click="$emit('close')" class="icon-cancel text-xl text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white transition"></button>
+                    <button type="button" aria-label="@lang('dam::app.admin.explorer.dialog.cancel')" @click="$emit('close')" class="icon-cancel text-xl text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white transition"></button>
                 </div>
             </div>
 
@@ -33,12 +42,13 @@
             <div class="px-3 py-2 border-b dark:border-cherry-800">
                 <div class="relative">
                     <input
+                        ref="search"
                         v-model="query"
                         type="text"
                         class="block w-full rounded-lg border dark:border-gray-500 bg-white dark:bg-cherry-900 py-1.5 pl-3 pr-10 text-sm leading-6 text-gray-600 dark:text-gray-300 transition hover:border-gray-400 dark:hover:border-gray-400 focus:border-gray-400 dark:focus:border-gray-400 outline-none"
                         placeholder="@lang('dam::app.admin.dam.index.directory.search.placeholder')"
                         autocomplete="off"
-                        @keydown.esc="query = ''"
+                        @keydown.esc="clearQuery"
                     />
                     <span v-if="! searchLoading" class="icon-search pointer-events-none absolute right-2.5 top-2 flex items-center text-2xl text-gray-400"></span>
                     <svg v-else class="animate-spin h-4 w-4 text-primary-600 absolute right-3 top-2.5 pointer-events-none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -227,7 +237,16 @@ app.component('v-dam-folder-picker', {
             creating:        { open: false, name: '', loading: false, error: '' },
 
             selectedChildId: null,
+            returnFocus:     null,
+            focusReady:      false,
         };
+    },
+
+    // Opening a folder or cancelling a new one removes the control that had focus. Focus then goes to the
+    // picker itself, so Tab and Escape still belong to it and never reach the page behind.
+    updated() {
+        const dialog = this.$refs.dialog;
+        if (this.open && this.focusReady && dialog && ! dialog.contains(document.activeElement)) dialog.focus();
     },
 
     computed: {
@@ -262,6 +281,17 @@ app.component('v-dam-folder-picker', {
             if (val) {
                 this.reset();
                 this.loadRoot();
+                // The menu that opened the picker puts focus back on its own button first, so this waits a frame
+                // and remembers that button as the place to return to.
+                this.$nextTick(() => requestAnimationFrame(() => {
+                    this.returnFocus = document.activeElement;
+                    this.$refs.search?.focus();
+                    this.focusReady = true;
+                }));
+            } else {
+                this.focusReady = false;
+                this.returnFocus?.focus?.();
+                this.returnFocus = null;
             }
         },
         query(val) {
@@ -278,6 +308,37 @@ app.component('v-dam-folder-picker', {
     },
 
     methods: {
+        // Escape first clears a typed search; with nothing typed it closes the picker.
+        clearQuery(event) {
+            if (! this.query) return;
+            this.query = '';
+            event.preventDefault();
+            event.stopPropagation();
+        },
+
+        onEscape(event) {
+            if (event.defaultPrevented) return;
+            // Consumed here, so the page behind does not also clear its selection.
+            event.preventDefault();
+            event.stopPropagation();
+            this.$emit('close');
+        },
+
+        trapFocus(event) {
+            const focusable = Array.from(this.$refs.dialog?.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])') ?? [])
+                .filter(el => el.getClientRects().length > 0);
+            if (! focusable.length) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (event.shiftKey && (document.activeElement === first || document.activeElement === this.$refs.dialog)) {
+                event.preventDefault();
+                last.focus();
+            } else if (! event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        },
+
         reset() {
             this.currentDirId   = null;
             this.breadcrumb     = [];

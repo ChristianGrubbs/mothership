@@ -39,7 +39,7 @@
 
             <div
                 v-for="dir in directories" :key="`d-${dir.id}`"
-                class="dam-list-row px-4 py-2.5 text-sm border-b border-gray-100 dark:border-cherry-800 items-center cursor-pointer hover:bg-primary-100 dark:hover:bg-primary-800/50 transition-colors"
+                class="dam-list-row min-h-[52px] px-4 py-3 text-sm border-b border-gray-100 dark:border-cherry-800 items-center cursor-pointer hover:bg-primary-100 dark:hover:bg-primary-800/50 transition-colors"
                 :class="{ 'ring-2 ring-inset ring-primary-400': dropTargetId === dir.id, 'bg-primary-50 dark:bg-primary-900/40': isSelectedById(dir.id, 'directory') }"
                 :data-dir-id="dir.id"
                 :data-marquee-key="'directory:' + dir.id"
@@ -107,7 +107,7 @@
 
             <div
                 v-for="asset in assets" :key="`a-${asset.id}`"
-                class="dam-list-row px-4 py-2.5 text-sm border-b border-gray-100 dark:border-cherry-800 items-center cursor-pointer hover:bg-primary-100 dark:hover:bg-primary-800/50 transition-colors"
+                class="dam-list-row min-h-[52px] px-4 py-3 text-sm border-b border-gray-100 dark:border-cherry-800 items-center cursor-pointer hover:bg-primary-100 dark:hover:bg-primary-800/50 transition-colors"
                 data-dam-asset-open
                 :data-dam-asset-id="asset.id"
                 :data-marquee-key="'asset:' + asset.id"
@@ -253,7 +253,6 @@
             :selection="selection"
             @close="closeCtx"
             @navigate="$emit('navigate', $event)"
-            @open-new-tab="$emit('open-new-tab', $event)"
             @bookmark="$emit('bookmark', $event)"
             @refresh="$emit('refresh')"
         ></v-dam-explorer-ctx>
@@ -264,7 +263,7 @@
 app.component('v-dam-explorer-list', {
     template: '#v-dam-explorer-list-template',
     mixins: [window.MothershipExplorerMarquee],
-    emits: ['navigate','open-new-tab','bookmark','sort-change','refresh','internal-drop','toggle-select','select-range','set-selection','empty-action','stack-drop'],
+    emits: ['navigate','bookmark','sort-change','refresh','internal-drop','toggle-select','select-range','set-selection','empty-action','stack-drop'],
 
     props: {
         directories:          { type: Array, default: () => [] },

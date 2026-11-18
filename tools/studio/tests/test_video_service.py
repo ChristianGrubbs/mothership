@@ -24,6 +24,7 @@ class VideoServiceTests(unittest.TestCase):
             state=root / "state",
             host="127.0.0.1",
             port=18769,
+            downie=root / "bin" / "downie",
             ytdlp=root / "bin" / "yt-dlp",
             ffmpeg_dir=root / "bin",
             max_bytes=2 * 1024 * 1024 * 1024,
@@ -68,7 +69,7 @@ class VideoServiceTests(unittest.TestCase):
             self.write_source(root)
             config = self.config(root)
             (root / "bin").mkdir()
-            for present, missing in (((), "yt-dlp"), (("yt-dlp",), "ffmpeg")):
+            for present, missing in (((), "downie"), (("downie",), "yt-dlp"), (("yt-dlp",), "ffmpeg")):
                 for name in present:
                     (root / "bin" / name).touch()
                 with self.subTest(missing=missing), self.assertRaises(video_service.ServiceFailure) as raised:
@@ -81,12 +82,13 @@ class VideoServiceTests(unittest.TestCase):
             self.write_source(root)
             config = self.config(root, host="192.168.164.1")
             (root / "bin").mkdir()
-            for name in ("yt-dlp", "ffmpeg"):
+            for name in ("downie", "yt-dlp", "ffmpeg"):
                 (root / "bin" / name).touch()
             popen = self.start(config)
             environment = popen.call_args.kwargs["env"]
             self.assertEqual(environment["VIDEO_DATA"], str(root / "state" / "data"))
             self.assertEqual((environment["VIDEO_HOST"], environment["VIDEO_PORT"]), ("192.168.164.1", "18769"))
+            self.assertEqual(environment["VIDEO_DOWNIE"], str(root / "bin" / "downie"))
             self.assertEqual(environment["VIDEO_YTDLP"], str(root / "bin" / "yt-dlp"))
             # launchd's PATH has neither ffmpeg nor a JavaScript runtime; the manager puts both in reach.
             self.assertEqual(environment["PATH"].split(":")[:2], [str(root / "bin"), "/opt/homebrew/bin"])

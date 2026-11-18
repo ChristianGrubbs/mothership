@@ -4,6 +4,7 @@ import http.client
 import importlib.util
 import ipaddress
 import json
+import os
 import pathlib
 import shutil
 import socket
@@ -24,60 +25,114 @@ assert SPEC.loader is not None
 sys.modules[SPEC.name] = server_module
 SPEC.loader.exec_module(server_module)
 
+# Two-stream downloads that pause partway, shared by the stand-ins below: (the streams the look-up names, the lines
+# downie prints). The lines have the shape downie 0.2.0 printed in real downloads. A video stream, then its sound.
+SCENES = '''
+VIDEO, SOUND = "[download] Destination: clip.f137.mp4", "[download] Destination: clip.f140.m4a"
+def at(percent, size):
+    return "[download] {:5.1f}% of {}.00B at 10.00B/s ETA 00:15".format(percent, size)
+TWO = [VIDEO, at(50, 300), at(100, 300), SOUND, at(50, 100)]
+SCENES = {
+    "/parts": ([{"format_id": "137", "filesize": 300}, {"format_id": "140", "filesize": 100}], TWO),
+    "/mixed": ([{"format_id": "137", "filesize_approx": 300}, {"format_id": "140", "filesize": 100}], TWO),
+    "/unsized": ([{"format_id": "137"}, {"format_id": "140"}], TWO),
+    "/halfsized": ([{"format_id": "137"}, {"format_id": "140", "filesize": 100}], TWO),
+    # The sound's first report is already past the video's last count: only its Destination line marks the new stream.
+    "/jump": ([{"format_id": "137", "filesize": 100}, {"format_id": "140", "filesize": 1000}], [VIDEO, at(100, 100), SOUND, at(20, 1000)]),
+    # downie starts the whole download again after a failed attempt: it is still the first stream.
+    "/reset": ([{"format_id": "137", "filesize": 200}, {"format_id": "140", "filesize": 100}],
+               [VIDEO, at(75, 200), "Download attempt 1 failed: ERROR: connection reset", "Retrying in 1 seconds...", VIDEO, at(50, 200)]),
+    # The look-up named no streams: each Destination line still marks the next one.
+    "/anon": (None, [VIDEO, at(100, 300), SOUND, at(50, 100)]),
+}
+scene = next((SCENES[key] for key in SCENES if key in url), None)
+'''
+
 # Stands in for yt-dlp: the URL's path picks the behaviour, so a test never touches the network.
 FAKE_YTDLP = '''#!/usr/bin/env python3
-import json, os, pathlib, sys, time
+import json, pathlib, sys
 args = sys.argv[1:]
 if args == ["--version"]:
     print("2026.01.01"); sys.exit(0)
 url = args[-1]
+''' + SCENES + '''
 if "-J" in args:
     if "/missing" in url:
         sys.stderr.write("ERROR: [generic] Unable to download webpage: HTTP Error 404: Not Found (caused by https://example.test/x)\\n"); sys.exit(1)
-    print(json.dumps({"title": "Homecoming highlights", "uploader": "Example Channel", "duration": 75, "extractor_key": "Example", "formats": [
+    if "/channel" in url:
+        print(json.dumps({"_type": "playlist", "entries": []})); sys.exit(0)
+    info = {"title": "x" * 300 if "/longname" in url else "Homecoming highlights", "uploader": "Example Channel", "duration": 75,
+            "extractor_key": "Example", "formats": [
         {"format_id": "a", "acodec": "mp4a", "vcodec": "none", "abr": 128, "filesize": 1000},
         {"format_id": "v1", "vcodec": "avc1", "acodec": "none", "height": 1080, "ext": "mp4", "tbr": 4000, "filesize": 9000},
         {"format_id": "v2", "vcodec": "avc1", "acodec": "mp4a", "height": 360, "ext": "mp4", "tbr": 700, "filesize": 3000},
-    ]})); sys.exit(0)
+    ]}
+    if scene and scene[0]:
+        info["requested_formats"] = scene[0]
+    if "/declared" in url:
+        info["filesize"] = 5000
+    print(json.dumps(info)); sys.exit(0)
+# Only a title too long for downie comes here: yt-dlp shortens it, as its -o template asks.
 folder = pathlib.Path(args[args.index("-o") + 1]).parent
+(folder / ("x" * 100 + ".mp4")).write_bytes(b"0123456789" * 10)
+'''
+
+# Stands in for the downie command. Its exit code is 0 whatever happens, as the real one's is.
+FAKE_DOWNIE = '''#!/usr/bin/env python3
+import os, pathlib, sys, time
+args = sys.argv[1:]
+if args[-1] == "--help":
+    sys.exit(0)
+url = args[-1]
+folder = pathlib.Path(args[args.index("-o") + 1])
+def wait_for_the_gate():
+    gate = pathlib.Path(os.environ["FAKE_GATE"])
+    while not gate.exists():
+        time.sleep(0.05)
+''' + SCENES + '''
 if "/fail" in url:
-    sys.stderr.write("WARNING: noise\\nERROR: [generic] example: Video unavailable\\n"); sys.exit(1)
+    print("Download attempt 1 failed: ERROR: [generic] example: Video unavailable", flush=True)
+    print("Download failed: ERROR: [generic] example: Video unavailable", flush=True); sys.exit(0)
+if "/silent" in url:
+    sys.exit(0)
+if "/unreported" in url:
+    (folder / "Clip: one.mp4").write_bytes(b"0123456789")
+    sys.exit(0)
+if "/nofile" in url:
+    print("Download successful: {}".format(folder / "Clip: one.mp4"), flush=True); sys.exit(0)
+if "/empty" in url:
+    (folder / "clip.f137.mp4").write_bytes(b"0123456789")  # a stream left behind must not pass for the result
+    (folder / "Clip: one.mp4").write_bytes(b"")
+    print("Download successful: {}".format(folder / "Clip: one.mp4"), flush=True); sys.exit(0)
+if "/many" in url:
+    print("[download] Downloading item 1 of 3", flush=True)
+    wait_for_the_gate()
+if "/huge" in url:
+    (folder / "clip.mp4.part").write_bytes(b"0" * 5000)
+    wait_for_the_gate()
 if "/slow" in url:
-    gate = pathlib.Path(os.environ["FAKE_GATE"])
-    while not gate.exists():
-        time.sleep(0.05)
-# Two-stream downloads that pause partway: (plan line, progress lines). The plan lines have the shape yt-dlp
-# 2026.10.26 itself prints for each mix of sizes (taken from its template evaluator): a stream with no size keeps
-# its record. A video stream (format 137), then its sound (format 140).
-TWO = ["150|300|NA|10|15|137", "300|300|NA|10|0|137", "50|100|NA|10|5|140"]
-SCENES = {
-    "/parts": ('[{"format_id": "137", "filesize": 300}, {"format_id": "140", "filesize": 100}]|400', TWO),
-    "/mixed": ('[{"format_id": "137", "filesize_approx": 300}, {"format_id": "140", "filesize": 100}]|NA', TWO),
-    "/unsized": ('[{"format_id": "137"}, {"format_id": "140"}]|NA', TWO),
-    "/halfsized": ('[{"format_id": "137"}, {"format_id": "140", "filesize": 100}]|NA', TWO),
-    # The sound's first report is already past the video's last count: only the format id marks the new stream.
-    "/jump": ('[{"format_id": "137", "filesize": 100}, {"format_id": "140", "filesize": 1000}]|1100',
-              ["100|100|NA|10|0|137", "200|1000|NA|10|80|140"]),
-    # The count starts over inside one stream (a retry): it is still the same stream.
-    "/reset": ('[{"format_id": "137", "filesize": 300}, {"format_id": "140", "filesize": 100}]|400',
-               ["150|300|NA|10|15|137", "100|300|NA|10|20|137"]),
-    # No plan and no format ids: the count starting over is the only sign of a second stream.
-    "/anon": ('[]|NA', ["300|300|NA|10|0|NA", "50|100|NA|10|5|NA"]),
-}
-scene = next((SCENES[key] for key in SCENES if key in url), None)
+    wait_for_the_gate()
 if scene:
-    print("MSPLAN|" + scene[0], flush=True)
-    for progress in scene[1]:
-        print("MSVID|" + progress, flush=True)
-    gate = pathlib.Path(os.environ["FAKE_GATE"])
-    while not gate.exists():
-        time.sleep(0.05)
+    for line in scene[1]:
+        print(line, flush=True)
+    wait_for_the_gate()
 else:
-    print("MSVID|50|100|NA|10|5|18", flush=True)
+    print("[download]  50.0% of 100.00B at 10.00B/s ETA 00:05", flush=True)
 print("[Merger] Merging formats", flush=True)
-target = folder / ("Clip: one.mp3" if "-x" in args else "Clip: one.mp4")
-target.write_bytes(b"0123456789" * 10)
-print(str(target), flush=True)
+sound = args[args.index("-f") + 1] == "ba/b"
+name = "badsound.m4a" if "/badsound" in url else "Clip: one.m4a" if sound else "Clip: one.mp4"
+(folder / name).write_bytes(b"0123456789" * 10)
+print("Download successful: {}".format(folder / name), flush=True)
+if "/exit3" in url:
+    sys.exit(3)
+'''
+
+# Stands in for ffmpeg: writes the file named last, and cannot read the sound of one test's download.
+FAKE_FFMPEG = '''#!/usr/bin/env python3
+import pathlib, sys
+if any("badsound" in argument for argument in sys.argv):
+    sys.exit(1)
+pathlib.Path(sys.argv[-1]).write_bytes(b"0123456789" * 10)
 '''
 
 
@@ -95,16 +150,20 @@ class VideoServerCase(unittest.TestCase):
     def setUp(self):
         self.root = pathlib.Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.fake = self.root / "yt-dlp"
-        self.fake.write_text(FAKE_YTDLP)
-        self.fake.chmod(self.fake.stat().st_mode | stat.S_IEXEC)
+        self.fake_downie = self.root / "downie"
+        self.tools = self.root / "ffmpeg-folder"
+        self.tools.mkdir()
+        for path, source in ((self.fake, FAKE_YTDLP), (self.fake_downie, FAKE_DOWNIE), (self.tools / "ffmpeg", FAKE_FFMPEG)):
+            path.write_text(source)
+            path.chmod(path.stat().st_mode | stat.S_IEXEC)
         self.gate = self.root / "gate"
         self.enterContext(mock.patch.dict("os.environ", {"FAKE_GATE": str(self.gate)}))
 
     def config(self, **overrides):
         environ = {
             "VIDEO_HOST": "127.0.0.1", "VIDEO_PORT": "0", "VIDEO_DATA": str(self.root / "data"),
-            "VIDEO_YTDLP": str(self.fake), "VIDEO_ALLOW_PRIVATE": "1", "VIDEO_MIN_FREE_BYTES": "0",
-            "VIDEO_OPTIMIZER_API": "off",
+            "VIDEO_DOWNIE": str(self.fake_downie), "VIDEO_YTDLP": str(self.fake), "VIDEO_FFMPEG_DIR": str(self.tools),
+            "VIDEO_ALLOW_PRIVATE": "1", "VIDEO_MIN_FREE_BYTES": "0", "VIDEO_OPTIMIZER_API": "off",
         }
         environ.update({key: str(value) for key, value in overrides.items()})
         return server_module.ServerConfig(environ)
@@ -151,12 +210,31 @@ class LinkRules(VideoServerCase):
         with self.assertRaises(server_module.BadRequest):
             server_module.validate_url("http://studio.internal/x", resolver=private)
 
-    def test_choice_ids_map_to_fixed_arguments(self):
-        self.assertIn("bv*[height=720]+ba/b[height=720]/bv*[height<=720]+ba/b", server_module.choice_args("v720"))
-        self.assertIn("mp3", server_module.choice_args("mp3"))
+    def test_choice_ids_map_to_fixed_formats(self):
+        steps = server_module.choice_format("v720").split("/")
+        self.assertEqual(steps[0], "bv*[height=720][vcodec^=avc]+ba[ext=m4a]")  # H.264 with AAC plays on every device
+        self.assertLess(steps.index("bv*[height=720][vcodec!^=av01]+ba"), steps.index("bv*[height=720]+ba"))
+        self.assertEqual(steps[-2:], ["bv*[height<=720]+ba", "b"])  # a site without that exact size still answers
+        self.assertEqual(server_module.choice_format("best").split("/")[0], "bv*[vcodec^=avc]+ba[ext=m4a]")
+        self.assertEqual(server_module.choice_format("mp3"), "ba/b")
         for bad in ("", "v", "v720; rm", "--exec", "best "):
             with self.assertRaises(server_module.BadRequest):
-                server_module.choice_args(bad)
+                server_module.choice_format(bad)
+
+    def test_a_video_link_inside_a_playlist_is_narrowed_to_the_one_video(self):
+        config = self.config()
+        page = {"webpage_url": "https://example.test/watch?v=1"}
+        self.assertEqual(server_module.single_video_url(config, {"url": "https://example.test/watch?v=1&list=2"}, page), page["webpage_url"])
+        # Any other link stays as pasted: a private share link carries its token in the address.
+        self.assertEqual(server_module.single_video_url(config, {"url": "https://example.test/v/1?token=a"}, page), "https://example.test/v/1?token=a")
+        self.assertEqual(server_module.single_video_url(config, {"url": "https://example.test/w?list=2"}, {}), "https://example.test/w?list=2")
+
+    def test_a_title_is_too_long_when_its_file_name_would_be(self):
+        self.assertFalse(server_module.title_too_long({"title": "x" * 200}))
+        self.assertTrue(server_module.title_too_long({"title": "x" * 201}))
+        self.assertTrue(server_module.title_too_long({"title": "é" * 101}))  # counted in bytes, not characters
+        self.assertTrue(server_module.title_too_long({"title": "x" * 190 + ":" * 6}))  # each becomes a three-byte lookalike
+        self.assertFalse(server_module.title_too_long({}))
 
     def test_ranges(self):
         self.assertIsNone(server_module.parse_range(None, 100))
@@ -298,12 +376,16 @@ class OverHttp(VideoServerCase):
     def test_the_downloader_is_sent_through_the_proxy(self):
         _, store = self.serve()
         self.assertTrue(store.config.proxy.startswith("http://127.0.0.1:"))
-        command = server_module.download_command(store.config, {"choice": "best", "url": "https://example.test/v"}, self.root)
-        self.assertEqual(command[command.index("--proxy") + 1], store.config.proxy)
-        self.assertEqual(command[-2:], ["--", "https://example.test/v"])
+        job, url = {"choice": "best", "url": "https://example.test/v"}, "https://example.test/v"
+        command = server_module.download_command(store.config, job, self.root)
+        self.assertEqual(command[:3], [str(self.fake_downie), "video", "download"])
+        for each in (command, server_module.lookup_command(store.config, job), server_module.long_title_command(store.config, job, self.root, url)):
+            self.assertEqual(each[each.index("--proxy") + 1], store.config.proxy)
+            self.assertEqual(each[-2:], ["--", url])  # a link can never be read as an option
         environment = server_module.downloader_environment(store.config)
         self.assertEqual({environment[name] for name in ("http_proxy", "https_proxy", "HTTPS_PROXY")}, {store.config.proxy})
         self.assertEqual(environment["no_proxy"], "")
+        self.assertEqual(environment["PYTHONUNBUFFERED"], "1")  # or downie's progress arrives long after the fact
 
     def test_stop_waits_for_a_downloader_that_was_starting_and_kills_it(self):
         store = self.store()
@@ -378,7 +460,9 @@ class OverHttp(VideoServerCase):
         self.assertEqual(run("ffprobe", "-v", "verbose", "http://127.0.0.1:9/x.ts")[:2], ["-protocol_whitelist", local])
         self.assertEqual(run("ffprobe", "-bsfs"), ["-bsfs"])
         _, store = self.serve(VIDEO_FFMPEG_DIR=tools)
-        command = server_module.download_command(store.config, {"choice": "best", "url": "https://example.test/v"}, self.root)
+        # downie has no ffmpeg option: it runs the first ffmpeg on PATH, which has to be the stand-in.
+        self.assertEqual(server_module.downloader_environment(store.config)["PATH"].split(":")[0], str(store.config.data / "bin"))
+        command = server_module.long_title_command(store.config, {"choice": "best"}, self.root, "https://example.test/v")
         self.assertEqual(command[command.index("--ffmpeg-location") + 1], str(store.config.data / "bin"))
 
     @unittest.skipUnless(pathlib.Path(server_module.SANDBOX_EXEC).exists(), "needs the macOS sandbox")
@@ -452,6 +536,60 @@ class OverHttp(VideoServerCase):
         # Cancelling the stuck download frees the single worker for the next person.
         self.assertEqual(request(port, "DELETE", "/jobs/{}?owner=7".format(slow))[0].status, 200)
         self.assertEqual(self.wait_for(port, 9, waiting, ("done", "failed"))["filename"], "Clip one.mp3")
+        self.assertEqual([p.suffix for p in (store.config.files / waiting).iterdir()], [".mp3"])  # the source sound is gone
+
+    def outcome(self, path, choice="v360", **overrides):
+        port, store = self.serve(**overrides)
+        _, data = request(port, "POST", "/jobs", {"owner": 7, "url": "https://example.test/" + path, "choice": choice})
+        job = self.wait_for(port, 7, json.loads(data)["job"]["id"], ("done", "failed"))
+        return job, store.config.files / job["id"]
+
+    def test_success_is_the_printed_result_and_a_file_with_something_in_it_never_the_exit_code(self):
+        # Each of these exits 0, as the real command does whatever happened.
+        for path in ("silent", "unreported", "nofile", "empty"):
+            with self.subTest(path=path):
+                job, folder = self.outcome(path, VIDEO_DATA=self.root / path)
+                self.assertEqual((job["status"], job["error"]), ("failed", "The video could not be downloaded."))
+                self.assertFalse(folder.exists())
+        job, _ = self.outcome("exit3", VIDEO_DATA=self.root / "exit3")  # the result was printed and the file is whole
+        self.assertEqual((job["status"], job["size"]), ("done", 100))
+
+    def test_a_failed_look_up_says_why_before_anything_is_fetched(self):
+        job, _ = self.outcome("missing")
+        self.assertEqual(job["status"], "failed")
+        self.assertIn("HTTP Error 404", job["error"])
+        self.assertNotIn("https://", job["error"])
+
+    def test_a_list_of_videos_is_refused_at_the_look_up_and_while_downloading(self):
+        for path in ("channel", "many"):
+            with self.subTest(path=path):
+                job, folder = self.outcome(path, VIDEO_DATA=self.root / path)
+                self.assertEqual((job["status"], job["error"]), ("failed", "That link is a list of videos. Paste the link to one video."))
+                self.assertFalse(folder.exists())
+
+    def test_a_download_is_stopped_when_its_bytes_on_disk_pass_the_limit(self):
+        with mock.patch.object(server_module, "SIZE_WATCH_SECONDS", 0.05):
+            job, folder = self.outcome("huge", VIDEO_MAX_BYTES=1000)
+        self.assertEqual((job["status"], job["error"]), ("failed", "That video is larger than 1000 B. Pick a smaller size."))
+        self.assertFalse(folder.exists())
+
+    def test_a_video_declared_over_the_limit_is_refused_before_it_starts(self):
+        job, _ = self.outcome("declared", VIDEO_MAX_BYTES=1000)
+        self.assertEqual((job["status"], job["error"]), ("failed", "That video is larger than 1000 B. Pick a smaller size."))
+
+    def test_a_title_too_long_for_downie_is_saved_with_a_shortened_name(self):
+        job, _ = self.outcome("longname")
+        self.assertEqual((job["status"], job["filename"]), ("done", "x" * 100 + ".mp4"))
+
+    def test_sound_that_cannot_be_converted_fails_and_leaves_nothing_behind(self):
+        job, folder = self.outcome("badsound", choice="mp3")
+        self.assertEqual((job["status"], job["error"]), ("failed", "The sound could not be converted to MP3."))
+        self.assertFalse(folder.exists())
+
+    def test_health_fails_when_the_downie_command_cannot_run(self):
+        port, _ = self.serve(VIDEO_DOWNIE=self.root / "not-installed")
+        response, data = request(port, "GET", "/health")
+        self.assertEqual((response.status, json.loads(data)["ok"], json.loads(data)["downie"]), (503, False, False))
 
     def test_bad_requests_are_refused(self):
         port, _ = self.serve()
@@ -461,7 +599,7 @@ class OverHttp(VideoServerCase):
         self.assertEqual(request(port, "GET", "/jobs")[0].status, 400)
         self.assertEqual(request(port, "GET", "/files/not-an-id?owner=7")[0].status, 404)
         health = json.loads(request(port, "GET", "/health")[1])
-        self.assertEqual((health["ok"], health["ytdlp"]), (True, "2026.01.01"))
+        self.assertEqual((health["ok"], health["downie"], health["ytdlp"]), (True, True, "2026.01.01"))
 
 
 class Progress(VideoServerCase):
@@ -486,20 +624,32 @@ class Progress(VideoServerCase):
         self.assertEqual((done["status"], done["percent"], done["part"], done["parts"]), ("done", 100, None, None))
         return job["percent"], job["downloaded"], job["total"], job["eta"], job["part"], job["parts"]
 
-    def test_the_plan_names_each_stream_or_admits_it_cannot(self):
-        plan = server_module.parse_plan
-        # The first line is from a real download; the rest are what yt-dlp's template evaluator prints for each mix.
-        self.assertEqual(plan('MSPLAN|[{"format_id": "394", "filesize": 4639733, "filesize_approx": 4639708}, '
-                              '{"format_id": "258", "filesize": 30767611, "filesize_approx": 30767602}]|35407344'),
-                         [4639733, 30767611])
-        self.assertEqual(plan('MSPLAN|[{"format_id": "137", "filesize_approx": 300}, {"format_id": "140", "filesize": 100}]|NA'), [300, 100])
-        self.assertEqual(plan('MSPLAN|[{"format_id": "137"}, {"format_id": "140", "filesize": 100}]|NA'), [None, 100])
-        self.assertEqual(plan('MSPLAN|[{"format_id": "137"}, {"format_id": "140"}]|NA'), [None, None])
-        self.assertEqual(plan('MSPLAN|[{"format_id": "a|b", "filesize": 7}]|NA'), [7])
-        self.assertEqual(plan("MSPLAN|[]|28526904"), [28526904])  # one file, as yt-dlp prints it
-        self.assertEqual(plan("MSPLAN|NA|28526904"), [28526904])
-        self.assertEqual(plan("MSPLAN|[]|NA"), [])
-        self.assertEqual(plan("MSPLAN|garbage"), [])
+    def test_the_look_up_names_each_stream_or_admits_it_cannot(self):
+        plan = server_module.plan_sizes
+        self.assertEqual(plan({"requested_formats": [{"filesize": 4639733, "filesize_approx": 4639708}, {"filesize": 30767611}]}), [4639733, 30767611])
+        self.assertEqual(plan({"requested_formats": [{"filesize_approx": 300}, {"filesize": 100}]}), [300, 100])
+        self.assertEqual(plan({"requested_formats": [{}, {"filesize": 100}]}), [None, 100])
+        self.assertEqual(plan({"requested_formats": [{}, {}]}), [None, None])
+        self.assertEqual(plan({"filesize_approx": 28526904}), [28526904])  # one file
+        self.assertEqual(plan({"requested_formats": [], "filesize": 7}), [7])
+        self.assertEqual(plan({}), [])
+
+    def test_progress_lines_are_read_as_downie_prints_them(self):
+        read = server_module.parse_progress
+        self.assertEqual(read("[download]  50.0% of  300.00B at   10.00B/s ETA 00:15"), (150.0, 300.0, 10.0, 15.0))
+        self.assertEqual(read("[download]  25.0% of ~   4.00KiB at    1.00KiB/s ETA 01:02:03"), (1024.0, 4096.0, 1024.0, 3723.0))
+        self.assertEqual(read("[download]   0.0% of    1.00MiB at  Unknown B/s ETA Unknown"), (0.0, 1048576.0, None, None))
+        self.assertEqual(read("[download] 100% of  300.00B in 00:00:00 at 1.00KiB/s"), (300.0, 300.0, 1024.0, None))
+        self.assertEqual(read("[download]    2.00KiB at    1.00KiB/s (00:00:02)"), (2048.0, None, 1024.0, None))
+        for other in ("[download] Destination: 50.0% of 300.00B.mp4", "Download progress: 10.3%", "[Merger] Merging formats"):
+            self.assertIsNone(read(other))
+
+    def test_output_is_split_where_progress_rewrites_its_own_line(self):
+        reader, writer = os.pipe()
+        os.write(writer, b"\r\x1b[K[download]  10.0% of 1.00B\r\x1b[K[download]  20.0% of 1.00B\nlast")
+        os.close(writer)
+        with os.fdopen(reader, "rb") as stream:
+            self.assertEqual(list(server_module.output_lines(stream)), ["[download]  10.0% of 1.00B", "[download]  20.0% of 1.00B", "last"])
 
     def test_progress_is_measured_against_the_whole_file_when_every_stream_has_a_size(self):
         # 300 bytes of video are in and 50 of the 100 bytes of sound: 350 of 400, not "50%" of the sound alone.
@@ -518,15 +668,15 @@ class Progress(VideoServerCase):
         percent, downloaded, total, _eta, part, parts = self.measure("halfsized", 50)
         self.assertEqual((percent, downloaded, total, part, parts), (50, 50, 100, 2, 2))
 
-    def test_a_new_stream_is_told_by_its_format_not_by_the_count_going_down(self):
+    def test_a_new_stream_is_told_by_its_destination_line_not_by_the_count_going_down(self):
         # The sound's first report (200) is past the video's last count (100): 300 of 1100, not 200 of 2000.
         self.assertEqual(self.measure("jump", 300), (27, 300, 1100, 80.0, None, None))
 
-    def test_a_count_that_starts_over_inside_one_stream_is_not_a_new_stream(self):
-        # A retry: still stream one, 100 of 400.
-        self.assertEqual(self.measure("reset", 100), (25, 100, 400, 30.0, None, None))
+    def test_a_download_that_starts_over_is_back_on_its_first_stream(self):
+        # downie's retry announces the first stream again: still stream one, 100 of 300.
+        self.assertEqual(self.measure("reset", 100), (33, 100, 300, 20.0, None, None))
 
-    def test_with_no_plan_and_no_format_the_count_starting_over_marks_the_second_stream(self):
+    def test_with_no_sizes_from_the_look_up_each_destination_line_marks_the_next_stream(self):
         percent, downloaded, total, _eta, part, parts = self.measure("anon", 50)
         self.assertEqual((percent, downloaded, total, part, parts), (50, 50, 100, 2, None))
 
@@ -548,10 +698,11 @@ class LoopbackStreams(BaseHTTPRequestHandler):
 
 @unittest.skipUnless(shutil.which("yt-dlp"), "yt-dlp is not installed here")
 class RealDownloader(unittest.TestCase):
-    """The plan and progress templates are an agreement with yt-dlp, and the stand-in above cannot break it. So where
-    yt-dlp is installed it evaluates both itself, on a made-up video served over loopback: no network, no ffmpeg."""
+    """The look-up's stream sizes and the wording of the progress lines are an agreement with yt-dlp (downie prints
+    yt-dlp's own lines), and the stand-ins above cannot break it. So where yt-dlp is installed it produces both itself,
+    on a made-up video served over loopback: no network, no ffmpeg."""
 
-    def lines(self, video_sizes):
+    def run_yt_dlp(self, video_sizes, *options):
         httpd = ThreadingHTTPServer(("127.0.0.1", 0), LoopbackStreams)
         self.addCleanup(httpd.server_close)
         self.addCleanup(httpd.shutdown)
@@ -564,29 +715,30 @@ class RealDownloader(unittest.TestCase):
                 {"format_id": "v", "url": base + "/v.mp4", "ext": "mp4", "vcodec": "avc1", "acodec": "none", "height": 480, "protocol": "http", **video_sizes},
                 {"format_id": "a", "url": base + "/a.m4a", "ext": "m4a", "vcodec": "none", "acodec": "mp4a", "protocol": "http", "filesize": 9000},
             ]}))
-        # The service's own command line, less the link and the limits; a missing ffmpeg leaves the streams unmerged.
+        # A missing ffmpeg leaves the streams unmerged.
         done = subprocess.run([
             shutil.which("yt-dlp"), "--ignore-config", "--load-info-json", str(folder / "info.json"), "-f", "bv*+ba/b",
-            "--no-warnings", "--newline", "--no-quiet", "--progress", "--progress-template", server_module.PROGRESS_TEMPLATE,
-            "--print", server_module.PLAN_TEMPLATE, "--no-simulate", "--ffmpeg-location", str(folder / "none"),
-            "-o", str(folder / "out.%(ext)s"),
+            "--no-warnings", "--ffmpeg-location", str(folder / "none"), "-o", str(folder / "out.%(ext)s"), *options,
         ], capture_output=True, text=True, timeout=60)
         self.assertEqual(done.returncode, 0, done.stderr)
-        return done.stdout.splitlines()
+        return done.stdout
 
-    def plan(self, lines):
-        return server_module.parse_plan(next(line for line in lines if line.startswith(server_module.PLAN_PREFIX)))
+    def plan(self, video_sizes):
+        return server_module.plan_sizes(json.loads(self.run_yt_dlp(video_sizes, "-J")))
 
-    def test_yt_dlp_prints_one_size_per_stream_and_names_the_stream_in_every_progress_line(self):
-        lines = self.lines({"filesize_approx": 40000})  # the picture has only an estimate, the sound an exact size
-        self.assertEqual(self.plan(lines), [40000, 9000])
-        progress = [line[len(server_module.PROGRESS_PREFIX):].split("|", 5) for line in lines if line.startswith(server_module.PROGRESS_PREFIX)]
-        self.assertTrue(progress)
-        self.assertEqual({len(fields) for fields in progress}, {6})
-        self.assertEqual(list(dict.fromkeys(fields[5] for fields in progress)), ["v", "a"])
+    def test_the_look_up_gives_one_size_per_stream(self):
+        self.assertEqual(self.plan({"filesize_approx": 40000}), [40000, 9000])  # an estimate for the picture, exact for the sound
 
-    def test_a_stream_with_no_size_keeps_its_place_in_what_yt_dlp_prints(self):
-        self.assertEqual(self.plan(self.lines({})), [None, 9000])
+    def test_a_stream_with_no_size_keeps_its_place_in_the_look_up(self):
+        self.assertEqual(self.plan({}), [None, 9000])
+
+    def test_each_stream_announces_itself_and_its_progress_can_be_read(self):
+        lines = self.run_yt_dlp({"filesize": 40000}, "--newline", "--no-quiet", "--progress").splitlines()
+        self.assertEqual(sum(line.startswith("[download] Destination:") for line in lines), 2)
+        readings = [server_module.parse_progress(line) for line in lines]
+        finals = [reading[1] for reading in readings if reading and reading[1] and reading[0] > reading[1] - 1]
+        self.assertAlmostEqual(finals[0], 40000, delta=64)
+        self.assertAlmostEqual(finals[-1], 9000, delta=64)
 
 
 class FakeClop(BaseHTTPRequestHandler):

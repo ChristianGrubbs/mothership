@@ -7,7 +7,7 @@
 @include('dam::components.shared.asset-favorites')
 <script type="text/x-template" id="v-dam-explorer-asset-card-template">
     <div
-        class="relative group rounded-lg border border-gray-300 dark:border-cherry-600 bg-white dark:bg-cherry-900 overflow-hidden transition-colors cursor-pointer"
+        class="relative group rounded-xl border border-gray-200 dark:border-cherry-700 bg-white dark:bg-cherry-900 overflow-hidden transition-colors cursor-pointer"
         v-dam-custom-thumbnail-drop="asset"
         :class="{ 'outline outline-[3px] -outline-offset-1 outline-primary-600 dark:outline-primary-400 !bg-primary-50 dark:!bg-primary-900/40': isSelected, 'ring-2 ring-inset ring-primary-400 bg-primary-200 dark:bg-primary-900/60': isDropTarget, 'ring-1 ring-inset ring-primary-300': dragHint && ! isDropTarget }"
         :style="isStack ? 'box-shadow:0 1px 3px rgba(0,0,0,.08), 4px -4px 0 -1px rgb(var(--c-primary-100, 219 234 254)), 4px -4px 0 0 rgb(var(--c-primary-300, 147 197 253)), 8px -8px 0 -1px rgb(var(--c-primary-50, 239 246 255)), 8px -8px 0 0 rgb(var(--c-primary-200, 191 219 254));' : 'box-shadow:0 1px 3px rgba(0,0,0,.08);'"
@@ -151,14 +151,14 @@
 
         </div>
 
-        <div class="flex gap-1.5 items-center py-1.5 pl-1">
+        <div class="flex flex-wrap gap-x-2 gap-y-1 items-center py-2.5 pl-1.5 min-[640px]:flex-nowrap">
             {{-- The checkbox takes the row's padding around it, so a near miss selects instead of opening the asset. --}}
             <span
-                class="z-10 -my-1.5 -ml-1 self-stretch transition-opacity"
+                class="z-10 -my-2.5 -ml-1.5 self-stretch transition-opacity max-[639px]:mb-0"
                 :class="{ '!opacity-100': anySelected || isSelected }"
                 @click.stop
             >
-                <label :for="`sel-card-asset-${asset.id}`" class="flex h-full items-center py-1.5 pl-1 pr-1 cursor-pointer">
+                <label :for="`sel-card-asset-${asset.id}`" class="flex h-full items-center py-2.5 pl-1.5 pr-1 cursor-pointer max-[639px]:pb-0">
                     <input
                         type="checkbox"
                         class="peer sr-only"
@@ -170,12 +170,12 @@
                     <span class="icon-checkbox-normal peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary-600 dark:peer-focus-visible:outline-primary-400 peer-checked:icon-checkbox-check peer-checked:text-primary-700 rounded-md text-2xl"></span>
                 </label>
             </span>
-            <p class="flex-1 min-w-0 text-xs text-gray-600 dark:text-gray-300 truncate"><bdi>@{{ (asset.display_name || asset.file_name) }}</bdi></p>
+            <p class="flex-1 min-w-0 text-sm font-medium text-gray-800 dark:text-gray-100 min-[640px]:truncate max-[639px]:order-last max-[639px]:basis-full max-[639px]:pl-1.5 max-[639px]:pr-3 max-[639px]:line-clamp-2 max-[639px]:min-h-[2lh] max-[639px]:[overflow-wrap:anywhere]"><bdi>@{{ (asset.display_name || asset.file_name) }}</bdi></p>
             @include('dam::components.explorer.access-indicator', ['expression' => 'asset.access_mode'])
 
             <button
                 type="button"
-                class="dam-ctx-trigger relative shrink-0 ltr:mr-1 rtl:ml-1 w-6 h-6 max-[639px]:after:absolute max-[639px]:after:-inset-2.5 max-[639px]:after:content-[''] flex items-center justify-center rounded-md text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-cherry-800 hover:text-primary-700 dark:hover:text-primary-400 transition-opacity"
+                class="dam-ctx-trigger relative shrink-0 ltr:mr-1 rtl:ml-1 max-[639px]:ltr:ml-auto max-[639px]:rtl:mr-auto w-6 h-6 max-[639px]:after:absolute max-[639px]:after:-inset-2.5 max-[639px]:after:content-[''] flex items-center justify-center rounded-md text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-cherry-800 hover:text-primary-700 dark:hover:text-primary-400 transition-opacity"
                 :class="{ '!opacity-100': isSelected }"
                 :title="'@lang('dam::app.admin.explorer.list.header.actions')'"
                 :aria-label="actionsLabel"
@@ -193,7 +193,7 @@
         <!-- A stack's basis and key, and how many files it holds (D5); a single plain file shows nothing. -->
         <p
             v-if="stackLine"
-            class="px-2 pb-1 -mt-0.5 text-[11px] leading-tight font-medium text-primary-700 dark:text-primary-300 truncate"
+            class="px-3 pb-1 -mt-1 text-xs leading-snug font-medium text-primary-700 dark:text-primary-300 truncate"
             :title="stackLine"
             data-dam-stack-line
         >@{{ stackLine }}</p>
@@ -242,7 +242,7 @@
         <!-- The uploader, from created_by; a file with no owner shows nothing. -->
         <p
             v-if="asset.owner_name"
-            class="px-2 pb-1.5 -mt-0.5 text-[11px] leading-tight text-gray-400 dark:text-gray-500 truncate"
+            class="px-3 pb-3 -mt-1 text-xs leading-snug text-gray-500 dark:text-gray-400 truncate"
             :title="`@lang('dam::app.admin.explorer.uploaded-by') ${asset.owner_name}`"
             data-dam-asset-owner
         >@{{ asset.owner_name }}</p>
