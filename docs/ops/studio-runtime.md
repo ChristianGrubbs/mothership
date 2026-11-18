@@ -259,6 +259,71 @@ a 10-second grace period. Panorama/video-preview jobs can legitimately run for
 hours and use `--tries=1`; interrupting one during lifecycle work can lose that
 in-flight attempt instead of retrying it.
 
+## Menu bar app
+
+`tools/studio/menubar` is a Mac menu bar app that shows the stack's health and
+starts, stops and restarts it. It drives the stack only through the wrapper's
+`up`, `down` and `status`, and reads health with read-only checks.
+
+Install or update it from Terminal on the host. Installing never starts, stops
+or restarts the stack, and a failed update puts the previous version back:
+
+```bash
+zsh tools/studio/menubar/scripts/install.sh --wrapper <stack-wrapper> --app-env <state>/app.env --site-url https://<host>/up --disk <volume> --coordinator <lease-tool> --deploy-lease worktree:<live-checkout> --umbrel-ssh <user@umbrel-host> --umbrel-key <private-key> --umbrel-capacity-file <state>/storage/app/private/umbrel-capacity.json --craft-tool <artcraft>/tools/craft-local/craft_updates.py
+```
+
+- The panel is a split-flap board in the site's style. Its **Graphite** and **White**
+  themes change the panel around the board, and the board stays dark in both. Faults
+  are written out in full under the board. The board animates only while the panel
+  is open, and Reduce Motion turns the animation off.
+- The **ArtCraft** row opens a page that lists installed and latest versions.
+  **Update Apps** causes no outage and skips apps that are open. **Update Engines**
+  asks first, stops the site, builds the engines, starts the site once, then
+  activates the engines that pass their checks. It builds only ArtCraft engine
+  images, and only while every stack container is stopped.
+- After an engine update starts the site, the app waits up to 3 minutes for the
+  site address to answer 200. If it doesn't, the panel says the site didn't come
+  back and the app stops there. It never runs `up` a second time.
+- **Restart** on the MCP server asks first if sessions are open or a key render is
+  running. The ArtCraft tool makes every one of these changes.
+- The panel's storage figures come from the Umbrel, where assets live: the space
+  The Mothership's bucket uses and the space free on the Umbrel's data drive. The
+  app reads them over SSH with one fixed read-only command, every 4 minutes, or
+  every minute while the panel is open or after a failed read. If the Umbrel can't
+  be read the panel says **Umbrel unreachable**. The line for this Mac is only the
+  working space for drafts and staging.
+- Health checks run every 30 seconds. Checks that launch a process run every
+  5 minutes while the stack is healthy and the panel is closed, and every minute
+  otherwise. Container memory and uptime are read only while the panel is open.
+- The app is the LaunchAgent `app.themothership.menubar`. At each login it waits
+  for the container runtime and runs `up` unless the stack is already running.
+  Clear **Start site at login** in the panel to turn that off.
+- The app starts the stack only at login or when you click its control. It never
+  restarts the stack because it looks down, so a planned outage stays down.
+- A Mac that keeps the stack on a removable volume asks once for access to that
+  volume and to the local network. Allow both, or the app cannot read the stack.
+  If macOS refuses the drive, the panel says so and opens Privacy & Security.
+- Ollama and the tunnel run outside the stack. If only they are down, the panel
+  reports it but does not recommend a restart, because a restart would not fix it.
+- Each action runs in its own session (`Resources/stack-action.sh`), so quitting
+  the app does not interrupt it. The app picks the action up again when it reopens.
+- Actions refuse to run while another `up` or `down` is in progress, while a
+  deploy holds the lease on the live checkout, or when the coordinator can't say
+  whether one does. An engine update also refuses while the site's queues are busy.
+- While an action runs, the app writes `stack-action.json` in its actions folder.
+  The deploy steps read that marker after they claim the lease.
+- Output of each action is in
+  `~/Library/Application Support/The Mothership Menu Bar/actions/`. The app's own
+  log is `app.jsonl` in the folder above it.
+- Remove it with `zsh tools/studio/menubar/scripts/install.sh --uninstall`. The
+  site keeps running.
+
+CI cannot build the app. Test it on a Mac with Xcode:
+
+```bash
+cd tools/studio/menubar && DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer swift test
+```
+
 ## State and ownership
 
 The isolated named VM network is `mothership-private`. It deliberately uses the
