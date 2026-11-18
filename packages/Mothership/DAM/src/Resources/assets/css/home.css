@@ -86,7 +86,7 @@
 .hm-stale:empty{display:none}
 .hm-stale{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:12px;color:var(--ink-2);font-size:14px}
 /* The top bar's Upload belongs to Home alone. */
-body:has([data-mothership-home]) .bridge-top-upload{display:inline-flex}
+body:has([data-mothership-home]) .bridge-top-upload{display:inline-flex!important}
 /* Home's upload dialog opens from the top bar, so a phone keeps the button as an icon. The hit area reaches 44px. */
 @media(max-width:719px){
 body:has([data-mothership-home]) .bridge-top-upload{position:relative;display:inline-flex;flex:none;width:40px;height:40px;padding:0;border-radius:999px}
