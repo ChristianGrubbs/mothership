@@ -1,9 +1,8 @@
 # The Mothership native video download service
 
 The Home **Video Downloader** tool lets a signed-in person paste a link, pick a size and save the
-file to their own device. The production Mac does the downloading natively with its own `yt-dlp` and
-`ffmpeg` (the same pair the Studio's Yoink terminal app drives; Yoink itself is a full-screen
-terminal program with no scriptable mode, so the service uses Yoink's format recipe directly).
+file to their own device. The production Mac does the downloading natively with the `downie` command,
+looks videos up with `yt-dlp` and finishes files with `ffmpeg`.
 The Mothership's containers reach the service over the private Apple-container bridge, like the Clop
 service (`docs/ops/studio-clop.md`). It has no public listener, Cloudflare route or DNS record.
 
@@ -20,9 +19,27 @@ A single stdlib-only script (`tools/studio/video-service/server.py`) run with th
 - Service JSONL events (gated by `VIDEO_SERVICE_LOG=1`): `logs/video-service-events.jsonl`
 - PID/config receipt: `run/video-service.json`
 
-It needs `/opt/homebrew/bin/yt-dlp` and `/opt/homebrew/bin/ffmpeg`. The manager refuses to start
-and names whichever is missing. Sites change often; when downloads from a site start failing,
-update the Studio's yt-dlp (`brew upgrade yt-dlp`) and restart the service.
+It needs `~/.local/bin/downie`, `/opt/homebrew/bin/yt-dlp` and `/opt/homebrew/bin/ffmpeg`. The manager
+refuses to start and names whichever is missing. launchd starts the service with a short `PATH`, so
+`downie` is called by its full path: `--downie` on the manager, `VIDEO_DOWNIE` on the server.
+
+Sites change often, and `downie` carries its own copy of yt-dlp. When downloads from a site start
+failing, update both (`uv tool upgrade downie` and `brew upgrade yt-dlp`) and restart the service.
+
+## What the downie command leaves to the service
+
+`downie video download` fetches the file. These are the parts it has no option for, and how each is kept:
+
+| Needed | How the service keeps it |
+| --- | --- |
+| The size list before a download | `POST /probe` still asks Homebrew's yt-dlp, because `downie` has no look-up |
+| One video per link | Each job first runs a yt-dlp look-up with `--no-playlist`. A link naming a playlist is narrowed to the one video's page, a list is refused, and a download that starts a list anyway is stopped |
+| Whole-file progress | The look-up gives each stream's size; `downie`'s `[download]` lines give the stream in hand |
+| The size limit | A file declared over `VIDEO_MAX_BYTES` is refused before it starts, and a running download is stopped when its reported size or its bytes on disk pass the limit |
+| A result that can be trusted | `downie` exits 0 even when a download fails, so success is its `Download successful:` line plus the file it names, in the job's folder and not empty. The exit code is never read |
+| MP3 | `downie` fetches the sound, and the service converts it with the local-only ffmpeg stand-in |
+| H.264 first | The order is spelled out in the `-f` selector: H.264 with AAC, then anything but AV1, then what the site has |
+| Very long titles | `downie` cannot shorten a file name, so a title over 200 bytes is fetched by yt-dlp directly, cut to 100 characters |
 
 ## Start, stop, verify
 
@@ -105,8 +122,10 @@ restart the service; the tool reads the number from `GET /jobs`, so its wording 
 
 ## What progress is shown
 
-- **Downloading** is measured. A video and its sound are usually two streams; yt-dlp is asked for every stream's
-  size before the first byte, so the percentage, the sizes and the time left are for the whole file. When a site
+- **Downloading** is measured. A video and its sound are usually two streams; the look-up asks yt-dlp for every
+  stream's size before the first byte, so the percentage, the sizes and the time left are for the whole file. The
+  look-up uses Homebrew's yt-dlp and `downie` uses its own copy, so keep the two on the same version: when they
+  differ, the total can be an estimate. When a site
   gives no sizes, the row says which part it is on ("Downloading part 2 of 2, 40%") instead of running to 99% twice.
 - **Finishing the file** (joining the streams) has no measure: a moving line.
 - **Making the file smaller** has no measure either: Clop reports nothing until it is done. The row shows a moving
@@ -131,7 +150,7 @@ Safari for anything larger.
 
 Fixed; `HomeVideoController` is built to match it.
 
-- `GET /health` -> `200 {"ok":true,"ytdlp":"<version>","ffmpeg":true,"workers":4,"optimizer":true,...}`, or `503` when yt-dlp cannot be run.
+- `GET /health` -> `200 {"ok":true,"downie":true,"ytdlp":"<version>","ffmpeg":true,"workers":4,"optimizer":true,...}`, or `503` when `downie` or yt-dlp cannot be run.
 - `POST /probe {"url"}` -> `200 {"title","duration","thumbnail","choices":[{"id","kind","label","size","default"}]}`.
   Choice ids are `v<height>`, `best` and `mp3`. At most four video sizes are offered (the original's
   top size plus 1080p, 720p and 480p where they exist); the default is 1080p or the next size down.
@@ -150,16 +169,17 @@ Fixed; `HomeVideoController` is built to match it.
 - `GET /files/<id>?owner=<id>` -> the file as an attachment; `Range` is honoured (`206`).
 
 Links must be `http` or `https`, carry no user name or password, and resolve only to public
-addresses; anything else is refused with `422` before yt-dlp runs. That check alone would not stop a
+addresses; anything else is refused with `422` before a downloader runs. That check alone would not stop a
 public page that redirects to a private address, names one as its media URL, or changes its DNS
-answer, so yt-dlp and the ffmpeg it starts are also given a loopback proxy inside the service as
+answer, so `downie`, yt-dlp and the ffmpeg they start are also given a loopback proxy inside the service as
 their only way out (`--proxy` and the proxy environment variables). The proxy resolves every
 destination itself, refuses it with `403` unless every address is public, connects to the address it
 checked, and logs `egress.refused`. ffmpeg is given no network at all: the service writes
 `data/bin/ffmpeg` and `data/bin/ffprobe` stand-ins that limit every input to local files, because a
-manifest can name key or segment addresses ffmpeg would open itself, around the proxy. On macOS the
+manifest can name key or segment addresses ffmpeg would open itself, around the proxy. `downie` has no
+ffmpeg option, so the stand-ins' folder goes first on its `PATH`. On macOS the
 stand-ins also run ffmpeg under `sandbox-exec` with all network access denied, which no ffmpeg option
 or playlist file can override. ffmpeg only
-joins and converts what yt-dlp has already downloaded, so live streams, which yt-dlp hands to ffmpeg
+joins and converts what has already been downloaded, so live streams, which the downloader hands to ffmpeg
 to fetch, fail with a plain error rather than download. yt-dlp is run with
-`--ignore-config` and the link after `--`, so a link can never be read as an option.
+`--ignore-config`, and every command takes the link after `--`, so a link can never be read as an option.
