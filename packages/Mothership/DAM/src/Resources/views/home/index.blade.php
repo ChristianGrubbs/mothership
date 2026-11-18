@@ -1,98 +1,87 @@
 <x-admin::layouts>
     <x-slot:title>Home — {{ config('documentation.name') }}</x-slot:title>
-    <div v-pre data-mothership-home data-base="{{ url(config('app.admin_url').'/home') }}" data-csrf="{{ csrf_token() }}" data-user="{{ auth('admin')->id() }}" data-name="{{ auth('admin')->user()->name }}" data-library="{{ route('admin.dam.assets.index') }}" data-upload="{{ route('admin.dam.assets.upload') }}" data-directory-search="{{ route('admin.dam.directory.search') }}" data-directories="{{ route('admin.dam.directory.index') }}" data-library-allowed="{{ bouncer()->hasPermission('dam.assets') ? '1' : '0' }}" data-superuser="{{ auth('admin')->user()?->role?->permission_type === 'all' ? '1' : '0' }}">
-        <header class="agh-hero">
-            <p class="agh-hero-date" data-today></p>
-            <h1 data-greeting>Welcome, {{ \Illuminate\Support\Str::before(auth('admin')->user()->name, ' ') }}</h1>
-            <p class="agh-hero-brief" data-brief>Find a file, start a task, or see what is coming up.</p>
-            @if (bouncer()->hasPermission('dam.assets'))
-                <form class="agh-search" action="{{ route('admin.dam.assets.index') }}" method="GET" accept-charset="UTF-8" role="search" aria-label="Search all files" data-no-ajax-nav>
-                    <input type="hidden" name="search_submit" value="1">
-                    <label for="agh-home-search">Search all files</label>
-                    <div class="agh-search-row">
-                        <input id="agh-home-search" name="search" type="search" maxlength="255" autocomplete="off" placeholder="Type a name, a tag, or what is in the picture" data-home-search>
-                        <button type="submit" class="agh-button agh-primary">Search</button>
-                    </div>
-                </form>
-            @endif
-            <nav class="agh-start" aria-label="Start something">
-                @foreach ($actions as $action)
-                    @if (isset($action['url']))
-                        <a class="agh-start-item" href="{{ $action['url'] }}" data-start-key="{{ $action['key'] }}">
-                    @else
-                        <button type="button" class="agh-start-item" data-start-key="{{ $action['key'] }}" @isset($action['start']) data-start="{{ $action['start'] }}" @endisset @isset($action['url_fallback']) data-start-url="{{ $action['url_fallback'] }}" @endisset @isset($action['open']) data-start-open="{{ $action['open'] }}" @endisset>
-                    @endif
-                        <span class="agh-start-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="{{ $action['icon'] }}"/></svg></span>
-                        <span class="agh-start-text"><strong>{{ $action['label'] }}</strong><small>{{ $action['help'] }}</small></span>
-                    @if (isset($action['url']))
-                        </a>
-                    @else
-                        </button>
-                    @endif
-                @endforeach
-            </nav>
-        </header>
-        <div role="status" aria-live="polite" class="agh-status" data-status>Loading your Home…</div>
-        <div class="agh-sections" data-grid>
-            <div class="agh-day">
-                <section class="agh-section" aria-labelledby="agh-day-title" data-section="day" hidden>
-                    <h2 id="agh-day-title">Your day</h2>
-                    <div class="agh-agenda" data-day data-id="calendar"></div>
-                </section>
-                <div class="agh-side">
-                    <section class="agh-section agh-apps" aria-labelledby="agh-apps-title" data-section="apps">
-                        <h2 id="agh-apps-title">Apps</h2>
-                        <div class="agh-section-head agh-apps-head">
-                            <h3 id="agh-tools-title">Studio tools</h3>
-                            @if (filled($iconLibraryUrl = config('dam-home.icon_library_url')))<a href="{{ rtrim($iconLibraryUrl, '/') }}/" target="_blank" rel="noopener noreferrer">Icon Library <span aria-hidden="true">↗</span></a>@endif
+    @php
+        $homeLinks = [
+            'connect' => bouncer()->hasPermission('configuration.integrations') && \Illuminate\Support\Facades\Route::has('admin.configuration.integrations.index') ? route('admin.configuration.integrations.index') : '',
+            'shares' => bouncer()->hasPermission('dam.shares') ? route('admin.dam.shared-links.index') : '',
+            'requests' => bouncer()->hasPermission('dam.upload_requests') ? route('admin.dam.upload-requests.index') : '',
+            'newUploads' => bouncer()->hasPermission('dam') ? route('admin.dam.new-uploads.index') : '',
+        ];
+    @endphp
+    <div v-pre data-mothership-home data-base="{{ url(config('app.admin_url').'/home') }}" data-csrf="{{ csrf_token() }}" data-user="{{ auth('admin')->id() }}" data-name="{{ auth('admin')->user()->name }}" data-library="{{ route('admin.dam.assets.index') }}" data-upload="{{ route('admin.dam.assets.upload') }}" data-directory-search="{{ route('admin.dam.directory.search') }}" data-directories="{{ route('admin.dam.directory.index') }}" data-library-allowed="{{ bouncer()->hasPermission('dam.assets') ? '1' : '0' }}" data-superuser="{{ auth('admin')->user()?->role?->permission_type === 'all' ? '1' : '0' }}" data-connect="{{ $homeLinks['connect'] }}" data-shares="{{ $homeLinks['shares'] }}" data-requests="{{ $homeLinks['requests'] }}" data-new-uploads="{{ $homeLinks['newUploads'] }}">
+        <h1 class="hm-sr">Home</h1>
+        <div role="status" aria-live="polite" class="hm-status" data-status></div>
+        <div role="status" aria-live="polite" class="hm-stale" data-stale></div>
+        <div class="hm-layout" data-grid>
+            <div class="hm-centre">
+                <div class="hm-object" data-board-object>
+                    <section class="hm-board" data-m="board" data-board aria-labelledby="hm-board-title" aria-busy="true">
+                        <div class="hm-board-head hm-mono">
+                            <h2 id="hm-board-title">Arrivals board</h2>
+                            <span class="hm-sp"></span>
+                            <span class="hm-board-state" data-board-state></span>
                         </div>
-                        <ul class="agh-app-grid" aria-labelledby="agh-tools-title">
-                            <li data-tools-end><button type="button" class="agh-app" data-id="phone-app" data-phone-open title="Put The Mothership on your iPhone or iPad">
-                                <span class="agh-app-icon agh-app-phone" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 2.5h8a1.5 1.5 0 0 1 1.5 1.5v16a1.5 1.5 0 0 1-1.5 1.5H8A1.5 1.5 0 0 1 6.500 20V4A1.5 1.5 0 0 1 8 2.500z M10.500 5h3 M12 12v5 M9.500 14.500L12 17l2.500-2.500"/></svg></span>
-                                <strong>iPhone app</strong>
-                                <small>Get The Mothership on your phone</small>
-                            </button></li>
-                        </ul>
+                        <div class="hm-cols hm-mono" aria-hidden="true">
+                            <span class="k1" style="--n:6">Time</span>
+                            <span class="k2" style="--n:12">From</span>
+                            <span class="k3" style="--n:21">Cargo</span>
+                            <span class="k4" style="--n:4">Qty</span>
+                            <span class="k5" style="--n:8">Status</span>
+                        </div>
+                        <div role="list" aria-label="Arrivals since your last visit" data-board-rows></div>
+                        <p class="hm-more hm-mono" data-board-more hidden></p>
                     </section>
-                    @if ($transfers ?? null)
-                        <section class="agh-section agh-feature" aria-labelledby="agh-send-title" data-block="send" data-id="transfers">
-                            <div class="agh-section-head">
-                                <h2 id="agh-send-title">Send files to a person</h2>
-                                <a href="{{ $transfers['transfersUrl'] }}" data-send-open>Open Transfers <span aria-hidden="true">›</span></a>
-                            </div>
-                            <p class="agh-section-note">Files go from your browser to theirs, directly where the network allows and through The Mothership where it does not. Nothing is stored in between, so both of you need The Mothership open.</p>
-                            <div class="agh-send" data-send>
-                                <p class="agh-caption" role="status">Looking for people who are online…</p>
-                            </div>
-                        </section>
-                    @endif
+                    <section class="hm-deck" data-m="arrive" data-deck aria-label="New since your last visit" aria-busy="true"></section>
                 </div>
-            </div>
-            <section class="agh-section" aria-labelledby="agh-recent-title" data-section="recent" hidden>
-                <div class="agh-section-head">
-                    <h2 id="agh-recent-title">Recent uploads</h2>
-                    <a href="{{ route('admin.dam.index') }}">See all files <span aria-hidden="true">›</span></a>
-                </div>
-                <div class="agh-work" data-recent data-id="recent"></div>
-                <div class="agh-starred" data-starred data-id="favorites"></div>
-            </section>
-            @if (auth('admin')->user()?->role?->permission_type === 'all')
-                <section class="agh-section agh-admin" aria-labelledby="agh-status-title" data-section="status" hidden>
-                    <div class="agh-section-head">
-                        <h2 id="agh-status-title">Studio admin</h2>
-                        <span class="agh-admin-note">Only administrators see this part of Home.</span>
+
+                <nav class="hm-card hm-glance" aria-label="Around the ship" data-glance></nav>
+
+                <section class="hm-card hm-needs" data-m="panel" data-needs aria-label="Needs you" hidden></section>
+
+                <div data-cargo-section hidden>
+                    <div class="hm-sec" id="hm-cargo">
+                        <h2>Cargo</h2>
+                        <span class="hm-mono">What landed, newest first</span>
+                        <a class="hm-sec-link" href="{{ route('admin.dam.assets.index') }}">Open in Library <svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v10M7 17 17 7"/></svg></a>
                     </div>
-                    <div class="agh-slot agh-around" data-slot="status"></div>
+                    <ol class="hm-log" data-m="arrive" data-cargo></ol>
+                </div>
+
+                {{-- TODO 2026-11-18: remove when Phase 5b ships --}}
+                <section class="hm-tools" aria-labelledby="hm-tools-title" data-section="apps">
+                    <h2 id="hm-tools-title">Tools</h2>
+                    <ul class="hm-tool-list" data-tools>
+                        <li data-tools-end><button type="button" class="hm-tool" data-calendar-open><svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4z M4 10h16 M8 3v5 M16 3v5"/></svg><span>Calendar</span></button></li>
+                        <li><button type="button" class="hm-tool" data-id="phone-app" data-phone-open><svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2.500h8A1.500 1.500 0 0 1 17.500 4v16a1.500 1.500 0 0 1-1.500 1.500H8A1.500 1.500 0 0 1 6.500 20V4A1.500 1.500 0 0 1 8 2.500z M11 18.500h2"/></svg><span>iPhone app</span></button></li>
+                        @if ($transfers ?? null)
+                            <li><a class="hm-tool" href="{{ route('admin.dam.transfers.index') }}"><svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 3 10 14 M21 3l-7 18-4-7-7-4z"/></svg><span>Send files</span></a></li>
+                        @endif
+                        @if (filled($iconLibraryUrl = config('dam-home.icon_library_url')))
+                            <li><a class="hm-tool" href="{{ rtrim($iconLibraryUrl, '/') }}/" target="_blank" rel="noopener noreferrer"><svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v10M7 17 17 7"/></svg><span>Icon Library</span></a></li>
+                        @endif
+                    </ul>
+                    <div data-section="links" hidden>
+                        <h3 class="hm-mono">Your saved links</h3>
+                        <div class="hm-saved-links" data-saved-links></div>
+                    </div>
                 </section>
-            @endif
-            <section class="agh-section" aria-labelledby="agh-links-title" data-section="links" hidden>
-                <h2 id="agh-links-title">Your saved links</h2>
-                <div class="agh-saved-links" data-saved-links></div>
-            </section>
+            </div>
+
+            <aside class="hm-side" aria-label="Around the ship" data-side>
+                <section class="hm-card hm-dock" id="hm-docked" data-docked></section>
+                <section class="hm-card hm-signal" id="hm-signal" data-signal data-id="rss"></section>
+                <section class="hm-card hm-away" id="hm-away" data-away></section>
+            </aside>
         </div>
+
+        <dialog class="hm-sheet" data-side-sheet aria-labelledby="hm-sheet-title">
+            <div class="hm-sheet-head"><h2 id="hm-sheet-title">Around the ship</h2><button type="button" class="hm-btn" data-sheet-close>Close</button></div>
+            <div data-sheet-body></div>
+        </dialog>
+
         <dialog class="agh-settings agh-calendar-dialog" data-calendar-dialog aria-labelledby="agh-calendar-title">
             <div class="agh-dialog-head"><h2 id="agh-calendar-title">Calendar</h2><button type="button" class="agh-button" data-calendar-close aria-label="Close calendar">✕</button></div>
-            <div class="agh-slot" data-slot="coming"></div>
+            <div class="agh-slot" data-slot="coming"><article class="agh-card" data-id="calendar"><div class="agh-card-body"></div></article></div>
         </dialog>
         <dialog class="agh-settings agh-upload" data-upload-dialog aria-labelledby="agh-upload-title"></dialog>
         <dialog class="agh-settings agh-phone" data-phone-dialog aria-labelledby="agh-phone-title">
@@ -118,8 +107,8 @@
         {{-- AJAX navigation carries body styles along with this page's scripts. --}}
         <style>{!! file_get_contents(base_path('packages/Mothership/DAM/src/Resources/assets/css/home.css')) !!}</style>
         <script>{!! file_get_contents(base_path('packages/Mothership/DAM/src/Resources/assets/js/home-state.js')) !!}</script>
-        <script>{!! file_get_contents(base_path('packages/Mothership/DAM/src/Resources/assets/js/home-system-quickview.js')) !!}</script>
         <script>{!! file_get_contents(base_path('packages/Mothership/DAM/src/Resources/assets/js/home-calendar.js')) !!}</script>
+        <script>{!! file_get_contents(base_path('packages/Mothership/DAM/src/Resources/assets/js/home-bridge.js')) !!}</script>
         <script>{!! file_get_contents(base_path('packages/Mothership/DAM/src/Resources/assets/js/home.js')) !!}</script>
     @endpush
 </x-admin::layouts>

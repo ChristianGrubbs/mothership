@@ -4,7 +4,6 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.resolve(__dirname, '../../../packages/Mothership/DAM/src/Resources/assets/js/transfers-host.js'), 'utf8');
-const {homeRoot, homeAnswersSource} = require('./support/home-fixture.cjs');
 
 function fixture({request = async () => ({grant: 'proof'}), getTheme = () => 'light', track = () => {}} = {}) {
     const window = {addEventListener() {}};
@@ -144,7 +143,7 @@ test('pins channel, version, origin and frame source before obtaining a grant', 
         await page.waitForFunction(() => window.__grantRequests === 6);
         await page.frame({url: 'https://transfers.example/'}).waitForFunction(() => window.initializes === 3);
         assert.equal(await reconnect.evaluate(button => getComputedStyle(button).display), 'none');
-        for (const selector of ['.mothership-transfers-toolbar a', '.agh-qv-send']) {
+        for (const selector of ['.mothership-transfers-toolbar a']) {
             await page.locator('#start').focus();
             for (let index = 0; index < 5 && !await page.locator(selector).evaluate(el => el === document.activeElement); index++) await page.keyboard.press('Tab');
             const seen = await page.locator(selector).evaluate(el => ({focused: el.matches(':focus-visible'), outline: getComputedStyle(el).outlineColor, width: getComputedStyle(el).outlineWidth, fill: getComputedStyle(el).backgroundColor}));
@@ -154,80 +153,6 @@ test('pins channel, version, origin and frame source before obtaining a grant', 
             for (const surface of [[23, 25, 29], [36, 25, 27], [57, 40, 44]]) assert.ok((indicator + 0.05) / (luminance(surface) + 0.05) >= 3);
             if (selector.endsWith(' a')) assert.equal(seen.fill, 'rgb(57, 40, 44)');
         }
-    } finally {await browser.close();}
-});
-
-(process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH ? test : test.skip)('actual Home keeps Studio load and its Transfers controls inside the card at every width and never writes', async () => {
-    const browser = await launchBrowser();
-    const assets = path.resolve(__dirname, '../../../packages/Mothership/DAM/src/Resources/assets');
-    try {
-        const page = await browser.newPage({viewport: {width: 1440, height: 1000}});
-        const errors = [];page.on('pageerror', error => errors.push(error.message));
-        await page.route('https://host.example/', route => route.fulfill({contentType: 'text/html', body: '<html></html>'}));await page.goto('https://host.example/');
-        // Studio load is a Studio admin card: a full-access account, with Transfers configured.
-        await page.setContent(homeRoot({superuser: true, transfers: true, tag: 'main'}) + '<div data-transfers-host></div>');
-        await page.addStyleTag({content: '*{box-sizing:border-box}body{margin:20px;font-family:Arial}'+fs.readFileSync(path.join(assets, 'css/home.css'), 'utf8')+fs.readFileSync(path.join(assets, 'css/transfers.css'), 'utf8')});
-        await page.addScriptTag({content: homeAnswersSource});
-        await page.evaluate(() => {
-            window.__writes = 0;
-            // pageerror misses browser-raised ErrorEvents with no error object, such as the
-            // "ResizeObserver loop" notice QuickView sizing once raised on every Home load.
-            window.__windowErrors = [];addEventListener('error', event => window.__windowErrors.push(event.message));
-            const catalog = [{id: 'system-quickview', title: 'Studio & people', icon: 'system', kind: 'native', settings: {}}, {id: 'storage', title: 'Storage', icon: 'storage', kind: 'native', settings: {}}];
-            window.fetch = async (_url, options = {}) => {
-                const address = String(_url);
-                if (options.method && options.method !== 'GET') window.__writes++;
-                const body = address.endsWith('/layout') ? {widgets: catalog.map(({id}) => ({id, settings: {}})), catalog, links: []}
-                    : address.endsWith('/data/storage') ? {available: true, free: 500, total: 1000}
-                    : window.__homeAnswer(address) ?? {metrics: {available: false}, presence: {available: true, users: [{id: 1, name: 'Lex', is_current: true}]}};
-                return new Response(JSON.stringify(body), {headers: {'Content-Type': 'application/json'}});
-            };
-            const labels = {ready: 'Ready', open: 'Open Transfers', send: 'Send', morePeers: '+:count more → Open Transfers', sendToDevice: 'Send files to :name on :device', noPeers: 'Open Transfers on another device to receive files.'};
-            window.__state = {labels, readyPeers: Array.from({length: 5}, (_, i) => ({userId: '1', peerId: `peer${i}`, name: 'Long named colleague', deviceName: `Chrome · Mac · ${i}`})), activeCount: 0, status: 'ready', open() {}, openPeer() {}};
-            // Home's Send panel and the Studio load card each subscribe.
-            window.__listeners = new Set();
-            window.__publish = state => window.__listeners.forEach(listener => listener(state));
-            window.MothershipTransfers = {subscribe(listener) {window.__listeners.add(listener);listener(window.__state);return () => window.__listeners.delete(listener);}};
-        });
-        for (const file of ['home-state.js', 'home-system-quickview.js', 'home.js']) await page.addScriptTag({content: fs.readFileSync(path.join(assets, 'js', file), 'utf8')});
-        await page.waitForFunction(() => document.querySelector('[data-qv-updated]')?.textContent.startsWith('Updated '));
-        // "Reachable" is what a fixed-height card owes its content: nothing is cut off sideways, and
-        // whatever is taller than the card can be scrolled to inside it. "Clear" is the card keeping
-        // out of the next card's way.
-        const measure = () => page.evaluate(() => {
-            const card = document.querySelector('[data-id="system-quickview"]'), body = card.querySelector('.agh-card-body'), content = card.querySelector('[data-qv]'), next = document.querySelector('[data-id="storage"]');
-            const box = card.getBoundingClientRect(), other = next.getBoundingClientRect(), inner = body.getBoundingClientRect(), last = content.getBoundingClientRect();
-            return {card: box.height, clear: other.top >= box.bottom || other.left >= box.right || other.right <= box.left, inside: inner.bottom <= box.bottom + 1 && inner.right <= box.right + 1,
-                sideways: content.scrollWidth <= content.clientWidth + 1 && body.scrollWidth <= body.clientWidth + 1, reachable: last.bottom <= inner.bottom + 1 || ['auto', 'scroll'].includes(getComputedStyle(body).overflowY),
-                fits: last.bottom <= inner.bottom + 1, slack: inner.bottom - last.bottom, page: document.documentElement.scrollWidth <= innerWidth};
-        });
-        const sound = seen => {for (const key of ['clear', 'inside', 'sideways', 'reachable', 'fits', 'page']) assert.equal(seen[key], true, `${key}: ${JSON.stringify(seen)}`);};
-        await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 250)));
-        let seen = await measure();sound(seen);
-        assert.equal(await page.locator('[data-qv-send]').count(), 2);
-        await page.setViewportSize({width: 900, height: 1000});
-        await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 250)));
-        seen = await measure();sound(seen);
-        assert.equal(await page.locator('[data-qv-send]').count(), 2);
-        assert.equal(await page.locator('.agh-qv-more-peers').textContent(), '+3 more → Open Transfers');
-        assert.equal(await page.evaluate(() => window.__writes), 0);
-        await page.setViewportSize({width: 375, height: 812});
-        await page.evaluate(() => window.__publish({...window.__state, readyPeers: []}));
-        await page.waitForFunction(() => document.querySelector('[data-qv-transfer-status]')?.textContent.includes('another device'));
-        await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 250)));
-        // On a phone the card grows with its content instead of scrolling inside itself.
-        seen = await measure();sound(seen);assert.equal(seen.fits, true, JSON.stringify(seen));
-        assert.equal(await page.evaluate(() => window.__writes), 0);assert.deepEqual(errors, []);
-        assert.deepEqual(await page.evaluate(() => window.__windowErrors), []);
-        await page.setViewportSize({width: 1440, height: 1000});await page.evaluate(() => window.__publish(window.__state));
-        await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 250)));
-        seen = await measure();sound(seen);
-        assert.equal(await page.locator('[data-qv-send]').count(), 2);
-        // The fixed page has nothing to arrange or save.
-        assert.equal(await page.locator('[data-customize],[data-drag-handle],[data-resize-handle],[data-save]').count(), 0);
-        assert.equal(await page.evaluate(() => window.__writes), 0);
-        assert.deepEqual(errors, []);assert.deepEqual(await page.evaluate(() => window.__windowErrors), []);
-        await page.close();
     } finally {await browser.close();}
 });
 
@@ -446,60 +371,6 @@ async function launchBrowser() {
         ? await (await import(require('node:url').pathToFileURL(launcher).href)).launchChrome({chromium, playwrightVersion: require(path.join(playwrightPath, 'package.json')).version})
         : await chromium.launch({headless: true, channel: process.env.MOTHERSHIP_BROWSER_CHANNEL || 'chrome'});
 }
-(playwrightPath ? test : test.skip)('QuickView keeps presence and labels exact devices, bounded peers, empty states and subscription lifecycle', async () => {
-    const browser = await launchBrowser();
-    try {
-        const page = await browser.newPage({viewport: {width: 1000, height: 900}});
-        await page.setContent('<article class="agh-card"><div class="agh-card-body"></div></article><article id="replacement" class="agh-card"><div class="agh-card-body"></div></article>');
-        const assets = path.resolve(__dirname, '../../../packages/Mothership/DAM/src/Resources/assets');
-        await page.addStyleTag({content: fs.readFileSync(path.join(assets, 'css/home.css'), 'utf8')});
-        await page.addStyleTag({content: fs.readFileSync(path.join(assets, 'css/transfers.css'), 'utf8')});
-        await page.evaluate(() => {
-            window.__calls = [];window.__subscriptions = 0;window.__released = 0;
-            window.MothershipTransfers = {subscribe(listener) {window.__listener = listener;window.__subscriptions++;return () => {window.__released++;window.__listener = null;};}};
-        });
-        await page.addScriptTag({content: fs.readFileSync(path.join(assets, 'js/home-system-quickview.js'), 'utf8')});
-        await page.evaluate(() => {
-            const data = {metrics: {available: false}, presence: {available: true, users: [{id: 1, name: 'Lex Example', is_current: true}, {id: 2, name: 'Remy Example'}]}};
-            window.__view = MothershipSystemQuickView.create({request: async () => data});window.__view.mount(document.querySelector('article'));
-            const labels = {ready: 'Ready', connecting: 'Connecting', unavailable: 'Unavailable', disconnected: 'Disconnected', noPeers: 'Open Transfers on another device to receive files.', active: ':count active transfers', activeOne: '1 active transfer', morePeers: '+:count more → Open Transfers', open: 'Open Transfers', send: 'Send', sendToDevice: 'Send files to :name on :device'};
-            window.__publish = (readyPeers, status = 'ready', activeCount = 0) => window.__listener?.({readyPeers, status, activeCount, labels, open: () => window.__calls.push('open'), openPeer: peerId => window.__calls.push(peerId)});
-            window.__peers = [{userId: '1', peerId: 'laptop', name: 'Lex $& :device Example', deviceName: 'Safari · macOS · A1'}, {userId: '1', peerId: 'phone', name: 'Lex Example', deviceName: 'Safari · iOS · B2'}, {userId: '2', peerId: 'other', name: 'Remy Example', deviceName: 'Chrome · Windows · C3'}];
-            window.__publish(window.__peers);
-        });
-        const card = page.locator('article').first();
-        await card.locator('[data-qv-users] li').first().waitFor();
-        assert.equal(await card.locator('[data-qv-users] li').count(), 2);
-        assert.equal(await card.locator('[data-qv-count]').textContent(), '2 people online');
-        assert.equal(await card.locator('.agh-qv-transfer-peers li').count(), 2);
-        assert.equal(await card.locator('[data-qv-send="laptop"]').getAttribute('aria-label'), 'Send files to Lex $& :device Example on Safari · macOS · A1');
-        assert.equal(await card.locator('.agh-qv-more-peers').textContent(), '+1 more → Open Transfers');
-        await card.locator('.agh-qv-more-peers').click();assert.deepEqual(await page.evaluate(() => window.__calls), ['open']);
-        assert.equal(await card.locator('.agh-qv-transfer-peers li').filter({hasText: 'Safari · iOS · B2'}).count(), 1);
-        await card.locator('[data-qv-send="phone"]').click();
-        assert.deepEqual(await page.evaluate(() => window.__calls), ['open', 'phone']);
-        const original = await card.locator('[data-qv-send="phone"]').elementHandle();
-        await page.evaluate(() => window.__publish(window.__peers, 'ready', 1));
-        assert.equal(await original.evaluate(element => element.isConnected), true);
-        assert.equal(await card.locator('[data-qv-transfer-status]').textContent(), '1 active transfer');
-        await page.evaluate(() => window.__publish(window.__peers, 'ready', 2));
-        assert.equal(await card.locator('[data-qv-transfer-status]').textContent(), '2 active transfers');
-        assert.equal(await card.locator('.agh-qv-foot .agh-caption').evaluate(element => getComputedStyle(element).fontSize), '12px');
-        await page.evaluate(() => window.__publish([window.__peers[1]]));
-        assert.equal(await card.locator('[data-qv-send]').count(), 1);
-        await page.evaluate(() => window.__publish([]));
-        assert.equal(await card.locator('[data-qv-transfer-status]').textContent(), 'Open Transfers on another device to receive files.');
-        for (const status of ['connecting', 'unavailable', 'disconnected']) {
-            await page.evaluate(status => window.__publish([], status), status);
-            assert.equal((await card.locator('[data-qv-transfer-status]').textContent()).toLowerCase(), status);
-        }
-        await page.evaluate(() => {window.__publish(window.__peers);window.__view.mount(document.querySelector('#replacement'));});
-        assert.equal(await page.locator('#replacement [data-qv-send]').count(), 2);
-        assert.equal(await page.evaluate(() => window.__subscriptions), 1);
-        await page.evaluate(() => window.__view.unmount());assert.equal(await page.evaluate(() => window.__released), 1);
-    } finally {await browser.close();}
-});
-
 test('the frame URL names this page\'s origin in hub_parent so the child can pick among its allowed parents', () => {
     const window = {addEventListener() {}, location: {origin: 'https://mothership.example.net'}};
     vm.runInNewContext(source, {window, document: {querySelector: () => null, addEventListener() {}}, URL, AbortController, setInterval, clearInterval, setTimeout, clearTimeout});

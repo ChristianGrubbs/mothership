@@ -10,15 +10,13 @@ const path=require('node:path');
 const playwrightPath=process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH;
 const browserTest=playwrightPath?test:test.skip;
 const root=path.resolve(__dirname,'../../..');
-const stateSource=fs.readFileSync(path.join(root,'packages/Mothership/DAM/src/Resources/assets/js/home-state.js'),'utf8');
-const homeSource=fs.readFileSync(path.join(root,'packages/Mothership/DAM/src/Resources/assets/js/home.js'),'utf8');
 // The fixture frame runs the real bootstrap, so a keypress inside the tool travels the same path a
 // live tool uses: home-frame.js turns Escape into the bridge message the host acts on.
 const frameSource=fs.readFileSync(path.join(root,'packages/Mothership/DAM/src/Resources/assets/js/home-frame.js'),'utf8');
 
 const ORIGIN='https://mothership.test';
 const toolUrl=tool=>`${ORIGIN}/admin/home/tools/${tool}/index.html`;
-const {homeApp,homeAnswersSource}=require('./support/home-fixture.cjs');
+const {homeApp,homeAnswersSource,homeScripts}=require('./support/home-fixture.cjs');
 const PAGE_HTML=`<!doctype html><html><body>${homeApp({tag:'main'})}</body></html>`;
 // The shell only accepts a frame that identifies itself, otherwise it shows a load error instead.
 const bridgedTool=tool=>`<!doctype html><html><body><script>window.__MOTHERSHIP_FRAME__={widget:"${tool}",state:{},url:"/admin/home/widgets/${tool}",csrf:"fixture"};<\/script><script>${frameSource}<\/script><p>tool</p><input id="tool-field"><button id="tool-button" type="button">Rotate</button></body></html>`;
@@ -46,8 +44,7 @@ async function workspacePage(browser,{toolGate=null,toolHtml=TOOL_HTML,tool='sph
             ? response({catalog,widgets:[{id,settings:{}}],links:[]})
             : response(window.__homeAnswer(address)??{});
     },{url:toolUrl(tool),id:tool});
-    await page.addScriptTag({content:stateSource});
-    await page.addScriptTag({content:homeSource});
+    for(const content of homeScripts)await page.addScriptTag({content});
     // Every bridge message, kept in arrival order. The host's own listener was registered first, so
     // it has handled a message by the time it is recorded here.
     await page.evaluate(()=>{window.__heard=[];window.addEventListener('message',event=>{if(event.data?.protocol==='mothership-widget/v1')window.__heard.push({type:event.data.type,payload:event.data.payload});});});

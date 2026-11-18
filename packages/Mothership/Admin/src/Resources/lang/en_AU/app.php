@@ -2537,6 +2537,7 @@ return [
             ],
 
             'header' => [
+                'upload'        => 'Upload',
                 'logo'          => 'Logo',
                 'account-title' => 'Account',
                 'app-version'   => 'Version : :version',

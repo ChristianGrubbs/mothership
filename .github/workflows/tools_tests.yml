@@ -77,3 +77,8 @@ jobs:
       - name: RSS service tests
         if: '!cancelled()'
         run: python -m unittest discover -s tools/rss -p 'test_*.py' -v
+
+      # The Mac side of the library MCP server, driven over real stdio against tests/fake_container.py.
+      - name: Library MCP launcher tests
+        if: '!cancelled()'
+        run: python -m unittest discover -s tools/mcp-launcher/tests -v

@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Laravel\Mcp\Enums\ProtocolVersion;
 use Laravel\Mcp\Server\Registrar;
 use Mothership\DAM\Mcp\LibraryTool;
 use Mothership\DAM\Mcp\MothershipServer;
@@ -221,4 +222,15 @@ it('creates a folder once and updates titles and tags', function () {
     expect($error)->toContain('Nothing to change');
     [, $error] = ($this->call)('search', ['unknown' => 1]);
     expect($error)->toContain('Unknown tool argument');
+});
+
+it('matches the tool list the Mac launcher answers with', function () {
+    $manifest = json_decode((string) file_get_contents(base_path('tools/mcp-launcher/tools_manifest.json')), true, flags: JSON_THROW_ON_ERROR);
+    $server = (new ReflectionClass(MothershipServer::class))->getDefaultProperties();
+    $tools = array_map(fn (string $action): array => (new LibraryTool(action: $action))->toArray(), LibraryTool::actions());
+
+    expect($manifest['serverInfo'])->toBe(['name' => $server['name'], 'version' => $server['version']])
+        ->and($manifest['instructions'])->toBe($server['instructions'])
+        ->and($manifest['protocolVersions'])->toBe(ProtocolVersion::supported())
+        ->and($manifest['tools'])->toEqual(json_decode((string) json_encode($tools), true));
 });

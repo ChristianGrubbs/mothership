@@ -187,6 +187,55 @@
                 snapshot() { return {canUndo:index>0,canRedo:index<entries.length-1,dirty:JSON.stringify(entries[index])!==baseline}; },
             };
         },
+        // The arrivals board: one flap cell per character. Text longer than its column ends in "…".
+        boardCells({text, width, align = 'left'}) {
+            const characters = [...String(text ?? '').toUpperCase()];
+            const fitted = characters.length > width ? [...characters.slice(0, width - 1), '…'] : characters;
+            const padding = Array(width - fitted.length).fill(' ');
+            return align === 'right' ? [...padding, ...fitted] : [...fitted, ...padding];
+        },
+        craftName(producer) {
+            const known = {artcraft:'ArtCraft', 'claude-code':'Claude Code', claude:'Claude Code', blender:'Blender', codex:'Codex'};
+            const key = String(producer ?? '').trim().toLowerCase();
+            return known[key] || key.split(/[-_\s]+/).filter(Boolean).map(word => word[0].toUpperCase() + word.slice(1)).join(' ');
+        },
+        // What one board row says, in cells and in the sentence a screen reader hears instead of them.
+        boardRow({row, time}) {
+            const statuses = {landed:['new', 'Landed'], partial:['hold', 'Partial'], failed:['hold', 'Failed'], stowing:['stow', 'Stowing'], seen:['seen', 'Seen']};
+            const [tone, status] = statuses[row.status] || statuses.seen;
+            const from = row.source === 'craft' ? this.craftName(row.producer) : (row.mine ? 'You' : 'Upload');
+            const cargo = row.title || (row.status === 'failed' ? 'Upload failed' : row.phase === 'processing' ? 'Processing upload' : 'Uploading files');
+            const files = Number(row.files) || 0;
+            return {
+                tone, time, from, cargo, status, quantity: String(files),
+                sentence: `${time}, ${from}: ${cargo}, ${files} ${files === 1 ? 'file' : 'files'}, ${status.toLowerCase()}.`,
+            };
+        },
+        // The deck's sentence. It names the sources only when every new landing is on the board.
+        deckSentence({rows, files, size}) {
+            const words = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+            const count = number => words[number] ?? String(number);
+            const fresh = rows.filter(row => ['landed', 'partial'].includes(row.status));
+            const counted = fresh.reduce((total, row) => total + (Number(row.files) || 0), 0);
+            if (!fresh.length || counted !== files) return `${size} since your last visit.`;
+            const crafts = new Set(fresh.filter(row => row.source === 'craft').map(row => row.producer)).size;
+            const uploads = fresh.filter(row => row.source !== 'craft');
+            if (!crafts && uploads.length === 1 && uploads[0].mine) return `One upload from you · ${size}.`;
+            const parts = [crafts ? `${count(crafts)} craft` : '', uploads.length ? `${count(uploads.length)} ${uploads.length === 1 ? 'upload' : 'uploads'}` : ''].filter(Boolean);
+            return `From ${parts.join(' and ')} · ${size}.`;
+        },
+        // How many pictures a shelf shows at this width, and what its "+N" tile counts.
+        shelfFit({room, tile, least, moreTile, gap}) {
+            return {
+                full: Math.max(1, Math.floor((room + gap) / (tile + gap))),
+                withMore: Math.max(1, Math.floor((room - moreTile) / (least + gap))),
+            };
+        },
+        shelfPlan({files, previews, full, withMore}) {
+            if (files <= full && previews >= files) return {pictures: files, more: 0};
+            const pictures = Math.min(previews, withMore);
+            return {pictures, more: Math.max(0, files - pictures)};
+        },
         acceptMessage({event, frame, origin}) {
             return event.source === frame && event.origin === origin
                 && event.data?.protocol === 'mothership-widget/v1';

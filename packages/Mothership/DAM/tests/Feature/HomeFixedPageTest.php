@@ -16,14 +16,13 @@ beforeEach(function () {
 
 it('serves the fixed sections with nothing to customize', function () {
     $this->get('/admin/home')->assertOk()
-        ->assertSee('Your day')
-        ->assertSee('Recent uploads')
-        ->assertSee('Studio tools')
+        ->assertSee('Arrivals board')
+        ->assertSee('Cargo')
+        ->assertSee('Tools')
+        ->assertSee('Calendar')
         ->assertSee('iPhone app')
         ->assertSee('Add to Home Screen')
         ->assertSee('data-calendar-dialog', false)
-        ->assertSee('id="agh-home-search"', false)
-        ->assertSee('data-start-key="upload"', false)
         ->assertDontSee('Customize Home')
         ->assertDontSee('data-customize', false);
 });
@@ -73,19 +72,22 @@ it('survives a stored layout that is not valid JSON', function () {
     $this->getJson('/admin/home/layout')->assertOk()->assertJsonPath('links', []);
 });
 
-it('offers only the start buttons a role can use', function () {
+it('offers only the links and upload a role can use', function () {
     $this->get('/admin/home')->assertOk()
-        ->assertSee('Upload files')
-        ->assertSee('Browse all files')
-        ->assertDontSee('logos and colors');
+        ->assertSee('class="bridge-btn-card bridge-top-upload', false)
+        ->assertSee('data-library-allowed="1"', false)
+        ->assertSee('data-shares="'.route('admin.dam.shared-links.index').'"', false)
+        ->assertSee('data-requests="'.route('admin.dam.upload-requests.index').'"', false);
 
     $role = Role::factory()->create(['permission_type' => 'custom', 'permissions' => ['settings']]);
     $this->actingAs(Admin::factory()->create(['role_id' => $role->id]), 'admin');
 
     $this->get('/admin/home')->assertOk()
-        ->assertDontSee('data-start-key="upload"', false)
-        ->assertDontSee('Browse all files')
-        ->assertDontSee('id="agh-home-search"', false);
+        ->assertDontSee('class="bridge-btn-card bridge-top-upload', false)
+        ->assertSee('data-library-allowed="0"', false)
+        ->assertSee('data-shares=""', false)
+        ->assertSee('data-requests=""', false)
+        ->assertSee('data-new-uploads=""', false);
 });
 
 it('shows no Creative Hub apps now the in-app Hub is gone, even with dam.hub.enabled on', function () {
@@ -95,23 +97,26 @@ it('shows no Creative Hub apps now the in-app Hub is gone, even with dam.hub.ena
         ->assertDontSee('data-hub-apps', false);
 });
 
-it('offers sending files to a person only when Transfers is available', function () {
-    config(['dam.transfers.enabled' => false]);
-    $this->get('/admin/home')->assertOk()
-        ->assertDontSee('data-start-key="send"', false)
-        ->assertDontSee('data-block="send"', false);
+it('links to Transfers from the Tools shelf only while Transfers can open', function () {
+    $this->get('/admin/home')->assertOk()->assertDontSee('<span>Send files</span>', false);
 
     config(['dam.transfers.enabled' => true, 'dam.transfers.origin' => 'https://transfers.example.test', 'dam.transfers.shared_key' => str_repeat('k', 40)]);
+
     $this->get('/admin/home')->assertOk()
-        ->assertSee('data-start-key="send"', false)
-        ->assertSee('data-block="send"', false)
-        ->assertSee('Send files to a person');
+        ->assertSee('<span>Send files</span>', false)
+        ->assertSee(route('admin.dam.transfers.index'), false)
+        ->assertDontSee('data-block="send"', false);
 });
 
-it('keeps the studio admin part for full-access accounts', function () {
-    $this->get('/admin/home')->assertOk()->assertSee('Studio admin')->assertSee('data-slot="status"', false);
+it('keeps every tool launcher reachable from the Tools shelf', function () {
+    config(['dam-home.video_api' => 'https://video.example.test']);
 
-    $role = Role::factory()->create(['permission_type' => 'custom', 'permissions' => ['dam', 'dam.assets']]);
-    $this->actingAs(Admin::factory()->create(['role_id' => $role->id]), 'admin');
-    $this->get('/admin/home')->assertOk()->assertDontSee('Studio admin')->assertDontSee('data-slot="status"', false);
+    $this->get('/admin/home')->assertOk()
+        ->assertSee('data-tools', false)
+        ->assertSee('data-calendar-open', false)
+        ->assertSee('data-phone-open', false);
+
+    $downloader = collect($this->getJson('/admin/home/layout')->assertOk()->json('catalog'))->firstWhere('id', 'video-downloader');
+
+    expect($downloader['kind'])->toBe('tool')->and($downloader['url'])->not->toBeEmpty();
 });
