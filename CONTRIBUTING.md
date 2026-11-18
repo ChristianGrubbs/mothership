@@ -17,6 +17,7 @@ Production runs on the maintainer's Mac. This repository is the only source.
 ## Workflow
 
 - Work on a branch and open a pull request. Never push to `main`.
+- Only collaborators can open pull requests on this repository.
 - One change per pull request.
 - Name branches `feat/<topic>`, `fix/<topic>` or `docs/<topic>`.
 - In the pull request, say what you ran. Include a screenshot for any visible change.
