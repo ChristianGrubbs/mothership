@@ -33,6 +33,25 @@ struct ActionRunner: Sendable {
         return Current(id: id, kind: kind)
     }
 
+    /// Restarts one bridge through its own manager. It is not recorded as the panel's current action,
+    /// so the Start, Stop and Restart controls stay as they are while it runs.
+    func launchBridgeRestart(_ target: BridgeTarget, watch: BridgeWatchConfig) throws -> String {
+        guard let script = Bundle.main.url(forResource: "stack-action", withExtension: "sh") else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        try FileManager.default.createDirectory(at: BarPaths.actions, withIntermediateDirectories: true)
+        let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "")
+        let id = "\(stamp)-bridge-\(target.label)-\(UUID().uuidString.prefix(8).lowercased())"
+        try spawnDetached(arguments: [
+            "/bin/zsh", script.path, id, "bridge-restart", config.wrapperPath, BarPaths.actions.path, config.containerBinary,
+            config.craftTool?.python ?? "", config.craftTool?.script ?? "",
+            config.deployGuard?.coordinator ?? "", config.deployGuard?.lease ?? "", config.siteURL,
+            watch.python, watch.source, watch.nativeServices, target.label, target.host, String(target.port),
+        ])
+        BarLog.write("info", "bridge.restart_launched", loc: "ActionRunner.launchBridgeRestart", ctx: ["id": id, "bridge": target.label])
+        return id
+    }
+
     /// The action recorded on disk, for reattaching after the app restarts.
     func recorded() -> Current? {
         guard let text = try? String(contentsOf: Self.currentFile, encoding: .utf8) else { return nil }

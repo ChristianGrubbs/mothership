@@ -5,6 +5,7 @@
 #              --coordinator <lease-tool> --deploy-lease <worktree:/path>
 #              [--umbrel-ssh <user@host> --umbrel-key <private-key> [--umbrel-capacity-file <json>]]
 #              [--craft-tool <craft_updates.py>]
+#              [--bridge-source <deployed-checkout> --bridge-native <native-services-folder>]
 #   install.sh --uninstall
 # Installing never starts or stops the stack. Everything is staged and checked first. If the switch fails, the previous version is put back.
 set -euo pipefail
@@ -27,7 +28,7 @@ if [[ ${1:-} == --uninstall ]]; then
 fi
 
 wrapper="" app_env="" site_url="" disk="" umbrel_ssh="" umbrel_key="" umbrel_capacity_file=""
-craft_tool="" coordinator="" deploy_lease=""
+craft_tool="" coordinator="" deploy_lease="" bridge_source="" bridge_native=""
 while (( $# )); do
   case $1 in
     --wrapper) wrapper=${2:a} ;;
@@ -40,6 +41,8 @@ while (( $# )); do
     --craft-tool) craft_tool=${2:a} ;;
     --coordinator) coordinator=${2:a} ;;
     --deploy-lease) deploy_lease=$2 ;;
+    --bridge-source) bridge_source=${2:a} ;;
+    --bridge-native) bridge_native=${2:a} ;;
     *) print -r -- "unknown option: $1" >&2; exit 64 ;;
   esac
   shift 2
@@ -60,6 +63,10 @@ if [[ -n $umbrel_capacity_file && ( -z $umbrel_ssh || ! -d ${umbrel_capacity_fil
 fi
 if [[ -n $craft_tool && ! -f $craft_tool ]]; then
   print -r -- "--craft-tool needs an existing file" >&2
+  exit 64
+fi
+if [[ -n $bridge_source || -n $bridge_native ]] && [[ ! -d $bridge_source/tools/studio || ! -d $bridge_native ]]; then
+  print -r -- "--bridge-source needs the deployed checkout and --bridge-native needs an existing folder" >&2
   exit 64
 fi
 if [[ ! -x $coordinator || $deploy_lease != worktree:/* ]]; then
@@ -83,6 +90,7 @@ ditto "$build/The Mothership.app" "$staged_app"
 WRAPPER=$wrapper APP_ENV=$app_env SITE_URL=$site_url DISK=$disk CONFIG=$staged_config \
   UMBREL_SSH=$umbrel_ssh UMBREL_KEY=$umbrel_key UMBREL_CAPACITY_FILE=$umbrel_capacity_file \
   CRAFT_TOOL=$craft_tool COORDINATOR=$coordinator DEPLOY_LEASE=$deploy_lease \
+  BRIDGE_SOURCE=$bridge_source BRIDGE_NATIVE=$bridge_native \
   /usr/bin/python3 - <<'PY'
 import json, os
 config = {
@@ -111,6 +119,12 @@ if os.environ["UMBREL_CAPACITY_FILE"]:
     config["umbrelCapacityFile"] = os.environ["UMBREL_CAPACITY_FILE"]
 if os.environ["CRAFT_TOOL"]:
     config["craftTool"] = {"python": "/opt/homebrew/bin/python3", "script": os.environ["CRAFT_TOOL"]}
+if os.environ["BRIDGE_SOURCE"]:
+    config["bridgeWatch"] = {
+        "python": "/opt/homebrew/bin/python3",
+        "source": os.environ["BRIDGE_SOURCE"],
+        "nativeServices": os.environ["BRIDGE_NATIVE"],
+    }
 with open(os.environ["CONFIG"], "w", encoding="utf-8") as handle:
     json.dump(config, handle, indent=2)
 PY

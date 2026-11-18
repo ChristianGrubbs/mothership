@@ -24,7 +24,9 @@ public func healthRows(snapshot: HealthSnapshot, overall: Overall) -> [HealthRow
         siteRow(snapshot.site, quiet: quiet, problem: problem),
         containersRow(snapshot.containers, unreadable: snapshot.unreadable.contains(.containers), problem: problem),
         tunnelRow(snapshot.tunnel, problem: problem),
-        bridgesRow(snapshot.bridges, unreadable: snapshot.unreadable.contains(.bridges), problem: problem),
+        bridgesRow(
+            snapshot.bridges, watch: snapshot.bridgeWatch, unreadable: snapshot.unreadable.contains(.bridges), problem: problem
+        ),
         ollamaRow(snapshot.ollama, problem: problem),
     ]
 }
@@ -65,7 +67,7 @@ private func tunnelRow(_ tunnel: TunnelReading?, problem: (String) -> HealthRow.
 }
 
 private func bridgesRow(
-    _ bridges: [BridgeReading]?, unreadable: Bool, problem: (String) -> HealthRow.Parts
+    _ bridges: [BridgeReading]?, watch: [String: BridgeWatchStatus], unreadable: Bool, problem: (String) -> HealthRow.Parts
 ) -> HealthRow {
     guard let bridges else {
         return unreadable ? HealthRow("Bridges", problem("Can't read")) : .checking("Bridges")
@@ -74,9 +76,12 @@ private func bridgesRow(
     let healthy = bridges.filter(\.ok).count
     let count = "\(healthy) of \(bridges.count)"
     if healthy == bridges.count { return HealthRow("Bridges", (count, .ok)) }
+    let failing = bridges.filter { !$0.ok }.map(\.name)
+    // The board holds 14 characters. The fault line under it names the bridge.
+    let restarting = failing.filter { watch[$0] == .restarting }.count
+    if restarting > 0 { return HealthRow("Bridges", problem("\(restarting) restarting")) }
     if healthy == 0 { return HealthRow("Bridges", problem("All \(bridges.count) down")) }
-    let down = bridges.filter { !$0.ok }.map(\.name).joined(separator: ", ")
-    return HealthRow("Bridges", problem("\(count), \(down) down"))
+    return HealthRow("Bridges", problem("\(count), \(failing.joined(separator: ", ")) down"))
 }
 
 private func ollamaRow(_ ollama: OllamaReading?, problem: (String) -> HealthRow.Parts) -> HealthRow {

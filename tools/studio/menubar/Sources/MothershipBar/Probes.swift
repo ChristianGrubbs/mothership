@@ -52,11 +52,11 @@ struct Probes: Sendable {
         return TunnelReading(jobRunning: true, readyConnections: (body["readyConnections"] as? NSNumber)?.intValue)
     }
 
-    func bridges() async -> (readings: [BridgeReading]?, driveBlocked: Bool) {
+    func bridges() async -> (readings: [BridgeReading]?, targets: [BridgeTarget], driveBlocked: Bool) {
         switch await readFile(config.appEnvPath, timeout: 5) {
-        case .blocked: (nil, true)
-        case .unavailable: (nil, false)
-        case .text(let text): (await bridgeReadings(appEnv: text), false)
+        case .blocked: (nil, [], true)
+        case .unavailable: (nil, [], false)
+        case .text(let text): (await bridgeReadings(appEnv: text), parseBridgeTargets(text), false)
         }
     }
 
@@ -65,7 +65,7 @@ struct Probes: Sendable {
             for (index, endpoint) in parseBridgeEndpoints(text).enumerated() {
                 group.addTask {
                     let answer = await get(endpoint.url)
-                    return (index, BridgeReading(name: endpoint.name, ok: answer?.status == 200))
+                    return (index, BridgeReading(name: endpoint.name, ok: bridgeAnswered(status: answer?.status, body: answer?.data)))
                 }
             }
             var readings: [(Int, BridgeReading)] = []

@@ -73,6 +73,14 @@ enum RenderStates {
         twoBridgesDown.bridges?[0].ok = false
         twoBridgesDown.bridges?[2].ok = false
 
+        var bridgeRestarting = healthy
+        bridgeRestarting.bridges?[0].ok = false
+        bridgeRestarting.bridgeWatch = ["Optimizer": .restarting]
+
+        var bridgeGaveUp = healthy
+        bridgeGaveUp.bridges?[0].ok = false
+        bridgeGaveUp.bridgeWatch = ["Optimizer": .noRecovery]
+
         var unreadable = healthy
         unreadable.containers = nil
         unreadable.bridges = nil
@@ -151,6 +159,8 @@ enum RenderStates {
             ("11-stopping", panel(starting, action: .stop, step: ActionStep.down.title, elapsed: 21)),
             ("12-bridges-all-down", panel(bridgesDown)),
             ("13-bridges-two-down", panel(twoBridgesDown)),
+            ("13a-bridge-restarting", panel(bridgeRestarting)),
+            ("13b-bridge-gave-up", panel(bridgeGaveUp)),
             ("14-unreadable", panel(unreadable)),
             ("15-long-figures", panel(longFigures)),
             ("16-ollama-down", panel(ollamaDown)),

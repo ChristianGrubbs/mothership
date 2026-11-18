@@ -40,6 +40,8 @@ final class AppModel {
     @ObservationIgnored private var lastStoreRead: Date?
     @ObservationIgnored private var storeReadRunning = false
     @ObservationIgnored private var lastCraftAttempt: Date?
+    @ObservationIgnored private var bridgeWatch = BridgeWatch()
+    @ObservationIgnored private var bridgeRestart: (id: String, name: String, started: Date)?
 
     private var probes: Probes? { config.map { Probes(config: $0) } }
     private var runner: ActionRunner? { config.map { ActionRunner(config: $0) } }
@@ -332,6 +334,52 @@ final class AppModel {
         snapshot.store = storeState
     }
 
+    /// Restarts a stopped bridge, one at a time. This is the only thing the app restarts by itself, and it
+    /// never runs the stack's own `up` or `down`. The runner repeats every safety check before it acts.
+    private func watchBridges(
+        readings: [BridgeReading]?, targets: [BridgeTarget], containers: ContainerReading?, driveBlocked: Bool
+    ) {
+        guard let runner, let watch = config?.bridgeWatch else { return }
+        let before = bridgeWatch.statuses
+        defer { logBridgeWatchChanges(from: before) }
+        finishBridgeRestart(runner)
+        guard let readings else { return }
+        let stackIsUp = (containers?.running ?? 0) > 0 && containers?.notRunning.contains("fpm") == false
+        let clear = activeAction == nil && !externalBusy && !driveBlocked && stackIsUp
+        guard let name = bridgeWatch.observe(readings, clear: clear, now: Date()) else { return }
+        guard let target = targets.first(where: { $0.name == name }),
+              let id = try? runner.launchBridgeRestart(target, watch: watch) else {
+            BarLog.write("error", "bridge.restart_launch_failed", loc: "AppModel.watchBridges", ctx: ["bridge": name])
+            bridgeWatch.finished(name, outcome: .failed, now: Date())
+            return
+        }
+        bridgeRestart = (id, name, Date())
+    }
+
+    private func finishBridgeRestart(_ runner: ActionRunner) {
+        guard let current = bridgeRestart else { return }
+        let progress = runner.progress(of: current.id)
+        let runnerDied = !progress.finished && !runner.runnerIsAlive() && Date().timeIntervalSince(current.started) > 10
+        guard progress.finished || runnerDied else { return }
+        let outcome = runnerDied ? BridgeRestartOutcome.failed : bridgeRestartOutcome(exitCode: progress.exitCode)
+        BarLog.write(
+            outcome == .succeeded ? "info" : "warn", "bridge.restart_finished", loc: "AppModel.finishBridgeRestart",
+            ctx: ["bridge": current.name, "id": current.id, "outcome": outcome.rawValue, "exit": "\(progress.exitCode ?? -1)"]
+        )
+        bridgeWatch.finished(current.name, outcome: outcome, now: Date())
+        bridgeRestart = nil
+    }
+
+    private func logBridgeWatchChanges(from before: [String: BridgeWatchStatus]) {
+        let after = bridgeWatch.statuses
+        for name in Set(before.keys).union(after.keys) where before[name] != after[name] {
+            BarLog.write(
+                after[name] == .restarting || after[name] == nil ? "info" : "warn", "bridge.watch_changed",
+                loc: "AppModel.watchBridges", ctx: ["bridge": name, "status": after[name]?.rawValue ?? "answering"]
+            )
+        }
+    }
+
     private func pollOnce() async {
         guard let probes else { return }
         refreshStoreIfDue()
@@ -378,7 +426,13 @@ final class AppModel {
             )
         }
 
+        watchBridges(
+            readings: bridgeResult.readings, targets: bridgeResult.targets, containers: containerValue,
+            driveBlocked: bridgeResult.driveBlocked
+        )
+
         var next = HealthSnapshot()
+        next.bridgeWatch = bridgeWatch.statuses
         next.site = site
         next.containers = containerValue
         next.tunnel = await tunnel
