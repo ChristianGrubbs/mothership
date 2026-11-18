@@ -214,6 +214,8 @@ run('Video Downloader tells Home it holds work only while a file is on this devi
         studio.hold('a');
         await row('a').locator('button[data-act="save"]').click();
         await row('a', '.is-save-fetching').waitFor();
+        // The tool reports by postMessage, which arrives after the row is painted.
+        await page.waitForFunction(() => window.__told.length === 2 && window.__asksBeforeClosing());
         assert.deepEqual(await told(), [false, true]);
         assert.equal(await asks(), true);
 
