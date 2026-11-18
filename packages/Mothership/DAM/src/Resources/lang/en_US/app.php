@@ -1968,6 +1968,8 @@ return [
                     'download-many'  => ':count downloads',
                     'more'           => 'More',
                     'more-for'       => 'More actions for :name',
+                    'sort'           => 'Sort',
+                    'made-on'        => 'Made on',
                     'sort-by'        => 'Sort by :column',
                     'sorted-asc'     => ':column, sorted ascending. Reverse the order',
                     'sorted-desc'    => ':column, sorted descending. Reverse the order',

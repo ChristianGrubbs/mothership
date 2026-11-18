@@ -43,15 +43,21 @@
                     data-dam-shares
                 >
                     <x-admin::datagrid src="{{ route('admin.dam.shared-links.index') }}" ref="datagrid">
-                        <template #header="{ columns, applied, sortPage }">
-                            <div class="bridge-list-head">
-                                <span>@lang('dam::app.admin.dam.share.list.link')</span>
-                                <span>@lang('dam::app.admin.dam.share.datagrid.status')</span>
+                        <template #header="{ columns, meta, applied, sortPage }">
+                            {{--
+                                Below the table form the column names go, but the sort buttons stay as one strip,
+                                so the order can be changed at every width. One link or none has no order to change.
+                            --}}
+                            <div class="bridge-list-head" :class="{ 'has-sorts': (meta?.total ?? 0) > 1 }">
+                                <span class="bridge-list-for-table">@lang('dam::app.admin.dam.share.list.link')</span>
+                                <span class="bridge-list-for-table">@lang('dam::app.admin.dam.share.datagrid.status')</span>
+                                <span class="bridge-list-for-cards" aria-hidden="true">@lang('dam::app.admin.dam.share.list.sort')</span>
 
                                 <span v-for="sort in sorts" :key="sort.index">
                                     <button
                                         type="button"
                                         class="bridge-list-sort"
+                                        :class="{ 'is-sorted': applied.sort.column === sort.index }"
                                         :aria-label="sortLabel(sort, applied)"
                                         :title="sortLabel(sort, applied)"
                                         :data-dam-shares-sort="sort.index"
@@ -68,7 +74,7 @@
                                     </button>
                                 </span>
 
-                                <span class="sr-only">@lang('admin::app.components.datagrid.table.actions')</span>
+                                <span class="bridge-list-for-table sr-only">@lang('admin::app.components.datagrid.table.actions')</span>
                             </div>
                         </template>
 
@@ -442,11 +448,12 @@
                         expiryTouched: false,
                         pendingPublic: null,
 
-                        // The column names that sort the list, in the order the table form shows them.
+                        // The column names that sort the list, in the order the table form shows them. The last
+                        // column shows who made a link and when; it sorts by the day, so that is what it is called.
                         sorts: [
                             { index: 'expires_at', label: @js(trans('dam::app.admin.dam.share.datagrid.expires-at')) },
                             { index: 'view_count', label: @js(trans('dam::app.admin.dam.share.list.activity')) },
-                            { index: 'created_at', label: @js(trans('dam::app.admin.dam.share.datagrid.created-by')) },
+                            { index: 'created_at', label: @js(trans('dam::app.admin.dam.share.list.made-on')) },
                         ],
 
                         // The server's clock when the page was built, in the zone the rows' dates are stored in:

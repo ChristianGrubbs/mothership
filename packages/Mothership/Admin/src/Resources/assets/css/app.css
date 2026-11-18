@@ -1333,8 +1333,25 @@ a.bridge-list-name:hover {
 }
 
 .bridge-list-sort:hover,
+.bridge-list-sort.is-sorted,
 .bridge-list-sort[aria-pressed="true"] {
     color: var(--ink);
+}
+
+/* A list that can be put in another order keeps its sort buttons in the card forms, as one strip above the rows:
+   the column names go, the buttons stay, each at a touch height. */
+.bridge-list-head.has-sorts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 20px;
+    padding: 4px 16px;
+    border-bottom: 1px solid var(--line);
+}
+
+.bridge-list-head.has-sorts .bridge-list-sort {
+    min-height: 40px;
+    margin-block: 0;
 }
 
 /* Three quiet rows stand in for a list until its first answer arrives. */
@@ -1783,6 +1800,7 @@ a.bridge-review-name:hover {
     .bridge-list-foot,
     .bridge-list-loading,
     .bridge-list-head.has-pick,
+    .bridge-list-head.has-sorts,
     .bridge-list-bar,
     .bridge-review-head,
     .bridge-review-items {
@@ -1819,6 +1837,18 @@ a.bridge-review-name:hover {
 
     .bridge-list-for-cards {
         display: none;
+    }
+
+    /* In the table form the sort strip is the head row again: each button sits over its own column. */
+    .bridge-list-head.has-sorts {
+        display: grid;
+        gap: 0 20px;
+        padding: 12px 20px;
+    }
+
+    .bridge-list-head.has-sorts .bridge-list-sort {
+        min-height: 0;
+        margin-block: -6px;
     }
 
     .bridge-list-main,
