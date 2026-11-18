@@ -169,6 +169,17 @@ const fixture = `
             </template>
         </v-dropdown>
     </div>
+
+    <v-dropdown class="relative" data-case="stateful">
+        <template v-slot:toggle>
+            <button type="button">View options</button>
+        </template>
+        <template v-slot:menu>
+            <ul data-dropdown-menu class="py-4">
+                <li role="menuitemcheckbox" aria-checked="true" @click="pick('grouped')">Group by stack</li>
+            </ul>
+        </template>
+    </v-dropdown>
 `;
 
 async function mount(page) {
@@ -461,6 +472,16 @@ vueTest('the pointer still opens without moving focus, and a menu slot holding i
     await settle(page);
     assert.deepEqual(await picked(page), ['every-folder']);
     assert.equal(await plain.getAttribute('aria-expanded'), 'false');
+
+    const stateful = toggleOf(page, 'stateful');
+
+    await stateful.focus();
+    await page.keyboard.press('Enter');
+    await settle(page);
+    assert.equal(await active(page), 'menuitemcheckbox:Group by stack', 'an item with a checked state keeps its role and still takes focus');
+    assert.equal(await page.getByText('Group by stack').getAttribute('aria-checked'), 'true');
+    await page.keyboard.press('Escape');
+    await settle(page);
 
     const composite = toggleOf(page, 'composite');
 

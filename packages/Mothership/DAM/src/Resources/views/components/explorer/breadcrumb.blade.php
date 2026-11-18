@@ -70,9 +70,7 @@
                                 :class="crumbDropTarget === crumb.id ? 'bg-primary-100 dark:bg-primary-900/40 ring-1 ring-primary-400' : ''"
                                 :title="crumb.name"
                                 data-breadcrumb-hidden
-                                @click="chooseHidden(crumb)"
-                                @contextmenu.prevent.stop="showCrumbCtx($event, crumb)"
-                                @dragover.prevent="onDragOver($event, crumb)"
+                                @click="chooseHidden(crumb)"                                @dragover.prevent="onDragOver($event, crumb)"
                                 @dragleave="onDragLeave($event, crumb)"
                                 @drop.prevent="onHiddenDrop($event, crumb)"
                             >@{{ crumb.name }}</button>
@@ -89,29 +87,13 @@
                             ? 'text-primary-700 dark:text-primary-300 cursor-pointer bg-primary-100 dark:bg-primary-900/40 ring-1 ring-primary-400'
                             : 'text-gray-500 dark:text-gray-300 hover:text-primary-700 hover:underline cursor-pointer']"
                     :title="item.crumb.name"
-                    @click="item.index < breadcrumbs.length - 1 ? $emit('navigate', item.crumb) : null"
-                    @contextmenu.prevent.stop="showCrumbCtx($event, item.crumb)"
-                    @dragover.prevent="onDragOver($event, item.crumb)"
+                    @click="item.index < breadcrumbs.length - 1 ? $emit('navigate', item.crumb) : null"                    @dragover.prevent="onDragOver($event, item.crumb)"
                     @dragleave="onDragLeave($event, item.crumb)"
                     @drop.prevent="onDrop($event, item.crumb)"
                 >@{{ item.crumb.name }}</button>
             </template>
         </nav>
 
-        <teleport to="body">
-            <div
-                v-if="crumbCtx.on"
-                class="fixed bg-white dark:bg-cherry-900 border border-gray-200 dark:border-cherry-600 rounded-lg shadow-lg py-1"
-                style="z-index:10020;"
-                :style="{ left: crumbCtx.x + 'px', top: crumbCtx.y + 'px' }"
-            >
-                <button
-                    type="button"
-                    class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-cherry-800 whitespace-nowrap"
-                    @click="openCrumbInNewTab"
-                >@lang('dam::app.admin.explorer.context.open-new-tab')</button>
-            </div>
-        </teleport>
         </template>
 
     </div>
@@ -120,7 +102,7 @@
 <script type="module">
 app.component('v-dam-explorer-breadcrumb', {
     template: '#v-dam-explorer-breadcrumb-template',
-    emits: ['back', 'forward', 'navigate', 'open-new-tab', 'drop'],
+    emits: ['back', 'forward', 'navigate', 'drop'],
 
     props: {
         breadcrumbs:  { type: Array,   default: () => [] },
@@ -136,7 +118,6 @@ app.component('v-dam-explorer-breadcrumb', {
     data() {
         return {
             crumbDropTarget: null,
-            crumbCtx: { on: false, x: 0, y: 0, crumb: null },
             springTimer: null,
         };
     },
@@ -198,18 +179,6 @@ app.component('v-dam-explorer-breadcrumb', {
         scrollToCurrent() {
             const trail = this.$refs.trail;
             if (trail) trail.scrollLeft = trail.scrollWidth;
-        },
-
-        showCrumbCtx(e, crumb) {
-            this.crumbCtx = { on: true, x: e.clientX, y: e.clientY, crumb };
-            const close = () => { this.crumbCtx = { on: false, x: 0, y: 0, crumb: null }; };
-            document.addEventListener('click', close, { once: true });
-        },
-
-        openCrumbInNewTab() {
-            const crumb = this.crumbCtx.crumb;
-            this.crumbCtx = { on: false, x: 0, y: 0, crumb: null };
-            if (crumb) this.$emit('open-new-tab', crumb);
         },
 
         onDragOver(e, crumb) {

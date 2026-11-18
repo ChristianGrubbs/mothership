@@ -14,10 +14,6 @@
                 <i class="icon-dam-folder text-sm text-zinc-600 dark:text-white" aria-hidden="true"></i>
                 @lang('dam::app.admin.explorer.context.open')
             </button>
-            <button role="menuitem" class="flex items-center gap-2 w-full text-left px-4 py-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary-600 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-cherry-700" @click="doOpenNewTab">
-                <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-zinc-600 dark:text-white shrink-0"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-                @lang('dam::app.admin.explorer.context.open-new-tab')
-            </button>
 
             <template v-if="item && item.can_access">
                 <div class="border-t border-gray-100 dark:border-cherry-700 my-1"></div>
@@ -255,7 +251,7 @@
 <script type="module">
 app.component('v-dam-explorer-ctx', {
     template: '#v-dam-explorer-ctx-template',
-    emits: ['close','navigate','open-new-tab','bookmark','refresh'],
+    emits: ['close','navigate','bookmark','refresh'],
     props: { x: Number, y: Number, item: Object, itemType: String, tabId: { type: String, required: true }, clipboard: { type: Object, default: null }, selection: { type: Object, default: null } },
 
     data() {
@@ -337,7 +333,6 @@ app.component('v-dam-explorer-ctx', {
             }
         },
         doNavigate()    { this.$emit('navigate', this.item); this.close(); },
-        doOpenNewTab()  { this.$emit('open-new-tab', this.item); this.close(); },
         doBookmark()    { this.$emit('bookmark', this.item); this.close(); },
 
         preview()     { this.$emitter.emit('dam-open-preview', this.item.id); this.close(); },

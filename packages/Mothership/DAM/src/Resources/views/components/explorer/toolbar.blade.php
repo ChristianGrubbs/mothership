@@ -8,7 +8,7 @@
             {{-- VIS-11: with files selected, the bulk-action bar is pinned to the bottom of a phone screen. It cannot be position: sticky: the tab's overflow-hidden ancestors would hold it in place. --}}
             <div
                 class="flex flex-1 min-w-[120px] min-[640px]:min-w-[300px] items-center gap-x-1"
-                :class="{ 'max-[639px]:fixed max-[639px]:inset-x-0 max-[639px]:bottom-0 max-[639px]:z-[60] max-[639px]:flex-wrap max-[639px]:gap-y-2 max-[639px]:border-t max-[639px]:border-gray-200 dark:max-[639px]:border-cherry-700 max-[639px]:bg-white dark:max-[639px]:bg-cherry-900 max-[639px]:px-4 max-[639px]:pt-3 max-[639px]:pb-[calc(0.75rem+env(safe-area-inset-bottom))] max-[639px]:shadow-[0_-4px_12px_rgba(0,0,0,0.12)]': selection.ids.length > 0 }"
+                :class="{ 'max-[639px]:fixed max-[639px]:inset-x-0 max-[639px]:bottom-0 max-[639px]:z-[60] flex-wrap gap-y-2 max-[639px]:border-t max-[639px]:border-gray-200 dark:max-[639px]:border-cherry-700 max-[639px]:bg-white dark:max-[639px]:bg-cherry-900 max-[639px]:px-4 max-[639px]:pt-3 max-[639px]:pb-[calc(0.75rem+env(safe-area-inset-bottom))] max-[639px]:shadow-[0_-4px_12px_rgba(0,0,0,0.12)]': selection.ids.length > 0 }"
                 :style="selectionBarBottom ? { bottom: selectionBarBottom + 'px', paddingBottom: '0.75rem' } : null"
                 data-explorer-selection-bar
                 ref="selectionBar"
@@ -173,7 +173,7 @@
                         <div class="relative w-full min-w-0">
                             <input
                                 type="text"
-                                class="block w-full rounded-lg border dark:border-gray-500 bg-white dark:bg-cherry-900 py-1.5 ltr:pl-3 rtl:pr-3 ltr:pr-10 rtl:pl-10 leading-6 text-gray-600 dark:text-gray-300 transition-all hover:border-gray-400 dark:hover:border-gray-400 focus:border-gray-400 dark:focus:border-gray-400"
+                                class="block w-full rounded-lg border dark:border-gray-500 bg-white dark:bg-cherry-900 py-2 ltr:pl-3 rtl:pr-3 ltr:pr-10 rtl:pl-10 leading-6 text-gray-600 dark:text-gray-300 transition-all hover:border-gray-400 dark:hover:border-gray-400 focus:border-gray-400 dark:focus:border-gray-400"
                                 :placeholder="'@lang('dam::app.admin.explorer.search.placeholder')'"
                                 aria-label="Search assets in this scope"
                                 maxlength="255"
@@ -207,7 +207,7 @@
                 type="button"
                 class="min-[640px]:hidden flex w-full min-h-11 items-center justify-between gap-2 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 dark:border-cherry-700 dark:bg-cherry-900 dark:text-gray-200"
                 :aria-expanded="phoneFiltersOpen ? 'true' : 'false'"
-                aria-controls="explorer-phone-media-types"
+                aria-controls="explorer-phone-filters"
                 data-explorer-phone-filters
                 @click="phoneFiltersOpen = ! phoneFiltersOpen"
             >
@@ -223,13 +223,25 @@
                 <span class="text-xl" :class="phoneFiltersOpen ? 'icon-chevron-up' : 'icon-chevron-down'" aria-hidden="true"></span>
             </button>
 
-            <div class="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 min-w-0 max-[639px]:w-full max-[639px]:flex-nowrap max-[639px]:justify-between max-[639px]:gap-x-2" :class="{ 'max-[639px]:hidden': ! phoneFiltersOpen }">
+            <div id="explorer-phone-filters" class="flex flex-wrap items-center justify-end gap-x-3 gap-y-3 min-w-0 max-[639px]:w-full max-[639px]:justify-between max-[639px]:gap-x-2" :class="{ 'max-[639px]:hidden': ! phoneFiltersOpen, 'min-[640px]:hidden': selection.ids.length > 0 }">
+                <label class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 max-[639px]:min-w-0 max-[639px]:flex-1">
+                    <span class="sr-only">@lang('dam::app.admin.explorer.filter-recovery.media-type')</span>
+                    <select
+                        data-explorer-media-type
+                        class="max-[639px]:min-h-11 max-[639px]:w-full max-[639px]:min-w-0 rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-700 dark:border-gray-500 dark:bg-cherry-900 dark:text-gray-200"
+                        :value="mediaType"
+                        @change="setMediaType($event.target.value)"
+                    >
+                        <option v-for="(label, id) in mediaTypeLabels" :key="id" :value="id" v-text="id === 'all' ? @js(trans('dam::app.admin.explorer.filter-recovery.media-type')) : label"></option>
+                    </select>
+                </label>
+
                 <!-- "Similar to" results are ordered by similarity; the backend ignores the sort there. -->
                 <label v-show="! similarTo" class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 max-[639px]:min-w-0 max-[639px]:flex-1">
-                    <span class="whitespace-nowrap max-[639px]:sr-only">Sort by</span>
+                    <span class="sr-only">Sort by</span>
                     <select
                         data-explorer-sort
-                        class="max-[639px]:w-full max-[639px]:min-w-0 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-700 dark:border-gray-500 dark:bg-cherry-900 dark:text-gray-200"
+                        class="max-[639px]:min-h-11 max-[639px]:w-full max-[639px]:min-w-0 rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-700 dark:border-gray-500 dark:bg-cherry-900 dark:text-gray-200"
                         :title="sortBy === 'popularity' ? organizeT.sort?.['popularity-hint'] : undefined"
                         :value="`${sortBy}:${sortOrder}`"
                         @change="onSortSelection($event.target.value)"
@@ -242,13 +254,13 @@
                 <button
                     v-show="! similarTo"
                     type="button"
-                    class="flex shrink-0 items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-cherry-700 dark:bg-cherry-900 dark:text-gray-200 dark:hover:bg-cherry-800 max-[639px]:px-2"
+                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-gray-300 bg-white text-sm text-gray-700 hover:bg-gray-50 dark:border-cherry-700 dark:bg-cherry-900 dark:text-gray-200 dark:hover:bg-cherry-800 max-[639px]:h-11 max-[639px]:w-11"
                     title="@lang('dam::app.admin.organize.actions.save-search')"
                     data-organize-save-search
                     @click="openSaveSearch"
                 >
                     <svg class="shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"/></svg>
-                    <span class="max-[639px]:sr-only">@lang('dam::app.admin.organize.actions.save-search')</span>
+                    <span class="sr-only">@lang('dam::app.admin.organize.actions.save-search')</span>
                 </button>
 
                 <x-admin::drawer width="350px" ref="explorerFilterDrawer">
@@ -308,17 +320,6 @@
                         </div>
                     </x-slot:footer>
                 </x-admin::drawer>
-
-                <v-dam-explorer-pager
-                    class="max-[639px]:hidden"
-                    :class="{ invisible: ! meta }"
-                    :aria-hidden="meta ? undefined : 'true'"
-                    :current-page="meta?.current_page ?? 1"
-                    :last-page="meta?.last_page ?? 1"
-                    :per-page="perPage"
-                    @page-change="onPage"
-                    @per-page-change="onPerPage"
-                ></v-dam-explorer-pager>
             </div>
         </div>
 

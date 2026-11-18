@@ -66,9 +66,6 @@
                                             @lang('dam::app.admin.dam.index.title')
                                         </p>
                                     </div>
-                                    <p class="text-sm text-zinc-600 !leading-normal dark:text-slate-300">
-                                        @lang('dam::app.admin.dam.index.description')
-                                    </p>
                                 </div>
 
                                 <div class="dark:bg-cherry-700 border-b dark:border-cherry-800"></div>
@@ -175,7 +172,7 @@
                 template: '#v-dam-main-template',
 
                 data() {
-                    let showSidebar = true;
+                    let showSidebar = window.matchMedia?.('(min-width: 1240px)')?.matches ?? true;
                     try {
                         const s = localStorage.getItem('dam_show_sidebar');
                         if (s !== null) showSidebar = s !== 'false';
