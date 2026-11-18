@@ -332,7 +332,7 @@
                             "vault_note": {
                                 "type": "string",
                                 "maxLength": 500,
-                                "description": "The vault note that records the work."
+                                "description": "The note that records the work."
                             },
                             "source_url": {
                                 "type": "string",

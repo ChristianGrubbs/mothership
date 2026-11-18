@@ -195,7 +195,7 @@ class LibraryTool extends Tool
                         'backend'             => ['type' => 'string', 'maxLength' => 200],
                         'generation_id'       => ['type' => 'string', 'maxLength' => 200],
                         'reference_asset_ids' => ['type' => 'array', 'maxItems' => 50, 'items' => ['type' => 'integer', 'minimum' => 1], 'description' => 'Library assets used as references.'],
-                        'vault_note'          => ['type' => 'string', 'maxLength' => 500, 'description' => 'The vault note that records the work.'],
+                        'vault_note'          => ['type' => 'string', 'maxLength' => 500, 'description' => 'The note that records the work.'],
                         'source_url'          => ['type' => 'string', 'maxLength' => 2000],
                     ],
                     'additionalProperties' => false,
