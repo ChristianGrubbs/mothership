@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Mapping, Optional, Sequence
 
+DEFAULT_DOWNIE = pathlib.Path.home() / ".local" / "bin" / "downie"
 DEFAULT_YTDLP = "/opt/homebrew/bin/yt-dlp"
 DEFAULT_FFMPEG_DIR = "/opt/homebrew/bin"
 DEFAULT_MAX_BYTES = 2 * 1024 * 1024 * 1024  # 2 GiB
@@ -48,6 +49,7 @@ class ServiceConfig:
     state: pathlib.Path
     host: str
     port: int
+    downie: pathlib.Path
     ytdlp: pathlib.Path
     ffmpeg_dir: pathlib.Path
     max_bytes: int
@@ -281,7 +283,7 @@ def _up(config: ServiceConfig, log: EventLog) -> dict:
             "stop that process or choose another --port"
         )
 
-    for dependency in (config.ytdlp, config.ffmpeg_dir / "ffmpeg"):
+    for dependency in (config.downie, config.ytdlp, config.ffmpeg_dir / "ffmpeg"):
         if not dependency.is_file():
             raise ServiceFailure(f"missing native service dependency: {dependency}")
     config.log_file.parent.mkdir(parents=True, exist_ok=True)
@@ -291,6 +293,7 @@ def _up(config: ServiceConfig, log: EventLog) -> dict:
     environment = os.environ.copy()
     environment.update(
         {
+            "VIDEO_DOWNIE": str(config.downie),
             "VIDEO_YTDLP": str(config.ytdlp),
             "VIDEO_FFMPEG_DIR": str(config.ffmpeg_dir),
             "VIDEO_HOST": config.host,
@@ -298,7 +301,7 @@ def _up(config: ServiceConfig, log: EventLog) -> dict:
             "VIDEO_MAX_BYTES": str(config.max_bytes),
             "VIDEO_DATA": str(config.data),
             "VIDEO_SERVICE_LOG_PATH": str(config.lifecycle_log),
-            # yt-dlp runs ffmpeg and, for some sites, a JavaScript runtime; launchd's PATH has neither.
+            # downie and yt-dlp run ffmpeg and, for some sites, a JavaScript runtime; launchd's PATH has neither.
             "PATH": os.pathsep.join([str(config.ffmpeg_dir), "/opt/homebrew/bin", environment.get("PATH", "/usr/bin:/bin")]),
         }
     )
@@ -363,6 +366,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--state", type=pathlib.Path, default=default_state)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    parser.add_argument("--downie", type=pathlib.Path, default=DEFAULT_DOWNIE)
     parser.add_argument("--ytdlp", type=pathlib.Path, default=pathlib.Path(DEFAULT_YTDLP))
     parser.add_argument("--ffmpeg-dir", type=pathlib.Path, default=pathlib.Path(DEFAULT_FFMPEG_DIR))
     parser.add_argument("--max-bytes", type=int, default=DEFAULT_MAX_BYTES)
@@ -377,6 +381,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         state=args.state.resolve(),
         host=args.host,
         port=args.port,
+        downie=args.downie,
         ytdlp=args.ytdlp,
         ffmpeg_dir=args.ffmpeg_dir,
         max_bytes=args.max_bytes,

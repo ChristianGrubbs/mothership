@@ -51,7 +51,7 @@ test('URL search treats spaces, Unicode and zero as explicit all-assets queries'
     assert.equal(nav.locationState('?media_type=unknown').mediaType,'all');
 });
 
-test('explicit header search overrides saved active folder and filters while retaining other tabs',()=>{
+test('explicit header search overrides saved active folder and filters and leaves one view open',()=>{
     const {definition,context}=component(explorerFile,'v-dam-explorer',{
         [userKey('dam_explorer_tabs')]:JSON.stringify({tabs:[{directoryId:12,label:'Keep tab',search:'keep'},{directoryId:77,label:'Old tab',search:'old'}],activeIdx:1})
     });
@@ -60,7 +60,7 @@ test('explicit header search overrides saved active folder and filters while ret
     state.restore(99);
     const active=state.tabs.find(tab=>tab.id===state.activeTabId);
     assert.equal(active.directoryId,null);assert.equal(active.scope,'all');assert.equal(active.search,'café');assert.equal(active.mediaType,'svgs');assert.equal(active.clearSavedFilters,true);
-    assert.equal(state.tabs[0].directoryId,12);
+    assert.equal(state.tabs.length,1);
     const {definition:tab}=component(tabFile,'v-dam-tab',{[userKey('dam_explorer_active_dir')]:'77',[userKey('dam_explorer_filter_state')]:JSON.stringify([{index:'extension',value:['pdf']}])});
     const data=tab.data.call({...tab.methods,initialDirectoryId:null,initialScope:'all',initialSearch:'café',initialMediaType:'svgs',clearSavedFilters:true,initialPage:1,initialPerPage:50,initialViewMode:'grid',accessibleIds:[]});
     assert.equal(data.currentDirId,null);assert.equal(data.scope,'all');assert.equal(data.applied.filters.columns.length,0);
@@ -298,6 +298,7 @@ vueTest('sidebar pointer and keyboard controls persist width without changing mo
         const page=await browser.newPage({viewport:{width:1200,height:800}});
         await page.route('http://mothership.test/**',route=>route.fulfill({body:'<main id="app"></main>',contentType:'text/html; charset=utf-8'}));
         await page.goto('http://mothership.test/');
+        await page.evaluate(()=>localStorage.setItem('dam_show_sidebar','true'));
         await page.addScriptTag({path:process.env.MOTHERSHIP_VUE_RUNTIME_PATH});
         await page.addScriptTag({content:source(base+'Resources/assets/js/library-navigation.js')});
         await page.evaluate(()=>{window.definitions={};window.app={component:(name,definition)=>definitions[name]=definition};});
@@ -329,6 +330,7 @@ vueTest('sidebar resizing starts from the rendered width when the column has giv
         const page=await browser.newPage({viewport:{width:1200,height:800}});
         await page.route('http://mothership.test/**',route=>route.fulfill({body:'<main id="app"></main>',contentType:'text/html; charset=utf-8'}));
         await page.goto('http://mothership.test/');
+        await page.evaluate(()=>localStorage.setItem('dam_show_sidebar','true'));
         await page.evaluate(()=>localStorage.setItem('dam_sidebar_width','560'));
         await page.addScriptTag({path:process.env.MOTHERSHIP_VUE_RUNTIME_PATH});
         await page.addScriptTag({content:source(base+'Resources/assets/js/library-navigation.js')});
@@ -393,13 +395,13 @@ test('URL reload roundtrip preserves saved page, view and page size while fresh 
     }
 });
 
-test('both restore branches normalize every saved tab scope and media type',()=>{
-    for(const query of ['', '?scope=all&search=fresh']){
-        const {definition,context}=component(explorerFile,'v-dam-explorer',{[userKey('dam_explorer_tabs')]:JSON.stringify({tabs:[{directoryId:44,scope:'invalid',mediaType:'invalid',search:'old'},{directoryId:12,scope:'all',mediaType:'svgs'}],activeIdx:1})});
-        context.location.search=query;
+test('restore keeps only the view that was active and normalizes its scope and media type',()=>{
+    const tabs=[{directoryId:44,scope:'invalid',mediaType:'invalid',search:'old'},{directoryId:12,scope:'all',mediaType:'svgs'}];
+    for(const [activeIdx,scope,directoryId,mediaType] of [[0,'directory',44,'all'],[1,'all',null,'svgs']]){
+        const {definition}=component(explorerFile,'v-dam-explorer',{[userKey('dam_explorer_tabs')]:JSON.stringify({tabs,activeIdx})});
         const state={...definition.methods,tabs:[],activeTabId:null};state.restore();
-        assert.equal(state.tabs[0].scope,'directory');assert.equal(state.tabs[0].directoryId,44);assert.equal(state.tabs[0].mediaType,'all');
-        if(!query){assert.equal(state.tabs[1].scope,'all');assert.equal(state.tabs[1].directoryId,null);}
+        assert.equal(state.tabs.length,1);assert.equal(state.activeTabId,state.tabs[0].id);
+        assert.equal(state.tabs[0].scope,scope);assert.equal(state.tabs[0].directoryId,directoryId);assert.equal(state.tabs[0].mediaType,mediaType);
     }
 });
 
@@ -438,7 +440,7 @@ test('restore honours an explicit page for a matching saved view, a page-only ur
         const state={...definition.methods,tabs:[],activeTabId:null};state.restore();
         const active=state.tabs.find(tab=>tab.id===state.activeTabId);
         assert.equal(active.search,'campus',query);assert.equal(active.scope,'all',query);assert.equal(active.page,page,query);
-        assert.equal(state.tabs[0].page,3,query);assert.equal(state.tabs.length,2,query);
+        assert.equal(state.tabs.length,1,query);
     }
     const {definition,context}=component(explorerFile,'v-dam-explorer',{});
     context.location.search='?page=2';
@@ -505,10 +507,11 @@ test('a tab that saved 50 rows keeps it when the remembered preference is 200; a
     assert.equal(tab.data.call({...tab.methods,...tabProps,initialPerPage:50}).perPage,50);
     assert.equal(tab.data.call({...tab.methods,...tabProps,initialPerPage:null}).perPage,200);
     assert.equal(tab.data.call({...tab.methods,...tabProps,initialPerPage:100}).perPage,100);
-    const {definition:explorer}=component(explorerFile,'v-dam-explorer',{[userKey('dam_explorer_tabs')]:JSON.stringify({tabs:[{directoryId:12,label:'Fifty',perPage:50},{directoryId:13,label:'Unset'}],activeIdx:0})});
-    const state={tabs:[],activeTabId:null,...explorer.methods,$emitter:{emit(){}}};state.restore();
-    assert.equal(state.tabs.find(t=>t.label==='Fifty').perPage,50);
-    assert.equal(state.tabs.find(t=>t.label==='Unset').perPage,null);
+    for(const [activeIdx,perPage] of [[0,50],[1,null]]){
+        const {definition:explorer}=component(explorerFile,'v-dam-explorer',{[userKey('dam_explorer_tabs')]:JSON.stringify({tabs:[{directoryId:12,label:'Fifty',perPage:50},{directoryId:13,label:'Unset'}],activeIdx})});
+        const state={tabs:[],activeTabId:null,...explorer.methods,$emitter:{emit(){}}};state.restore();
+        assert.equal(state.tabs[0].perPage,perPage);
+    }
 });
 
 test('the clipboard survives a reload in this browser tab and never crosses accounts',()=>{

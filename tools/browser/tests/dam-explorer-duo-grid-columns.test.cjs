@@ -1,6 +1,7 @@
 // An unfolded iPhone Duo held sideways is 951px wide, and the Library there keeps the Directory column beside the file
 // panel, which leaves the panel about 321px of room. Three columns made 91px cards (2026-11-18), so the file grid stays
-// at two columns until lg. This renders the real class list from the Blade source against the committed stylesheets.
+// at two columns until xl, where it fills with cards at least 240px wide. This renders the real class list from the
+// Blade source against the committed stylesheets.
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
@@ -50,7 +51,7 @@ test('the Library file grid keeps readable cards on an unfolded iPhone Duo and e
         assert.equal(sideways.columns,2,'951px wide: two columns in the narrow panel');
         assert.ok(sideways.cell>=140,`951px wide: cards stay readable, got ${sideways.cell}px`);
 
-        for(const [width,panel,columns] of [[375,309,1],[382,316,2],[430,364,2],[669,603,2],[1024,640,3],[1280,800,4]]){
+        for(const [width,panel,columns] of [[375,309,1],[382,316,2],[430,364,2],[669,603,2],[1024,640,2],[1280,800,3],[1440,1100,4]]){
             assert.equal((await measure(page,{width,panel})).columns,columns,`${width}px wide: ${columns} columns`);
         }
     } finally {

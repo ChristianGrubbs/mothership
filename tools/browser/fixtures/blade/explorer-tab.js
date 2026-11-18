@@ -91,7 +91,7 @@ app.component('v-dam-tab', {
             foreignSelections:  {},
             folderPicker:       { open: false, mode: null },
             ctxTarget:          null,
-            sidebarVisible:     storedSidebar !== null ? storedSidebar !== 'false' : true,
+            sidebarVisible:     storedSidebar !== null ? storedSidebar !== 'false' : (window.matchMedia?.('(min-width: 1240px)')?.matches ?? true),
             bookmarkedDirIds:   [],
             expandedFilter:     null,
             available: {
@@ -1525,10 +1525,6 @@ app.component('v-dam-tab', {
             this.$emitter.emit('dam:explorer-navigate', { directoryId: entry.dirId });
             this.$emitter.emit('dam:explorer-tree-sync', { id: entry.dirId });
             this.fetch();
-        },
-
-        openNewTab(dir) {
-            this.$emitter.emit('dam:open-in-new-tab', { directoryId: dir.id, name: dir.name });
         },
 
         bookmark(dir) {
