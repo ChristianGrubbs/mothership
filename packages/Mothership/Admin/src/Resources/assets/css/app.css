@@ -2131,10 +2131,12 @@ html.dark .dark\:text-slate-500:is(.dark *):where(:not([class*="hover:text-"]:ho
         padding: 24px 0;
     }
 
-    /* The button clears any gap between the segments before it starts. The clamp keeps it in place if a browser
-       resolves only one of the two edges. */
+    /* The button clears any gap between the segments before it starts. Each edge falls back to the other, so the gap
+       counts as zero unless the browser resolves both. */
     .bridge-pending .bridge-btn-wide {
-        margin-top: clamp(24px, calc(24px + env(viewport-segment-top 0 1, 0px) - env(viewport-segment-bottom 0 0, 0px)), 120px);
+        margin-top: calc(24px + max(0px,
+            env(viewport-segment-top 0 1, env(viewport-segment-bottom 0 0, 0px))
+            - env(viewport-segment-bottom 0 0, env(viewport-segment-top 0 1, 0px))));
         margin-bottom: 24px;
     }
 }
