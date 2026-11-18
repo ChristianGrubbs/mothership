@@ -149,6 +149,31 @@ test('the explorer reserves room for the fixed selection bar and re-measures whe
     assert.equal(observed.length, 0, 'nothing is watched once the bar is gone');
 });
 
+// The tab bar is drawn over the bottom of a phone screen, and the selection actions were pinned underneath it.
+test('the phone selection bar sits on top of the tab bar, where it can be tapped', () => {
+    const { state } = explorer();
+    const tabbar = { getBoundingClientRect: () => ({ height: 76.2 }) };
+    const bar = (position, found = tabbar) => ({
+        style: { position },
+        ownerDocument: { querySelector: (selector) => (selector === '[data-bridge-tabbar]' ? found : null) },
+        getBoundingClientRect: () => ({ height: 90 }),
+    });
+
+    state.$refs = { selectionBar: bar('fixed') };
+    state.measureSelectionBar();
+    assert.equal(state.selectionBarBottom, 77, 'the bar is lifted by the whole tab bar, rounded up');
+
+    state.$refs = { selectionBar: bar('static') };
+    state.measureSelectionBar();
+    assert.equal(state.selectionBarBottom, 0, 'a bar back in the page flow is not lifted');
+
+    state.$refs = { selectionBar: bar('fixed', null) };
+    state.measureSelectionBar();
+    assert.equal(state.selectionBarBottom, 0, 'a page without a tab bar keeps the bar on the screen edge');
+
+    assert.match(source('packages/Mothership/DAM/src/Resources/views/components/explorer/toolbar.blade.php'), /:style="selectionBarBottom \? \{ bottom: selectionBarBottom \+ 'px'/);
+});
+
 
 test('the explorer breadcrumb shows the shimmer on the first load only and stays mounted through navigation', async () => {
     const binding = breadcrumbLoadingBinding();

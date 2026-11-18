@@ -5,9 +5,9 @@
 
     <x-slot:background>
         <div class="bridge-signin-hero" aria-hidden="true" inert data-login-backdrop>
-            <img src="{{ mothership_asset('images/brand/hero-colour-dark.svg') }}" width="300" height="300" alt="">
+            <x-admin::bridge.hero-mark data-dock="mark" />
 
-            <x-admin::bridge.board-strip :text="trans('admin::app.users.sessions.board')" :cells="14" />
+            <x-admin::bridge.board-strip :text="trans('admin::app.users.sessions.board')" :cells="14" data-dock="rise" data-flap />
         </div>
     </x-slot>
 
@@ -22,12 +22,12 @@
 
     {{--
         Bridge sign-in (redesign v2, Screens.html): the graphite hero panel with the brand hero and a
-        static board strip on the left, the form on the ground on the right. The board does not flip
-        here: split-flap motion belongs to Home's arrivals board only (motion v2-docking, rule 2).
+        board strip on the left, the form on the ground on the right. The strip flips in once on load;
+        the hero is decorative, so the board's words are also given to screen readers beside the heading.
     --}}
     <div class="bridge-signin-wrap bridge-signin-side relative z-10">
         <div class="bridge-signin-form">
-            <div class="bridge-signin-word">
+            <div class="bridge-signin-word" data-dock="rise">
                 @if ($logo = core()->getConfigData('general.design.admin_logo.logo_image'))
                     <img
                         class="h-8 w-auto"
@@ -56,9 +56,11 @@
             </div>
 
             <div>
-                <h1>@lang('admin::app.users.sessions.title')</h1>
+                <p class="sr-only">@lang('admin::app.users.sessions.board')</p>
 
-                <p class="bridge-signin-sub">
+                <h1 data-dock="rise">@lang('admin::app.users.sessions.title')</h1>
+
+                <p class="bridge-signin-sub" data-dock="rise">
                     @if ($passwordLogin ?? true)
                         @lang('admin::app.users.sessions.subtitle', ['name' => config('documentation.name')])
                     @else
@@ -67,6 +69,7 @@
                 </p>
 
                 @if ($passwordLogin ?? true)
+                    <div data-dock="rise">
                     <x-admin::form :action="route('admin.session.store')" :track-dirty="false" ajax="true">
                         <x-admin::form.control-group>
                             <x-admin::form.control-group.label>
@@ -146,9 +149,12 @@
                             <a href="{{ route('admin.invite.accept.create') }}">@lang('admin::app.users.sessions.invite-code-link')</a>
                         </div>
                     </x-admin::form>
+                    </div>
                 @endif
 
-                <x-admin::sso.buttons :providers="$ssoProviders ?? collect()" :divider="$passwordLogin ?? true" />
+                <div data-dock="rise">
+                    <x-admin::sso.buttons :providers="$ssoProviders ?? collect()" :divider="$passwordLogin ?? true" />
+                </div>
             </div>
 
         </div>

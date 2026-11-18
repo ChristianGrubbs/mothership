@@ -93,6 +93,13 @@ function bladeFixturesRender(): array
         $files["{$name}.js"] = $parts['script'];
     }
 
+    // The drag-select mixin the explorer's grid and list share.
+    $marquee = collect($library->querySelectorAll('script'))
+        ->filter(fn (Element $script) => str_contains($script->textContent, 'window.MothershipExplorerMarquee = {'))
+        ->values();
+    expect($marquee)->toHaveCount(1, 'the Library renders the drag-select mixin once');
+    $files['explorer-marquee.js'] = $marquee[0]->textContent;
+
     // The header's avatar dropdown, as the browser receives it (the account menu is in its content slot).
     $accountMenu = collect($home->querySelectorAll('header v-dropdown'))
         ->map(fn (Element $element) => $home->saveHtml($element))

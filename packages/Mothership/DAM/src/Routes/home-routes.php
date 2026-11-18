@@ -17,6 +17,7 @@ use Mothership\DAM\Http\Middleware\ManageFolderAccess;
 Route::get('', [HomeController::class, 'index'])->name('admin.home.index');
 Route::get('layout', [HomeController::class, 'layout'])->name('admin.home.layout');
 Route::get('data/{widget}', [HomeController::class, 'data'])->name('admin.home.data');
+Route::get('summary', [HomeController::class, 'summary'])->name('admin.home.summary');
 // Superuser-only: the Home right-click menu that toggles which custom roles get a tool on Home.
 Route::get('widget-access/{widget}', [HomeWidgetAccessController::class, 'index'])
     ->middleware(ManageFolderAccess::class)->name('admin.home.widget-access.index');

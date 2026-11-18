@@ -123,7 +123,7 @@
     @endif
 
     <div class="dam-share-viewport bg-gray-50 dark:bg-cherry-950 flex flex-col overflow-hidden" @if ($hasFileList) data-dam-share-has-files @endif>
-        <header class="shrink-0 bg-white dark:bg-cherry-900 border-b border-gray-200 dark:border-cherry-800 px-6 py-4">
+        <header class="shrink-0 bg-white dark:bg-cherry-900 border-b border-gray-200 dark:border-cherry-800 px-6 py-4" data-dock="rise">
             {{-- A preview-only link's note takes its own row on a phone, so the name keeps the header's width. --}}
             <div @class(['flex items-center justify-between gap-4', 'flex-wrap gap-y-1' => ! $downloadUrl])>
                 <div class="flex items-center gap-3 min-w-0">

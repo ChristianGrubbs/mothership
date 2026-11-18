@@ -341,6 +341,7 @@ class RuntimeContractTest(unittest.TestCase):
             "QUEUE_NAMES=webhooks,system,completeness,default,broadcastable",
             by_role["queue"].env,
         )
+        self.assertIn("STUDIO_WORKER_COUNT=2", by_role["queue"].env)
         self.assertIn("QUEUE_WORKER_CONNECTION=panorama", by_role["panorama_queue"].env)
         self.assertIn("QUEUE_WORKER_CONNECTION=vectorization", by_role["vectorization_queue"].env)
         self.assertEqual(
@@ -349,7 +350,7 @@ class RuntimeContractTest(unittest.TestCase):
                 "artisan", "queue:work",
                 "--queue=webhooks,system,completeness,default,broadcastable",
                 "--timeout=90", "--tries=3", "--max-jobs=1000",
-                "--max-time=3600", "--sleep=3",
+                "--max-time=3600", "--sleep=0.5",
             ),
         )
         self.assertEqual(
@@ -1181,6 +1182,109 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertFalse(pid_file.exists())
         with self.assertRaises(ProcessLookupError):
             os.kill(child_pid, 0)
+
+    def test_worker_supervisor_runs_the_requested_workers_and_stops_them_all(self):
+        with tempfile.TemporaryDirectory() as root:
+            root_path = pathlib.Path(root)
+            supervisor = root_path / "supervisor.sh"
+            supervisor.write_text(runtime.render_worker_supervisor(), encoding="utf-8")
+            pid_file = root_path / "worker.pid"
+            second_pid_file = root_path / "worker.pid.2"
+            process = subprocess.Popen(
+                ["/bin/bash", str(supervisor), "/bin/sleep", "30"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=dict(os.environ, STUDIO_WORKER_PID_FILE=str(pid_file), STUDIO_WORKER_COUNT="2"),
+            )
+            deadline = runtime.time.monotonic() + 5
+            while not (pid_file.exists() and second_pid_file.exists()) and runtime.time.monotonic() < deadline:
+                runtime.time.sleep(0.05)
+            self.assertTrue(pid_file.exists())
+            self.assertTrue(second_pid_file.exists())
+            child_pids = [int(path.read_text(encoding="utf-8")) for path in (pid_file, second_pid_file)]
+            self.assertNotEqual(child_pids[0], child_pids[1])
+            process.terminate()
+            process.communicate(timeout=10)
+
+            self.assertFalse(pid_file.exists())
+            self.assertFalse(second_pid_file.exists())
+
+        self.assertEqual(process.returncode, 143)
+        for child_pid in child_pids:
+            with self.assertRaises(ProcessLookupError):
+                os.kill(child_pid, 0)
+
+    def test_worker_supervisor_signals_every_worker_before_waiting_for_any(self):
+        with tempfile.TemporaryDirectory() as root:
+            root_path = pathlib.Path(root)
+            supervisor = root_path / "supervisor.sh"
+            supervisor.write_text(runtime.render_worker_supervisor(), encoding="utf-8")
+            pid_file = root_path / "worker.pid"
+            worker = root_path / "worker.sh"
+            # Like a queue worker finishing its job: it notes the signal, then takes a while to exit.
+            worker.write_text(
+                '#!/bin/bash\n'
+                'trap \'touch "$1.$$"; kill "$idle"; sleep 3; exit 0\' TERM\n'
+                'sleep 30 &\n'
+                'idle=$!\n'
+                'wait "$idle"\n',
+                encoding="utf-8",
+            )
+            worker.chmod(0o755)
+            marker = root_path / "heard"
+            process = subprocess.Popen(
+                ["/bin/bash", str(supervisor), str(worker), str(marker)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                env=dict(os.environ, STUDIO_WORKER_PID_FILE=str(pid_file), STUDIO_WORKER_COUNT="2"),
+            )
+            second_pid_file = root_path / "worker.pid.2"
+            deadline = runtime.time.monotonic() + 5
+            while not (pid_file.exists() and second_pid_file.exists()) and runtime.time.monotonic() < deadline:
+                runtime.time.sleep(0.05)
+            runtime.time.sleep(0.3)
+            process.terminate()
+            deadline = runtime.time.monotonic() + 2
+            while len(list(root_path.glob("heard.*"))) < 2 and runtime.time.monotonic() < deadline:
+                runtime.time.sleep(0.05)
+            heard_while_stopping = len(list(root_path.glob("heard.*")))
+            process.wait(timeout=15)
+
+        self.assertEqual(heard_while_stopping, 2)
+        self.assertEqual(process.returncode, 143)
+
+    def test_worker_supervisor_stops_the_group_when_an_extra_worker_gives_up(self):
+        with tempfile.TemporaryDirectory() as root:
+            root_path = pathlib.Path(root)
+            supervisor = root_path / "supervisor.sh"
+            supervisor.write_text(runtime.render_worker_supervisor(), encoding="utf-8")
+            pid_file = root_path / "worker.pid"
+            worker = root_path / "worker.sh"
+            worker.write_text(
+                '#!/bin/bash\n'
+                'if [[ "$STUDIO_WORKER_PID_FILE" == *.2 ]]; then exit 7; fi\n'
+                'exec /bin/sleep 30\n',
+                encoding="utf-8",
+            )
+            worker.chmod(0o755)
+            completed = subprocess.run(
+                ["/bin/bash", str(supervisor), str(worker)],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=dict(
+                    os.environ,
+                    STUDIO_WORKER_PID_FILE=str(pid_file),
+                    STUDIO_WORKER_COUNT="2",
+                    STUDIO_WORKER_MAX_FAILURES="1",
+                ),
+                timeout=15,
+            )
+            self.assertFalse(pid_file.exists())
+
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn("an extra worker reached the failure limit", completed.stdout)
 
     def test_artisan_probe_checks_supervised_child_pid(self):
         runner = RecordingRunner({})

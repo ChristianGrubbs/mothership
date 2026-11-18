@@ -1,7 +1,8 @@
 
 app.component('v-dam-explorer-list', {
     template: '#v-dam-explorer-list-template',
-    emits: ['navigate','open-new-tab','bookmark','sort-change','refresh','internal-drop','toggle-select','select-range','empty-action','stack-drop'],
+    mixins: [window.MothershipExplorerMarquee],
+    emits: ['navigate','open-new-tab','bookmark','sort-change','refresh','internal-drop','toggle-select','select-range','set-selection','empty-action','stack-drop'],
 
     props: {
         directories:          { type: Array, default: () => [] },
@@ -36,6 +37,11 @@ app.component('v-dam-explorer-list', {
     },
 
     methods: {
+        // Rows fill the list, so a row's type, size and date cells begin a box too; its name still moves the row.
+        marqueeStartsAt(target) {
+            if (target.closest('button, a, input, select, textarea, label, [role="checkbox"], [role="menu"], [contenteditable="true"], [data-marquee-no-start]')) return false;
+            return ! target.closest('[data-marquee-key]') || !! target.closest('.dam-list-col-type, .dam-list-col-size, .dam-list-col-date');
+        },
         // Server-rendered label with its :page placeholder filled in; a function replacement keeps `$&` in a value literal.
         matchPageLabel(asset) {
             return "p. :page".replace(':page', () => asset?.match?.page);

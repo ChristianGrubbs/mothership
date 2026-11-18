@@ -8,10 +8,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Mothership\Admin\Http\Controllers\Controller;
 use Mothership\DAM\Models\Asset;
-use Mothership\DAM\Models\Directory;
 use Mothership\DAM\Services\Access\AccessContext;
 use Mothership\DAM\Services\Access\AssetAccessDecision;
 use Mothership\DAM\Services\DirectoryPermissionService;
+use Mothership\DAM\Services\Home\HomeStorageReading;
+use Mothership\DAM\Services\Home\HomeSummary;
+use Mothership\DAM\Services\Home\HomeVisits;
 use Mothership\DAM\Services\HomeLayoutService;
 use Mothership\DAM\Services\HomeSystemQuickView;
 use Mothership\DAM\Services\HomeWidgetRegistry;
@@ -20,8 +22,13 @@ use Mothership\DAM\Support\PreviewKinds;
 
 class HomeController extends Controller
 {
-    public function index(Request $request, TransferSession $transfers)
+    public function index(Request $request, TransferSession $transfers, HomeVisits $visits)
     {
+        if ($this->isBrowserVisit($request)) {
+            // Home must still open if the visit cannot be written.
+            rescue(fn () => $visits->record(adminId: (int) auth('admin')->id(), now: now()->toImmutable()));
+        }
+
         $transferConfig = $transfers->clientConfig(request: $request);
 
         return view('dam::home.index', [
@@ -29,6 +36,21 @@ class HomeController extends Controller
             'actions'   => $this->startActions(transfers: $transferConfig !== null),
             'phoneHost' => $request->getHost(),
         ]);
+    }
+
+    /** A person opening the page: not a data request, and not the browser fetching it ahead of a click. */
+    private function isBrowserVisit(Request $request): bool
+    {
+        $purpose = strtolower((string) ($request->header('Sec-Purpose') ?? $request->header('Purpose')));
+
+        return $request->isMethod('GET') && ! $request->expectsJson() && ! str_contains($purpose, 'prefetch');
+    }
+
+    /** What the centre of Home shows for this person. */
+    public function summary(HomeSummary $summary)
+    {
+        return response()->json($summary->payload(admin: auth('admin')->user(), now: now()->toImmutable()))
+            ->header('Cache-Control', 'private, no-store');
     }
 
     /**
@@ -62,7 +84,7 @@ class HomeController extends Controller
         return response()->json($layouts->read())->header('Cache-Control', 'private, no-store');
     }
 
-    public function data(Request $request, string $widget, HomeWidgetRegistry $registry, DirectoryPermissionService $permissions, HomeSystemQuickView $quickView)
+    public function data(Request $request, string $widget, HomeWidgetRegistry $registry, DirectoryPermissionService $permissions, HomeSystemQuickView $quickView, HomeStorageReading $storage)
     {
         $registry->allowed($widget);
         if ($widget === 'system-quickview') {
@@ -75,13 +97,7 @@ class HomeController extends Controller
         }
         abort_unless(in_array($widget, ['recent', 'totals', 'storage'], true), 404);
         if ($widget === 'storage') {
-            $disk = Directory::getAssetDisk();
-            $root = config("filesystems.disks.$disk.root");
-            $local = config("filesystems.disks.$disk.driver") === 'local' && is_string($root) && is_dir($root);
-            $free = $local ? @disk_free_space($root) : false;
-            $total = $local ? @disk_total_space($root) : false;
-
-            return response()->json(['available' => $free !== false && $total !== false, 'free' => $free === false ? null : $free, 'total' => $total === false ? null : $total, 'label' => 'Asset storage volume'])->header('Cache-Control', 'private, no-store');
+            return response()->json($storage->read())->header('Cache-Control', 'private, no-store');
         }
         $query = Asset::query()->visibleCaptures();
         app(AssetAccessDecision::class)->scopeListable($query, AccessContext::library(AccessContext::PURPOSE_LIST));

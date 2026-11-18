@@ -1,5 +1,6 @@
 @include('dam::components.explorer.stack-line')
 @include('dam::components.shared.adobe-identity')
+@include('dam::components.explorer.marquee')
 @once('v-dam-explorer-list')
 @include('dam::components.shared.lazy-thumbnail')
 @include('dam::components.shared.custom-thumbnail-drop')
@@ -7,7 +8,10 @@
 
 <script type="text/x-template" id="v-dam-explorer-list-template">
     <div
-        class="dam-list border border-gray-200 dark:border-cherry-700 rounded-lg overflow-hidden bg-white dark:bg-cherry-900 min-h-72"
+        ref="space"
+        class="dam-list relative border border-gray-200 dark:border-cherry-700 rounded-lg overflow-hidden bg-white dark:bg-cherry-900 min-h-72"
+        @pointerdown="onSpacePointerDown"
+        @dragstart.capture="onMarqueeDragStart"
         @dragover.prevent
         @drop.prevent="onSpaceDrop($event)"
     >
@@ -17,7 +21,7 @@
         </div>
 
         <template v-else>
-            <div class="dam-list-row px-4 py-2 bg-gray-50 dark:bg-cherry-800 border-b border-gray-200 dark:border-cherry-700 text-xs font-bold uppercase tracking-widest text-gray-400">
+            <div class="dam-list-row px-4 py-2 bg-gray-50 dark:bg-cherry-800 border-b border-gray-200 dark:border-cherry-700 text-xs font-bold uppercase tracking-widest text-gray-400" data-marquee-no-start>
                 <span></span>
                 <span></span>
                 <span class="cursor-pointer hover:text-gray-600 dark:hover:text-white" @click="sort('name')">
@@ -38,6 +42,7 @@
                 class="dam-list-row px-4 py-2.5 text-sm border-b border-gray-100 dark:border-cherry-800 items-center cursor-pointer hover:bg-primary-100 dark:hover:bg-primary-800/50 transition-colors"
                 :class="{ 'ring-2 ring-inset ring-primary-400': dropTargetId === dir.id, 'bg-primary-50 dark:bg-primary-900/40': isSelectedById(dir.id, 'directory') }"
                 :data-dir-id="dir.id"
+                :data-marquee-key="'directory:' + dir.id"
                 :data-selected="isSelectedById(dir.id, 'directory')"
                 draggable="true"
                 @click="onRowClick($event, dir, 'directory', () => $emit('navigate', dir))"
@@ -105,6 +110,7 @@
                 class="dam-list-row px-4 py-2.5 text-sm border-b border-gray-100 dark:border-cherry-800 items-center cursor-pointer hover:bg-primary-100 dark:hover:bg-primary-800/50 transition-colors"
                 data-dam-asset-open
                 :data-dam-asset-id="asset.id"
+                :data-marquee-key="'asset:' + asset.id"
                 style="position:relative"
                 v-dam-custom-thumbnail-drop="asset"
                 :class="{ 'bg-primary-50 dark:bg-primary-900/40': isSelectedById(asset.id, 'asset'), 'ring-2 ring-inset ring-primary-400 !bg-primary-100 dark:!bg-primary-900/60': stackDropId === asset.id }"
@@ -226,6 +232,15 @@
             </div>
         </template>
 
+        {{-- Drag-select box, in the list's own coordinates so it stays put while the page scrolls. --}}
+        <div
+            v-if="marquee"
+            class="absolute pointer-events-none z-20 rounded-sm"
+            :style="{ left: marquee.left + 'px', top: marquee.top + 'px', width: marquee.width + 'px', height: marquee.height + 'px', border: '1px solid #2d5be3', background: 'rgba(45, 91, 227, 0.12)' }"
+            aria-hidden="true"
+            data-explorer-marquee
+        ></div>
+
         <v-dam-explorer-ctx
             v-if="ctx.on"
             :key="ctxKey"
@@ -248,7 +263,8 @@
 <script type="module">
 app.component('v-dam-explorer-list', {
     template: '#v-dam-explorer-list-template',
-    emits: ['navigate','open-new-tab','bookmark','sort-change','refresh','internal-drop','toggle-select','select-range','empty-action','stack-drop'],
+    mixins: [window.MothershipExplorerMarquee],
+    emits: ['navigate','open-new-tab','bookmark','sort-change','refresh','internal-drop','toggle-select','select-range','set-selection','empty-action','stack-drop'],
 
     props: {
         directories:          { type: Array, default: () => [] },
@@ -283,6 +299,11 @@ app.component('v-dam-explorer-list', {
     },
 
     methods: {
+        // Rows fill the list, so a row's type, size and date cells begin a box too; its name still moves the row.
+        marqueeStartsAt(target) {
+            if (target.closest('button, a, input, select, textarea, label, [role="checkbox"], [role="menu"], [contenteditable="true"], [data-marquee-no-start]')) return false;
+            return ! target.closest('[data-marquee-key]') || !! target.closest('.dam-list-col-type, .dam-list-col-size, .dam-list-col-date');
+        },
         // Server-rendered label with its :page placeholder filled in; a function replacement keeps `$&` in a value literal.
         matchPageLabel(asset) {
             return "@lang('dam::app.admin.explorer.match-page')".replace(':page', () => asset?.match?.page);

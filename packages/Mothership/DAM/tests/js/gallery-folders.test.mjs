@@ -4,7 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 import ops from '../../src/Resources/assets/js/library-file-ops.js';
 
-// Regression: the classic Library grid (DAM_EXPLORER_ENABLED unset) listed a folder's assets
+// Regression: the classic Library grid (DAM_EXPLORER_ENABLED=false) listed a folder's assets
 // recursively but never showed its subfolders, so a folder full of only sub-folders looked empty.
 // The v-dam-gallery-folders strip fills that gap with folder cards above the asset grid.
 

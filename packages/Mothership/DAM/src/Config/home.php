@@ -24,7 +24,7 @@ return [
         'plaque'           => ['title' => 'Plaque Maker', 'description' => 'Animated overlay plaques with sound, ready to export.', 'icon' => 'plaque', 'kind' => 'tool', 'sizes' => ['small', 'wide'], 'size' => 'small', 'always_available' => true, 'entry' => 'index.html', 'settings' => []],
         'sphereseam'       => ['title' => 'SphereSeam', 'paid' => true, 'description' => 'Repair the wrap seam of 360° panoramas.', 'icon' => 'sphereseam', 'kind' => 'tool', 'sizes' => ['small', 'wide'], 'size' => 'small', 'permission' => 'sphereseam', 'entry' => 'index.html', 'settings' => []],
         'calendar'         => ['title' => 'Calendar', 'description' => 'Events, games and campaigns, with their tasks and assets.', 'icon' => 'calendar', 'kind' => 'native', 'sizes' => ['wide', 'large'], 'size' => 'large', 'rows' => 4, 'permission' => 'dam.assets', 'settings' => []],
-        'system-quickview' => ['title' => 'Studio & people', 'description' => 'Live Mac Studio load and who is online now.', 'icon' => 'system', 'kind' => 'native', 'sizes' => ['wide', 'large'], 'size' => 'wide', 'always_available' => true, 'settings' => []],
+        'system-quickview' => ['title' => 'Studio & people', 'description' => 'Live load on the host Mac and who is online now.', 'icon' => 'system', 'kind' => 'native', 'sizes' => ['wide', 'large'], 'size' => 'wide', 'always_available' => true, 'settings' => []],
     ],
     // Accounts whose SIGNAL announcement strip is on until they choose otherwise (SignalAlerts). Every other account
     // is off until it opts in. An entry matches only when the account's id AND its email (trimmed, lower-cased) both
@@ -55,4 +55,28 @@ return [
 
     // Named Redis connection (config/database.php `redis.*`) that ephemeral presence tracking writes to.
     'presence_connection' => env('MOTHERSHIP_HOME_PRESENCE_CONNECTION', 'default'),
+
+    // A library store on another machine. A host process writes its free and total bytes to a capacity file
+    // (storage/app/private/umbrel-capacity.json); a file older than this reads as the store being unreachable.
+    'store_capacity' => [
+        'label'           => 'Umbrel',
+        'max_age_minutes' => 15,
+    ],
+
+    // The centre of Home (docs/features/customizable-home.md).
+    'summary' => [
+        // Opens of Home closer together than this are one visit, so a refresh does not clear what is new.
+        'visit_gap_minutes'   => 30,
+        // Files from one producer and person this close together are one landing.
+        'landing_gap_minutes' => 10,
+        // How many of the newest files the board groups. Past this, `truncated` tells Home the board is partial.
+        'landing_scan_limit'  => 1000,
+        'board_rows'          => 5,
+        // A share link counts as needing attention this many days before it expires.
+        'share_warning_days'  => 7,
+        // Failures and expired requests stay on Needs you for this long.
+        'attention_days'      => 7,
+        // An upload silent for this long is abandoned, and leaves the board.
+        'stowing_stale_hours' => 24,
+    ],
 ];

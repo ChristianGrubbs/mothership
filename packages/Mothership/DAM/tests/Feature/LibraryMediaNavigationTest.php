@@ -89,6 +89,12 @@ it('accepts zero as a literal search and rejects unknown media types', function 
     $this->getJson(route('admin.dam.explorer.index', ['scope' => 'all', 'media_type' => 'other']))->assertUnprocessable();
 });
 
+it('serves the explorer Library when nothing configures it', function (): void {
+    $config = require base_path('packages/Mothership/DAM/src/Config/dam.php');
+
+    expect($config['explorer']['enabled'])->toBeTrue('Drag-select and folder selection only exist in the explorer Library');
+});
+
 it('renders only the selected Library grid and preserves its shared controls', function (bool $explorer): void {
     config(['dam.explorer.enabled' => $explorer]);
     $html = $this->get(route('admin.dam.assets.index', ['scope' => 'all', 'search' => 'campaign', 'media_type' => 'audio']))->assertOk()->getContent();

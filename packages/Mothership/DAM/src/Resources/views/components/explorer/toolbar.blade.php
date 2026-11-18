@@ -9,6 +9,7 @@
             <div
                 class="flex flex-1 min-w-[120px] min-[640px]:min-w-[300px] items-center gap-x-1"
                 :class="{ 'max-[639px]:fixed max-[639px]:inset-x-0 max-[639px]:bottom-0 max-[639px]:z-[60] max-[639px]:flex-wrap max-[639px]:gap-y-2 max-[639px]:border-t max-[639px]:border-gray-200 dark:max-[639px]:border-cherry-700 max-[639px]:bg-white dark:max-[639px]:bg-cherry-900 max-[639px]:px-4 max-[639px]:pt-3 max-[639px]:pb-[calc(0.75rem+env(safe-area-inset-bottom))] max-[639px]:shadow-[0_-4px_12px_rgba(0,0,0,0.12)]': selection.ids.length > 0 }"
+                :style="selectionBarBottom ? { bottom: selectionBarBottom + 'px', paddingBottom: '0.75rem' } : null"
                 data-explorer-selection-bar
                 ref="selectionBar"
             >

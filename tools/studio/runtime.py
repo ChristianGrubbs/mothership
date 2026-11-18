@@ -859,15 +859,49 @@ failure_backoff="${STUDIO_WORKER_FAILURE_BACKOFF:-5}"
 stable_seconds="${STUDIO_WORKER_STABLE_SECONDS:-60}"
 failures=0
 child=0
-shutdown() {
+# STUDIO_WORKER_COUNT above 1 runs that many workers side by side. Each extra one is its own supervised copy with
+# its own pid file; this first worker keeps the pid file the health probe reads. An extra worker that reaches the
+# failure limit stops the whole group, so the container never carries on quietly with fewer workers.
+worker_count="${STUDIO_WORKER_COUNT:-1}"
+group_leader="${STUDIO_WORKER_GROUP_LEADER:-}"
+extra_supervisors=""
+stop_workers() {
+    local extra
+    # Every worker hears the signal first: a worker finishes its current job before it exits.
     if (( child > 0 )); then
         kill -TERM "$child" 2>/dev/null || true
+    fi
+    for extra in $extra_supervisors; do
+        kill -TERM "$extra" 2>/dev/null || true
+    done
+    if (( child > 0 )); then
         wait "$child" 2>/dev/null || true
     fi
+    for extra in $extra_supervisors; do
+        wait "$extra" 2>/dev/null || true
+    done
+}
+shutdown() {
+    stop_workers
     rm -f "$worker_pid_file"
     exit 143
 }
+extra_worker_gave_up() {
+    echo "an extra worker reached the failure limit; leaving container stopped"
+    stop_workers
+    rm -f "$worker_pid_file"
+    exit 1
+}
 trap shutdown TERM INT
+trap extra_worker_gave_up USR1
+
+if [[ "$worker_count" =~ ^[0-9]+$ ]] && (( worker_count > 1 )); then
+    for (( index = 2; index <= worker_count; index++ )); do
+        STUDIO_WORKER_COUNT=1 STUDIO_WORKER_GROUP_LEADER=$$ STUDIO_WORKER_PID_FILE="${worker_pid_file}.${index}" \
+            /bin/bash "${BASH_SOURCE[0]}" "$@" &
+        extra_supervisors="${extra_supervisors} $!"
+    done
+fi
 
 while true; do
     started=$SECONDS
@@ -893,6 +927,10 @@ while true; do
 
     if (( failures >= max_failures )); then
         echo "worker stopped with status ${status} after ${failures} consecutive failures; leaving container stopped"
+        stop_workers
+        if [[ -n "$group_leader" ]]; then
+            kill -USR1 "$group_leader" 2>/dev/null || true
+        fi
         exit "$status"
     fi
 
@@ -1795,7 +1833,11 @@ class Stack:
                 cpus=2,
                 memory="2G",
                 env_file=self.config.env_file,
-                env=application_env + ("QUEUE_NAMES=webhooks,system,completeness,default,broadcastable",),
+                env=application_env + (
+                    "QUEUE_NAMES=webhooks,system,completeness,default,broadcastable",
+                    # One worker per CPU: a single worker capped uploads at about 20 files a minute.
+                    "STUDIO_WORKER_COUNT=2",
+                ),
                 mounts=(storage_mount, worker_runtime_mount),
                 user=runtime_user,
                 workdir="/var/www/html",
@@ -1804,7 +1846,7 @@ class Stack:
                     "artisan", "queue:work",
                     "--queue=webhooks,system,completeness,default,broadcastable",
                     "--timeout=90", "--tries=3", "--max-jobs=1000",
-                    "--max-time=3600", "--sleep=3",
+                    "--max-time=3600", "--sleep=0.5",
                 ),
             ),
             ContainerSpec(

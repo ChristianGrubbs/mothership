@@ -119,7 +119,7 @@
     {{-- The storage meter: 20 cells, filled by the share of the asset volume in use (HomeController::data, widget "storage"). Hidden until it has a reading. --}}
     <script type="text/x-template" id="v-rail-storage-template">
         <div class="bridge-rail-store" role="img" :aria-label="summary" v-if="ready" data-rail-storage>
-            <div class="bridge-rail-store-row"><span class="bridge-mono">@lang('admin::app.components.layouts.rail.storage')</span><span class="bridge-mono" v-text="percent + '%'"></span></div>
+            <div class="bridge-rail-store-row"><span class="bridge-mono">@lang('admin::app.components.layouts.rail.storage')</span><span v-if="! message" class="bridge-mono" v-text="percent + '%'"></span></div>
             <div class="bridge-cells" aria-hidden="true"><i v-for="cell in 20" :key="cell" :class="{ on: cell <= filled }"></i></div>
             <p v-text="summary"></p>
         </div>
@@ -132,7 +132,7 @@
             props: ['url'],
 
             data() {
-                return { ready: false, used: 0, total: 0 };
+                return { ready: false, used: 0, total: 0, message: null };
             },
 
             computed: {
@@ -145,6 +145,10 @@
                 },
 
                 summary() {
+                    if (this.message) {
+                        return this.message;
+                    }
+
                     const size = (bytes) => {
                         const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
                         let value = bytes, unit = 0;
@@ -160,6 +164,13 @@
                 fetch(this.url, { headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
                     .then((response) => response.ok ? response.json() : null)
                     .then((data) => {
+                        if (! data?.available && data?.message) {
+                            this.message = data.message;
+                            this.ready = true;
+
+                            return;
+                        }
+
                         if (! data?.available || ! data.total) {
                             return;
                         }

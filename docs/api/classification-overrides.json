@@ -1,0 +1,203 @@
+{
+  "DELETE * /admin/dam/hub/resources/{uuid}": {
+    "reason": "Browser/session owner-only delete of a Hub resource (ADR 0015), releasing its blob when nothing else holds it; a resource the viewer cannot read answers 404; behind DAM_HUB_ENABLED (answers 404 while off) and the dam.hub.resources ACL key, which every signed-in non-API user holds; not a supported bearer integration operation.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HubResourceController.php",
+      "packages/Mothership/DAM/src/Services/CreativeHub/HubResourceStore.php"
+    ]
+  },
+  "DELETE * /admin/dam/pages/{id}": {
+    "reason": "Session-authenticated page trash action; requires dam.asset.destroy plus visible web asset ownership checks and does not expose a bearer integration operation."
+  },
+  "DELETE * /admin/home/video/jobs/{id}": {
+    "reason": "Session-authenticated Home Video Downloader relay to the Studio's private video service; the queue owner is always the signed-in account, and the tool's Home widget permission is checked on every call."
+  },
+  "DELETE * /oauth/mcp/authorize": {
+    "reason": "MCP OAuth discovery/consent or protocol method handling; see mcp-oauth.md.",
+    "sources": [
+      "packages/Mothership/AdminApi/src/Providers/McpOAuthServiceProvider.php"
+    ]
+  },
+  "GET * /.well-known/oauth-authorization-server": {
+    "sources": [
+      "packages/Mothership/AdminApi/src/Providers/McpOAuthServiceProvider.php"
+    ]
+  },
+  "GET * /.well-known/oauth-protected-resource/mcp": {
+    "sources": [
+      "packages/Mothership/AdminApi/src/Providers/McpOAuthServiceProvider.php"
+    ]
+  },
+  "GET * /admin/dam/analytics/replay/{path?}": {
+    "reason": "Authenticated browser replay relay; bounded fixed PostHog endpoints, not a supported bearer integration operation."
+  },
+  "GET * /admin/dam/assets/ai-tags/{id}/files/{fileId}": {
+    "reason": "Browser/session read of one stacked file's saved AI description with view and Files permissions, per-asset access and a current non-cover revision check; not a supported bearer integration operation."
+  },
+  "GET * /admin/dam/feedback": {
+    "reason": "Browser/session Settings > Feedback triage page (or the DataGrid's JSON on an Ajax/JSON request) listing every report with status, type, reporter and severity filters, for a triager only (an all-permission role or dam.feedback.manage); anyone else gets 403. Behind DAM_FEEDBACK_ENABLED (answers 404 while off); API accounts are refused; not a supported bearer integration operation."
+  },
+  "GET * /admin/dam/feedback/mine": {
+    "reason": "Browser/session My reports page (or JSON with Accept: application/json) listing only the viewer's own reports with status changes and replies marked visible to the reporter; internal notes are never included. Behind DAM_FEEDBACK_ENABLED (answers 404 while off); API accounts are refused; not a supported bearer integration operation."
+  },
+  "GET * /admin/dam/feedback/{report}": {
+    "reason": "Browser/session JSON detail of one report for its reporter (visible notes only) or a triager (an all-permission role or dam.feedback.manage); anyone else gets 404. Behind DAM_FEEDBACK_ENABLED (answers 404 while off); API accounts are refused; not a supported bearer integration operation."
+  },
+  "GET * /admin/dam/feedback/{report}/screenshot": {
+    "reason": "Browser/session delivery of a report's screenshot bytes to its reporter or a triager, nosniff and privately cached; anyone else gets 404. Behind DAM_FEEDBACK_ENABLED (answers 404 while off); API accounts are refused; not a supported bearer integration operation.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/FeedbackController.php",
+      "packages/Mothership/DAM/src/Services/Feedback/FeedbackStore.php"
+    ]
+  },
+  "GET * /admin/dam/hub/resources": {
+    "reason": "Browser/session Fonts & brushes manager page (ADR 0015): renders the page shell with the groups an owner may share with and the per-file and per-person caps; every resource it shows comes from admin.dam.hub.resources.list. Behind DAM_HUB_ENABLED (answers 404 while off) and the dam.hub.resources key, checked in the controller, which every signed-in non-API user holds; not a supported bearer integration operation."
+  },
+  "GET * /admin/dam/hub/resources/list": {
+    "reason": "Browser/session listing of the Creative Hub fonts and brushes (ADR 0015) the viewer may read (owner, Everyone, a listed group, or a full admin), as metadata and a sha256-pinned bytes URL, never bytes; behind DAM_HUB_ENABLED (answers 404 while off) and the dam.hub.resources ACL key, which every signed-in non-API user holds; not a supported bearer integration operation.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HubResourceController.php",
+      "packages/Mothership/DAM/src/Services/CreativeHub/HubResourceStore.php"
+    ]
+  },
+  "GET * /admin/dam/hub/resources/{uuid}/bytes": {
+    "reason": "Browser/session same-origin delivery of a readable Hub resource (ADR 0015) as a nosniff, privately cached attachment pinned to its sha256 (409 on a mismatch); cross-site and same-site fetches are refused, so a hub app receives the bytes from the workspace by postMessage (ADR 0012); behind DAM_HUB_ENABLED (answers 404 while off) and the dam.hub.resources ACL key, which every signed-in non-API user holds; not a supported bearer integration operation.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HubResourceController.php",
+      "packages/Mothership/DAM/src/Services/CreativeHub/HubResourceStore.php"
+    ]
+  },
+  "GET * /admin/dam/hub/transfers": {
+    "reason": "Authenticated human staff browser page for peer-to-peer Transfers; feature flag and dedicated origin/key required. No bearer integration API or file storage.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/TransfersController.php",
+      "packages/Mothership/DAM/src/Services/Transfers/TransferSession.php"
+    ]
+  },
+  "GET * /admin/home/video/jobs": {
+    "reason": "Session-authenticated Home Video Downloader relay to the Studio's private video service; the queue owner is always the signed-in account, and the tool's Home widget permission is checked on every call."
+  },
+  "GET * /admin/home/video/jobs/{id}/file": {
+    "reason": "Session-authenticated Home Video Downloader relay to the Studio's private video service; the queue owner is always the signed-in account, and the tool's Home widget permission is checked on every call."
+  },
+  "GET * /admin/invite": {
+    "sources": [
+      "packages/Mothership/Admin/src/Routes/auth-routes.php"
+    ]
+  },
+  "GET * /admin/reset-password": {
+    "sources": [
+      "packages/Mothership/Admin/src/Routes/auth-routes.php"
+    ]
+  },
+  "GET * /oauth/mcp/authorize": {
+    "reason": "MCP OAuth discovery/consent or protocol method handling; see mcp-oauth.md.",
+    "sources": [
+      "packages/Mothership/AdminApi/src/Providers/McpOAuthServiceProvider.php"
+    ]
+  },
+  "HEAD * /.well-known/oauth-authorization-server": {
+    "reason": "MCP OAuth discovery/consent or protocol method handling; see mcp-oauth.md.",
+    "sources": [
+      "packages/Mothership/AdminApi/src/Providers/McpOAuthServiceProvider.php"
+    ]
+  },
+  "HEAD * /.well-known/oauth-protected-resource/mcp": {
+    "reason": "MCP OAuth discovery/consent or protocol method handling; see mcp-oauth.md.",
+    "sources": [
+      "packages/Mothership/AdminApi/src/Providers/McpOAuthServiceProvider.php"
+    ]
+  },
+  "HEAD * /admin/dam/hub/transfers": {
+    "reason": "HEAD alias of the authenticated Transfers browser page."
+  },
+  "HEAD * /admin/dam/pages/{id}/members": {
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory."
+  },
+  "HEAD * /admin/invite": {
+    "sources": [
+      "packages/Mothership/Admin/src/Routes/auth-routes.php"
+    ]
+  },
+  "HEAD * /admin/reset-password": {
+    "sources": [
+      "packages/Mothership/Admin/src/Routes/auth-routes.php"
+    ]
+  },
+  "HEAD * /oauth/mcp/authorize": {
+    "reason": "MCP OAuth discovery/consent or protocol method handling; see mcp-oauth.md.",
+    "sources": [
+      "packages/Mothership/AdminApi/src/Providers/McpOAuthServiceProvider.php"
+    ]
+  },
+  "HEAD * /share/{token}/pf/{pin}/{path?}": {
+    "kind": "public-link",
+    "reason": "Recipient share delivery workflow; availability, signature, expiry and revocation follow the issuing feature."
+  },
+  "HEAD * /share/{token}/pgf/{grant}/{pin}/{path?}": {
+    "kind": "public-link",
+    "reason": "Recipient share delivery workflow; availability, signature, expiry and revocation follow the issuing feature."
+  },
+  "PATCH * /admin/dam/feedback/{report}": {
+    "reason": "Browser/session triage status change on a report, triagers only (403 otherwise); records a status-change note. Behind DAM_FEEDBACK_ENABLED (answers 404 while off); API accounts are refused; not a supported bearer integration operation."
+  },
+  "PATCH * /admin/dam/hub/resources/{uuid}": {
+    "reason": "Browser/session owner-only rename, visibility (private, Everyone or groups) and license note change of a Hub resource (ADR 0015); sharing also needs dam.hub.resources.share and a license attestation with a note (422 without); a resource the viewer cannot read answers 404; behind DAM_HUB_ENABLED (answers 404 while off) and the dam.hub.resources ACL key, which every signed-in non-API user holds; not a supported bearer integration operation.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HubResourceController.php",
+      "packages/Mothership/DAM/src/Services/CreativeHub/HubResourceStore.php"
+    ]
+  },
+  "POST * /admin/dam/analytics/replay/{path?}": {
+    "reason": "Authenticated browser replay relay; bounded fixed PostHog endpoints, not a supported bearer integration operation."
+  },
+  "POST * /admin/dam/assets/ai-rename/apply-member": {
+    "reason": "Browser/session member rename with rename and Files permissions, current revision and ownership checks; not a supported bearer integration operation."
+  },
+  "POST * /admin/dam/assets/ai-rename/members": {
+    "reason": "Browser/session stack-member naming inventory with rename and Files permissions and per-asset access checks; not a supported bearer integration operation."
+  },
+  "POST * /admin/dam/assets/ai-tags/{id}/files/{fileId}/describe": {
+    "reason": "Browser/session synchronous AI description of one stacked file with Files and tag permissions, own-only and per-asset checks and a current-revision recheck under lock; not a supported bearer integration operation."
+  },
+  "POST * /admin/dam/feedback": {
+    "reason": "Browser/session submission of a bug report, feedback or idea by any signed-in non-API user, with an optional PNG/JPEG/WebP screenshot stored as a file object and server-redacted context; rate limited (dam-feedback) and capped by dam.feedback.request_max_bytes (413). Behind DAM_FEEDBACK_ENABLED (answers 404 while off); API accounts are refused; not a supported bearer integration operation.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/FeedbackController.php",
+      "packages/Mothership/DAM/src/Services/Feedback/FeedbackStore.php"
+    ]
+  },
+  "POST * /admin/dam/feedback/{report}/notes": {
+    "reason": "Browser/session triager note on a report, internal or visible to the reporter; triagers only (403 otherwise), throttled at 60 a minute. Behind DAM_FEEDBACK_ENABLED (answers 404 while off); API accounts are refused; not a supported bearer integration operation."
+  },
+  "POST * /admin/dam/hub/resources": {
+    "reason": "Browser/session multipart upload of one font (TTF, OTF, WOFF, WOFF2) or PhotoCraft brush (ABR) as a Hub resource shared with Everyone when the uploader holds dam.hub.resources.share, the upload being the license attestation, else private (ADR 0015, amended 2026-10-20), throttled, checked by its bytes, per-file caps and a per-person byte quota (422 with a reason code); behind DAM_HUB_ENABLED (answers 404 while off) and the dam.hub.resources ACL key, which every signed-in non-API user holds; not a supported bearer integration operation.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HubResourceController.php",
+      "packages/Mothership/DAM/src/Services/CreativeHub/HubResourceStore.php"
+    ]
+  },
+  "POST * /admin/dam/hub/transfers/grant": {
+    "reason": "CSRF-protected active human staff session endpoint issuing a no-store, single-use, 90-second signed transfer grant. Server-derived account/session identity, feature flag and valid dedicated origin/key required. Not a bearer API.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/TransfersController.php",
+      "packages/Mothership/DAM/src/Services/Transfers/TransferSession.php"
+    ]
+  },
+  "POST * /admin/home/video/jobs": {
+    "reason": "Session-authenticated Home Video Downloader relay to the Studio's private video service; the queue owner is always the signed-in account, and the tool's Home widget permission is checked on every call."
+  },
+  "POST * /admin/home/video/jobs/{id}/optimize": {
+    "reason": "Session-authenticated Home Video Downloader relay to the Studio's private video service; the queue owner is always the signed-in account, and the tool's Home widget permission is checked on every call."
+  },
+  "POST * /admin/home/video/probe": {
+    "reason": "Session-authenticated Home Video Downloader relay to the Studio's private video service; the queue owner is always the signed-in account, and the tool's Home widget permission is checked on every call."
+  },
+  "POST * /oauth/mcp/authorize": {
+    "reason": "MCP OAuth discovery/consent or protocol method handling; see mcp-oauth.md.",
+    "sources": [
+      "packages/Mothership/AdminApi/src/Providers/McpOAuthServiceProvider.php"
+    ]
+  }
+}

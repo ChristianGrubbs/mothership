@@ -2,12 +2,14 @@
 
 namespace Mothership\DAM\Providers;
 
+use Aws\Handler\Guzzle\GuzzleHandler;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Database\Events\TransactionBeginning;
 use Illuminate\Database\Events\TransactionCommitted;
 use Illuminate\Database\Events\TransactionRolledBack;
+use Illuminate\Filesystem\FilesystemManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Router;
@@ -106,6 +108,8 @@ use Mothership\DAM\Services\Share\ShareGate;
 use Mothership\DAM\Services\SharedHiggsfield;
 use Mothership\DAM\Services\Webhooks\DamWebhookEvents;
 use Mothership\DAM\Services\WebPagePolicy;
+use Mothership\DAM\Support\ChunkUploadLogger;
+use Mothership\DAM\Support\LanFirstS3Handler;
 use Mothership\DataTransfer\Helpers\Exporters\Product\Exporter;
 use Mothership\DataTransfer\Helpers\Import;
 use Mothership\DataTransfer\Helpers\Importers\Product\Importer;
@@ -205,8 +209,35 @@ class DAMServiceProvider extends ServiceProvider
             || ($request->routeIs(...self::SHARE_MEDIA_RANGE_ROUTES) && strtolower((string) $request->query('disposition')) === 'inline');
     }
 
+    /**
+     * A driver override rather than a config value: a handler object in config would break `config:cache`.
+     */
+    private function routeS3DiskOverHomeNetwork(): void
+    {
+        $lanEndpoint = config('dam.asset_disk_lan_endpoint');
+
+        if (! is_string($lanEndpoint) || $lanEndpoint === '') {
+            return;
+        }
+
+        $this->app->make('filesystem')->extend('s3', function ($app, array $config) use ($lanEndpoint) {
+            if (LanFirstS3Handler::appliesTo(diskEndpoint: $config['endpoint'] ?? null, assetEndpoint: config('filesystems.disks.s3.endpoint'))) {
+                $config['http_handler'] = new LanFirstS3Handler(
+                    transport: new GuzzleHandler,
+                    lanEndpoint: $lanEndpoint,
+                    cache: $app->make('cache')->store(),
+                    logger: $app->make(ChunkUploadLogger::class),
+                );
+            }
+
+            return (new FilesystemManager($app))->createS3Driver($config);
+        });
+    }
+
     public function boot(Router $router)
     {
+        $this->routeS3DiskOverHomeNetwork();
+
         if (! config('dam.transfers.enabled')) {
             config(['menu.admin' => array_filter(config('menu.admin', []), fn (mixed $item): bool => ! is_array($item) || ($item['key'] ?? null) !== 'dam_transfers')]);
         }

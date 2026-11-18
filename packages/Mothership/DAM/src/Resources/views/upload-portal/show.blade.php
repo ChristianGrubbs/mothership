@@ -41,7 +41,7 @@
         </header>
 
         <main class="mx-auto flex max-w-3xl flex-col gap-5 px-4 py-6 sm:px-6 sm:py-10">
-            <section class="flex flex-col gap-2">
+            <section class="flex flex-col gap-2" data-dock="rise">
                 <h1 class="text-2xl font-semibold text-zinc-900 dark:text-slate-50 break-words" data-dam-portal-title>{{ $uploadRequest->title }}</h1>
                 @if ($uploadRequest->instructions)
                     <p class="whitespace-pre-line text-sm text-gray-700 dark:text-slate-300" data-dam-portal-instructions>{{ $uploadRequest->instructions }}</p>

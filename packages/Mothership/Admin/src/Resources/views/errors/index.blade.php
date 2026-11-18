@@ -11,7 +11,7 @@
     <!-- Error page Information -->
 	<div class="flex justify-center items-center h-[100vh] px-4 bg-[var(--ground)] dark:bg-cherry-800">
         <div class="flex gap-5 items-center max-w-[900px]">
-            <div class="w-full">
+            <div class="w-full" data-dock="rise">
                 <img
                     src="{{ mothership_asset('images/logo.svg') }}"
                     class="mb-6 h-8 w-auto dark:hidden"
@@ -68,7 +68,7 @@
                 @endif
             </div>
 
-            <div class="w-full">
+            <div class="w-full" data-dock="card">
                 <img src="{{ mothership_asset('images/error.svg') }}" alt="@lang("admin::app.errors.{$errorCode}.title")" />
             </div>
         </div>

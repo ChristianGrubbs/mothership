@@ -14,7 +14,7 @@
     <div class="min-h-screen bg-gray-50 dark:bg-cherry-950 flex flex-col items-center justify-center gap-8 px-6 py-10">
         @include('dam::upload-portal.partials.brand')
 
-        <div class="max-w-md w-full bg-white dark:bg-cherry-900 rounded-lg border border-gray-200 dark:border-cherry-800 p-8 text-center" data-dam-portal-unavailable>
+        <div class="max-w-md w-full bg-white dark:bg-cherry-900 rounded-lg border border-gray-200 dark:border-cherry-800 p-8 text-center" data-dam-portal-unavailable data-dock="card">
             <div class="mx-auto w-14 h-14 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-4">
                 <span class="icon-dam-link text-3xl text-amber-600 dark:text-amber-400"></span>
             </div>

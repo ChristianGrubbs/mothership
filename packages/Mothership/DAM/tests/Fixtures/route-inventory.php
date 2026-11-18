@@ -517,6 +517,7 @@ return [
     'admin.home.stylepress.reference-file'           => 'bytes',
     'admin.home.stylepress.source'                   => 'bytes',
     'admin.home.stylepress.thumbnail'                => 'bytes',
+    'admin.home.summary'                             => 'listing',
     'admin.home.video.jobs'                          => 'metadata',
     'admin.home.video.jobs.destroy'                  => 'mutation',
     'admin.home.video.jobs.file'                     => 'bytes',

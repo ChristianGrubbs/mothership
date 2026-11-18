@@ -297,8 +297,15 @@ it('renders only the folders the viewer can see into the Library folder strip se
         ->and($names)->not->toContain('Parity hidden')
         ->and(collect($page['children'])->firstWhere('name', 'Parity parent')->assets_total_count)->toBe(1);
 
+    // Only the classic Library embeds this seed. The explorer fetches its folders, so its page names neither.
+    config(['dam.explorer.enabled' => false]);
     $this->get(route('admin.dam.assets.index'))
         ->assertOk()
         ->assertSee('Parity parent')
+        ->assertDontSee('Parity hidden');
+
+    config(['dam.explorer.enabled' => true]);
+    $this->get(route('admin.dam.assets.index'))
+        ->assertOk()
         ->assertDontSee('Parity hidden');
 })->with([AccessModel::LISTS, AccessModel::GRANTS]);

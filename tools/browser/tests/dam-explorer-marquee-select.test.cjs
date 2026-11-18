@@ -1,6 +1,6 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
-const {bladeComponent} = require('../fixtures/blade.cjs');
+const {bladeComponent, bladeFixture} = require('../fixtures/blade.cjs');
 const {launchBrowser} = require('../launch-browser.cjs');
 
 const browserTest = process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH && process.env.MOTHERSHIP_VUE_RUNTIME_PATH ? test : test.skip;
@@ -16,6 +16,7 @@ async function mount(page, {grouped = false} = {}) {
         <body style="margin:0"><div id="app"></div>`);
     await page.addScriptTag({path: process.env.MOTHERSHIP_VUE_RUNTIME_PATH});
     await page.evaluate(() => { window.definitions = {}; window.app = {component(name, value) { definitions[name] = value; }}; });
+    await page.addScriptTag({content: bladeFixture('explorer-marquee.js')});
     for (const component of [tab, grid]) await page.addScriptTag({content: component.script});
     await page.evaluate(({gridTemplate, grouped}) => {
         const tabMethods = definitions['v-dam-tab'].methods;
@@ -47,8 +48,104 @@ async function mount(page, {grouped = false} = {}) {
     }, {gridTemplate: grid.template, grouped});
 }
 
+// The real list template and methods, with the tab's own selection handlers; every row it opens is kept on window.opened.
+async function mountList(page) {
+    await page.setViewportSize({width: 1000, height: 700});
+    const tab = bladeComponent('explorer-tab');
+    const list = bladeComponent('explorer-list');
+    await page.setContent(`<style>.dam-list-row{display:grid;grid-template-columns:32px 32px 1fr 100px 100px 120px 60px;height:44px;align-items:center}
+        .relative{position:relative}.absolute{position:absolute}.min-h-72{min-height:18rem}</style>
+        <body style="margin:0"><div id="app"></div>`);
+    await page.addScriptTag({path: process.env.MOTHERSHIP_VUE_RUNTIME_PATH});
+    await page.evaluate(() => { window.definitions = {}; window.app = {component(name, value) { definitions[name] = value; }}; });
+    await page.addScriptTag({content: bladeFixture('explorer-marquee.js')});
+    for (const component of [tab, list]) await page.addScriptTag({content: component.script});
+    await page.evaluate(({template}) => {
+        window.opened = [];
+        window.nativeDrags = 0;
+        document.addEventListener('dragstart', event => { if (! event.defaultPrevented) nativeDrags++; });
+        const tabMethods = definitions['v-dam-tab'].methods;
+        const app = Vue.createApp({
+            template: `<div style="padding:40px;width:900px"><v-dam-explorer-list tab-id="t" :directories="dirs" :assets="assets" :selection="selection"
+                @toggle-select="toggleSelect" @select-range="selectRange" @set-selection="setSelection" @navigate="dir => opened.push('directory:' + dir.id)"></v-dam-explorer-list></div>`,
+            data: () => ({
+                dirs: [{id: 7, name: 'Games', assets_count: 0, children_count: 0}],
+                assets: [1, 2, 3, 4].map(id => ({id, file_name: `IMG_${id}.JPG`, file_type: 'image', extension: 'jpg', path: '/x.jpg'})),
+                selection: {ids: [], mode: 'none'},
+            }),
+            methods: {
+                toggleSelect: tabMethods.toggleSelect, selectRange: tabMethods.selectRange, setSelection: tabMethods.setSelection,
+                computeSelectionMode() {}, persistSelection() {}, broadcastSelection() {},
+            },
+        });
+        app.config.globalProperties.$emitter = {on() {}, off() {}, emit(name, payload) { if (name === 'dam-open-preview') opened.push(`asset:${payload.id}`); }};
+        app.directive('dam-custom-thumbnail-drop', {});
+        app.directive('dam-thumbnail', {});
+        for (const name of new Set([...template.matchAll(/<(v-[a-z0-9-]+)/g)].map(match => match[1]))) app.component(name, {template: '<div></div>'});
+        app.component('v-dam-explorer-list', {...definitions['v-dam-explorer-list'], template});
+        window.vm = app.mount('#app');
+    }, {template: list.template});
+    await page.locator('[data-marquee-key="asset:4"]').waitFor();
+}
+
 const selected = page => page.evaluate(() => vm.selection.ids.map(i => `${i.type}:${i.id}`).sort());
 const box = (page, key) => page.locator(`[data-marquee-key="${key}"]`).boundingBox();
+// The middle of a list row's date cell, the part of a row that starts a box.
+const dateCell = async (page, key) => {
+    const cell = await page.locator(`[data-marquee-key="${key}"] .dam-list-col-date`).boundingBox();
+    return {x: cell.x + cell.width / 2, y: cell.y + cell.height / 2};
+};
+
+browserTest('in the list, dragging from a row\'s date cell selects the folders and files the box touches', async () => {
+    const browser = await launchBrowser({playwrightPath: process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH});
+    const page = await browser.newPage();
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+
+    try {
+        await mountList(page);
+        const from = await dateCell(page, 'directory:7');
+        const to = await dateCell(page, 'asset:2');
+
+        await page.mouse.move(from.x, from.y);
+        await page.mouse.down();
+        await page.mouse.move(to.x, to.y, {steps: 10});
+        assert.equal(await page.locator('[data-explorer-marquee]').count(), 1, 'the box is drawn while dragging');
+        await page.mouse.up();
+
+        assert.deepEqual(await selected(page), ['asset:1', 'asset:2', 'directory:7']);
+        assert.equal(await page.locator('[data-explorer-marquee]').count(), 0, 'the box goes away on release');
+        assert.equal(await page.evaluate(() => nativeDrags), 0, 'the row is not picked up and moved');
+        assert.deepEqual(await page.evaluate(() => opened), [], 'releasing the box opens nothing');
+        assert.deepEqual(errors, []);
+    } finally {
+        await browser.close();
+    }
+});
+
+browserTest('in the list, a row\'s name still moves it and a click on its date cell still opens it', async () => {
+    const browser = await launchBrowser({playwrightPath: process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH});
+    const page = await browser.newPage();
+
+    try {
+        await mountList(page);
+        const name = await page.locator('[data-marquee-key="asset:1"] bdi', {hasText: 'IMG_1.JPG'}).boundingBox();
+        const target = await dateCell(page, 'asset:3');
+        await page.mouse.move(name.x + 10, name.y + name.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(target.x, target.y, {steps: 10});
+        assert.equal(await page.locator('[data-explorer-marquee]').count(), 0, 'a press on the name never draws a box');
+        await page.mouse.up();
+        assert.equal(await page.evaluate(() => nativeDrags), 1, 'the row is picked up');
+        assert.deepEqual(await selected(page), []);
+
+        const cell = await dateCell(page, 'asset:2');
+        await page.mouse.click(cell.x, cell.y);
+        assert.deepEqual(await page.evaluate(() => opened), ['asset:2']);
+    } finally {
+        await browser.close();
+    }
+});
 
 browserTest('dragging on empty space selects the folders and files the box touches', async () => {
     const browser = await launchBrowser({playwrightPath: process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH});

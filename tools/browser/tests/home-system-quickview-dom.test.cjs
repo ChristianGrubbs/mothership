@@ -217,7 +217,7 @@ async function homePage(browser,{width=1200,holdLayout=false}={}){
     await page.addScriptTag({content:homeAnswersSource});
     await page.evaluate(({data,holdLayout,toolUrl})=>{
         const response=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
-        const catalog=[{id:'system-quickview',title:'Studio & people',description:'Live Mac Studio load and who is online now.',icon:'system',kind:'native',always_available:true,settings:{}},{id:'looper',title:'Video Loop Refiner',description:'Build a seamless loop.',icon:'looper',kind:'tool',settings:{},url:toolUrl}];
+        const catalog=[{id:'system-quickview',title:'Studio & people',description:'Live load on the host Mac and who is online now.',icon:'system',kind:'native',always_available:true,settings:{}},{id:'looper',title:'Video Loop Refiner',description:'Build a seamless loop.',icon:'looper',kind:'tool',settings:{},url:toolUrl}];
         window.__requests=[];
         window.fetch=async url=>{
             const address=String(url);window.__requests.push(address);

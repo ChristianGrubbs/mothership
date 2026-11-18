@@ -58,6 +58,36 @@ it('keeps the decorative hero panel beside the sign-in form inert, with no photo
     expect(strpos($html, 'data-login-backdrop'))->toBeLessThan(strpos($html, 'id="app"'));
 });
 
+it('gives the flipping board one real text equivalent and hides its cells from assistive technology', function () {
+    $html = $this->get(route('admin.session.create'))->assertOk()->getContent();
+
+    expect($html)
+        ->toMatch('/data-flap[^>]*>\s*<div class="bridge-frow" aria-hidden="true">/s')
+        ->toContain('<p class="sr-only">'.trans('admin::app.users.sessions.board').'</p>');
+});
+
+it('draws the still hero first, with the loop scenes hidden until the script plays them', function () {
+    $html = $this->get(route('admin.session.create'))->assertOk()->getContent();
+
+    expect($html)
+        ->toContain('data-hero-loop')
+        ->toMatch('/<g data-scene="nova" opacity="0">/')
+        ->toMatch('/<g data-scene="hole" opacity="0">/')
+        ->toMatch('/<g data-scene="moon" opacity="0">/')
+        ->toMatch('/<rect data-part="space"[^>]*opacity="0"/');
+});
+
+it('arms the entrance only when motion is allowed and always releases the page', function () {
+    $html = $this->get(route('admin.forget_password.create'))->assertOk()->getContent();
+
+    expect($html)
+        ->toContain("matchMedia('(prefers-reduced-motion: reduce)').matches")
+        ->toContain("root.classList.add('dock-armed')")
+        ->toContain('setTimeout(release, 900)')
+        ->toContain("['keydown', 'pointerdown', 'input']")
+        ->not->toMatch('/<html[^>]*class="[^"]*dock-armed/');
+});
+
 it('keeps the other anonymous pages free of the login backdrop', function () {
     $this->get(route('admin.forget_password.create'))
         ->assertOk()

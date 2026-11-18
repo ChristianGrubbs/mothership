@@ -104,6 +104,24 @@ checks distinguish its availability from Home availability. This change does not
 install or replace that service. Tool exports download to the browser; automatic
 import of exports into DAM is not part of this release.
 
+## Home summary
+
+`GET /admin/home/summary` (`admin.home.summary`) returns what the centre of Home shows for the signed-in person:
+`lead`, `board`, `needs_you`, `away` and `storage`. Every file count goes through the same listing access check as
+the Library. A source that cannot answer returns `available: false` with a reason and a null count, so a missing
+figure never reads as zero. Transfers keep no record, so their count is always unavailable.
+
+"New" means newer than the person's previous visit, kept in `dam_home_visits`. Opening Home in a browser records a
+visit. Opens within 30 minutes count as one visit, and data requests and prefetches do not count. Saves carry no
+session id, so the board groups files from one producer and person that arrive within 10 minutes of each other, and
+keeps an upload session together. Outbox reports are not available yet, so `board.holding` and the outbox entry in
+`needs_you.unavailable` say so. The limits live under `summary` in `packages/Mothership/DAM/src/Config/home.php`.
+
+A library on a local disk reports that disk's free space. A library on another machine reads
+`storage/app/private/umbrel-capacity.json`, which a host process writes with `free_bytes`, `total_bytes` and
+`checked_at` (UTC, `2026-11-18T17:41:00Z`). A file that is missing, malformed or more than 15 minutes old shows the
+store as unreachable. The local disk's figure is never used in its place.
+
 ## Operations and verification
 
 The additive migrations create `dam_home_layouts`, `dam_home_widget_state`,

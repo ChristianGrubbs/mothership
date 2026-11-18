@@ -214,6 +214,7 @@ return [
     'admin.home.favorites.index'                => [$s3Home],
     'admin.home.stylepress.assets'              => [$s3Home],
     'admin.home.stylepress.folders'             => [$s3Home],
+    'admin.home.summary'                        => [['Feature/HomeSummaryTest.php', 'counts only the files a restricted person may list']],
     'admin.home.video.jobs.file'                => [$homeVideo],
     'admin.home.vectorization.state'            => [$s3Home, $s3rDerived],
     // People and, under lists, folder roots; no asset. Probed that a member (every ACL key) is refused in both models:

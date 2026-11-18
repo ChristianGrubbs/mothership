@@ -53,7 +53,7 @@
                                 : 'w-[280px] max-w-full max-lg:w-full' }}"
                             @if (config('dam.explorer.enabled'))
                             :class="[ drawerOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full' ]"
-                            :style="{ width: isDesktopView ? sidebarWidth + 'px' : undefined, display: (!showSidebar && isDesktopView) ? 'none' : undefined }"
+                            :style="{ width: isDesktopView ? sidebarWidth + 'px' : undefined, display: (!showSidebar && isDesktopView) ? 'none' : undefined, bottom: drawerBottom ? drawerBottom + 'px' : undefined }"
                             @endif
                         >
 
@@ -185,7 +185,13 @@
 
                     let sidebarWidth = 280;
                     try { sidebarWidth = window.MothershipLibraryNavigation.sidebarWidth(localStorage.getItem('dam_sidebar_width')); } catch {}
-                    return { showSidebar, drawerOpen: false, isDesktopView, sidebarWidth };
+                    return { showSidebar, drawerOpen: false, drawerBottom: 0, isDesktopView, sidebarWidth };
+                },
+
+                watch: {
+                    drawerOpen(open) {
+                        if (open) this.measureDrawerBottom();
+                    },
                 },
 
                 mounted() {
@@ -241,7 +247,7 @@
                     this._onSidebarKeydown = (e) => { if (e.key === 'Escape') this.drawerOpen = false; };
                     window.addEventListener('keydown', this._onSidebarKeydown);
 
-                    this._onSidebarResize = () => { this.isDesktopView = this.isDesktop(); if (this.isDesktop()) this.drawerOpen = false; };
+                    this._onSidebarResize = () => { this.isDesktopView = this.isDesktop(); if (this.isDesktop()) this.drawerOpen = false; this.measureDrawerBottom(); };
                     window.addEventListener('resize', this._onSidebarResize);
 
                     this.$emitter.on('current-directory', () => { if (! this.isDesktop()) this.drawerOpen = false; });
@@ -255,6 +261,12 @@
                 },
 
                 methods: {
+                    // The phone tab bar covers the bottom of the screen, so the open drawer stops where the tab bar starts.
+                    measureDrawerBottom() {
+                        const tabbar = this.isDesktop() ? null : document.querySelector('[data-bridge-tabbar]');
+                        this.drawerBottom = tabbar ? Math.ceil(tabbar.getBoundingClientRect().height) : 0;
+                    },
+
                     // From lg up the column may render narrower than its stored width, giving way to the asset panel, so a
                     // drag or a key press starts from what the user sees: the column just before the separator.
                     effectiveSidebarWidth(handle) {

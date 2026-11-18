@@ -140,3 +140,8 @@ viewer no asset id for a stacked file precisely so it cannot overwrite the cover
   asset, on a device without a coarse pointer. There is no upload-time or backfill trigger for stacked files, so
   a stack's 3D file stays a badge until someone opens it once.
 
+
+## Amendment 2026-11-18 — the explorer is the default Library
+`DAM_EXPLORER_ENABLED` now defaults to on, so an install that leaves it unset serves the explorer Library. The
+classic datagrid remains available by setting it to false, or through a stored `dam_configuration` row, which
+still overrides the default. The runner stays page-level and mounted in both modes.

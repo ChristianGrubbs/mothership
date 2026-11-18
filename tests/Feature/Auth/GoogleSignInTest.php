@@ -154,7 +154,7 @@ it('shows the whole request number on the pending board', function (int $request
         'ttlHours'  => 24,
     ])->render();
 
-    preg_match('/<div class="bridge-frow">(.*?)<\/div>/s', $html, $row);
+    preg_match('/<div class="bridge-frow" aria-hidden="true">(.*?)<\/div>/s', $html, $row);
     preg_match_all('/<i>(.*?)<\/i>/s', $row[1], $cells);
 
     expect(implode('', $cells[1]))->toBe("REQUEST{$requestId}");

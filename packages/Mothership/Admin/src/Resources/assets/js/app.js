@@ -11,6 +11,8 @@ import { createApp, reactive, ref, computed, watch } from "vue/dist/vue.esm-bund
 import DOMPurify from "dompurify";
 
 import { HEADERS, EMITTER_EVENTS, FORM_EVENTS } from "./constants";
+import { runDocking } from "./docking";
+import { runHeroLoop } from "./hero-loop";
 
 // Expose DOMPurify for inline component scripts (e.g. AI chat widget); no CDN.
 window.DOMPurify = DOMPurify;
@@ -423,6 +425,10 @@ const mountApp = () => {
     appMounted = true;
 
     window.app.mount("#app");
+
+    runDocking();
+
+    runHeroLoop();
 
     initAjaxNavigation();
 };

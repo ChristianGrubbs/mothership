@@ -586,7 +586,7 @@ def build_parser() -> argparse.ArgumentParser:
     Returns:
         Configured ArgumentParser
     """
-    parser = argparse.ArgumentParser(description="Mac Studio system metrics sampler")
+    parser = argparse.ArgumentParser(description="Host Mac system metrics sampler")
     parser.add_argument(
         "--snapshot",
         type=pathlib.Path,

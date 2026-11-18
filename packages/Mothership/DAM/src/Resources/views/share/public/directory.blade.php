@@ -48,7 +48,7 @@
 
     <div class="min-h-screen bg-gray-50 dark:bg-cherry-950 flex flex-col">
 
-        <header class="sticky top-0 bg-white dark:bg-cherry-900 border-b border-gray-200 dark:border-cherry-800 px-6 py-4" style="z-index: 100;">
+        <header class="sticky top-0 bg-white dark:bg-cherry-900 border-b border-gray-200 dark:border-cherry-800 px-6 py-4" style="z-index: 100;" data-dock="rise">
             {{-- A preview-only link's note takes its own row on a phone, so the folder name keeps the header's width. --}}
             <div @class(['max-w-6xl mx-auto flex items-center justify-between gap-4', 'flex-wrap gap-y-1' => ! $share->allowsDownload()])>
                 <div class="flex items-center gap-2 min-w-0">

@@ -14,7 +14,7 @@
     <div class="min-h-screen bg-gray-50 dark:bg-cherry-950 flex flex-col items-center justify-center gap-8 px-6 py-10">
         @include('dam::upload-portal.partials.brand')
 
-        <div class="max-w-md w-full bg-white dark:bg-cherry-900 rounded-lg border border-gray-200 dark:border-cherry-800 p-8" data-dam-portal-password>
+        <div class="max-w-md w-full bg-white dark:bg-cherry-900 rounded-lg border border-gray-200 dark:border-cherry-800 p-8" data-dam-portal-password data-dock="card">
             <div class="mx-auto w-14 h-14 rounded-full bg-primary-50 dark:bg-primary-900 flex items-center justify-center mb-4">
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-primary-700 dark:text-primary-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>

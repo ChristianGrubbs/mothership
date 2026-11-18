@@ -424,11 +424,47 @@
     "reviewed": true
   },
   {
+    "id": "DELETE * /admin/home/calendar/assets/{link}",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "DELETE * /admin/home/calendar/events/{event}",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "DELETE * /admin/home/calendar/tasks/{task}",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
+    ],
+    "reviewed": true
+  },
+  {
     "id": "DELETE * /admin/home/favorites/{asset}",
     "kind": "internal",
     "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
     "sources": [
       "packages/Mothership/DAM/src/Http/Controllers/HomeFavoriteController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "DELETE * /admin/home/video/jobs/{id}",
+    "kind": "internal",
+    "reason": "Session-authenticated Home Video Downloader relay to the Studio's private video service; the queue owner is always the signed-in account, and the tool's Home widget permission is checked on every call.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeVideoController.php"
     ],
     "reviewed": true
   },
@@ -510,6 +546,24 @@
     "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
     "sources": [
       "packages/Mothership/Admin/src/Http/Controllers/Settings/RoleController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "DELETE * /admin/settings/users/access/preapprovals/{id}",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/Admin/src/Http/Controllers/Settings/UserAccessController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "DELETE * /admin/settings/users/access/requests/{id}",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/Admin/src/Http/Controllers/Settings/UserAccessController.php"
     ],
     "reviewed": true
   },
@@ -2966,6 +3020,51 @@
     "reviewed": true
   },
   {
+    "id": "GET * /admin/home/calendar/assets",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "GET * /admin/home/calendar/events",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "GET * /admin/home/calendar/events/{event}",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "GET * /admin/home/calendar/mine",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "GET * /admin/home/calendar/people",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
+    ],
+    "reviewed": true
+  },
+  {
     "id": "GET * /admin/home/data/{widget}",
     "kind": "internal",
     "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
@@ -3007,6 +3106,24 @@
     "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
     "sources": [
       "packages/Mothership/DAM/src/Http/Controllers/HomeController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "GET * /admin/home/plaque/context",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomePlaqueController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "GET * /admin/home/plaque/sets",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomePlaqueController.php"
     ],
     "reviewed": true
   },
@@ -3110,6 +3227,15 @@
     "reviewed": true
   },
   {
+    "id": "GET * /admin/home/summary",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeController.php"
+    ],
+    "reviewed": true
+  },
+  {
     "id": "GET * /admin/home/tools/{widget}/{path}",
     "kind": "internal",
     "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
@@ -3164,11 +3290,47 @@
     "reviewed": true
   },
   {
+    "id": "GET * /admin/home/video/jobs",
+    "kind": "internal",
+    "reason": "Session-authenticated Home Video Downloader relay to the Studio's private video service; the queue owner is always the signed-in account, and the tool's Home widget permission is checked on every call.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeVideoController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "GET * /admin/home/video/jobs/{id}/file",
+    "kind": "internal",
+    "reason": "Session-authenticated Home Video Downloader relay to the Studio's private video service; the queue owner is always the signed-in account, and the tool's Home widget permission is checked on every call.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeVideoController.php"
+    ],
+    "reviewed": true
+  },
+  {
     "id": "GET * /admin/home/widget-access/{widget}",
     "kind": "internal",
     "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
     "sources": [
       "packages/Mothership/DAM/src/Http/Controllers/HomeWidgetAccessController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "GET * /admin/invite",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/Admin/src/Routes/auth-routes.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "GET * /admin/invite/{token}",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/Admin/src/Http/Controllers/User/InviteAcceptController.php"
     ],
     "reviewed": true
   },
@@ -3524,6 +3686,15 @@
     "reviewed": true
   },
   {
+    "id": "GET * /admin/settings/users/access",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/Admin/src/Http/Controllers/Settings/UserAccessController.php"
+    ],
+    "reviewed": true
+  },
+  {
     "id": "GET * /admin/settings/users/edit/{id}",
     "kind": "internal",
     "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
@@ -3749,6 +3920,15 @@
     "reviewed": true
   },
   {
+    "id": "GET * /share/{token}/asset/{assetId}/display",
+    "kind": "public-link",
+    "reason": "Recipient share delivery workflow; availability, signature, expiry and revocation follow the issuing feature.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/PublicShare/SharedViewerController.php"
+    ],
+    "reviewed": true
+  },
+  {
     "id": "GET * /share/{token}/asset/{assetId}/download",
     "kind": "public-link",
     "reason": "Recipient share delivery workflow; availability, signature, expiry and revocation follow the issuing feature.",
@@ -3794,15 +3974,6 @@
     "reviewed": true
   },
   {
-    "id": "GET * /share/{token}/asset/{assetId}/display",
-    "kind": "public-link",
-    "reason": "Recipient share delivery workflow; availability, signature, expiry and revocation follow the issuing feature.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/PublicShare/SharedViewerController.php"
-    ],
-    "reviewed": true
-  },
-  {
     "id": "GET * /share/{token}/asset/{assetId}/preview",
     "kind": "public-link",
     "reason": "Recipient share delivery workflow; availability, signature, expiry and revocation follow the issuing feature.",
@@ -3822,6 +3993,15 @@
   },
   {
     "id": "GET * /share/{token}/assets",
+    "kind": "public-link",
+    "reason": "Recipient share delivery workflow; availability, signature, expiry and revocation follow the issuing feature.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/PublicShare/SharedViewerController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "GET * /share/{token}/display",
     "kind": "public-link",
     "reason": "Recipient share delivery workflow; availability, signature, expiry and revocation follow the issuing feature.",
     "sources": [
@@ -3912,15 +4092,6 @@
   },
   {
     "id": "GET * /share/{token}/pgf/{grant}/{pin}/{path?}",
-    "kind": "public-link",
-    "reason": "Recipient share delivery workflow; availability, signature, expiry and revocation follow the issuing feature.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/PublicShare/SharedViewerController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "GET * /share/{token}/display",
     "kind": "public-link",
     "reason": "Recipient share delivery workflow; availability, signature, expiry and revocation follow the issuing feature.",
     "sources": [
@@ -6413,6 +6584,51 @@
     "reviewed": true
   },
   {
+    "id": "HEAD * /admin/home/calendar/assets",
+    "kind": "head-alias",
+    "reason": "Laravel HEAD alias; see corresponding GET identity.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "HEAD * /admin/home/calendar/events",
+    "kind": "head-alias",
+    "reason": "Laravel HEAD alias; see corresponding GET identity.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "HEAD * /admin/home/calendar/events/{event}",
+    "kind": "head-alias",
+    "reason": "Laravel HEAD alias; see corresponding GET identity.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "HEAD * /admin/home/calendar/mine",
+    "kind": "head-alias",
+    "reason": "Laravel HEAD alias; see corresponding GET identity.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "HEAD * /admin/home/calendar/people",
+    "kind": "head-alias",
+    "reason": "Laravel HEAD alias; see corresponding GET identity.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
+    ],
+    "reviewed": true
+  },
+  {
     "id": "HEAD * /admin/home/data/{widget}",
     "kind": "head-alias",
     "reason": "Laravel HEAD alias; see corresponding GET identity.",
@@ -6454,6 +6670,24 @@
     "reason": "Laravel HEAD alias; see corresponding GET identity.",
     "sources": [
       "packages/Mothership/DAM/src/Http/Controllers/HomeController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "HEAD * /admin/home/plaque/context",
+    "kind": "head-alias",
+    "reason": "Laravel HEAD alias; see corresponding GET identity.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomePlaqueController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "HEAD * /admin/home/plaque/sets",
+    "kind": "head-alias",
+    "reason": "Laravel HEAD alias; see corresponding GET identity.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomePlaqueController.php"
     ],
     "reviewed": true
   },
@@ -6557,6 +6791,15 @@
     "reviewed": true
   },
   {
+    "id": "HEAD * /admin/home/summary",
+    "kind": "head-alias",
+    "reason": "Laravel HEAD alias; see corresponding GET identity.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeController.php"
+    ],
+    "reviewed": true
+  },
+  {
     "id": "HEAD * /admin/home/tools/{widget}/{path}",
     "kind": "head-alias",
     "reason": "Laravel HEAD alias; see corresponding GET identity.",
@@ -6611,11 +6854,47 @@
     "reviewed": true
   },
   {
+    "id": "HEAD * /admin/home/video/jobs",
+    "kind": "head-alias",
+    "reason": "Laravel HEAD alias; see corresponding GET identity.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeVideoController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "HEAD * /admin/home/video/jobs/{id}/file",
+    "kind": "head-alias",
+    "reason": "Laravel HEAD alias; see corresponding GET identity.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeVideoController.php"
+    ],
+    "reviewed": true
+  },
+  {
     "id": "HEAD * /admin/home/widget-access/{widget}",
     "kind": "head-alias",
     "reason": "Laravel HEAD alias; see corresponding GET identity.",
     "sources": [
       "packages/Mothership/DAM/src/Http/Controllers/HomeWidgetAccessController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "HEAD * /admin/invite",
+    "kind": "head-alias",
+    "reason": "Laravel HEAD alias; see corresponding GET identity.",
+    "sources": [
+      "packages/Mothership/Admin/src/Routes/auth-routes.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "HEAD * /admin/invite/{token}",
+    "kind": "head-alias",
+    "reason": "Laravel HEAD alias; see corresponding GET identity.",
+    "sources": [
+      "packages/Mothership/Admin/src/Http/Controllers/User/InviteAcceptController.php"
     ],
     "reviewed": true
   },
@@ -6967,6 +7246,15 @@
     "reason": "Laravel HEAD alias; see corresponding GET identity.",
     "sources": [
       "packages/Mothership/Admin/src/Http/Controllers/Settings/UserController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "HEAD * /admin/settings/users/access",
+    "kind": "head-alias",
+    "reason": "Laravel HEAD alias; see corresponding GET identity.",
+    "sources": [
+      "packages/Mothership/Admin/src/Http/Controllers/Settings/UserAccessController.php"
     ],
     "reviewed": true
   },
@@ -8096,6 +8384,15 @@
     "reviewed": true
   },
   {
+    "id": "HEAD * /share/{token}/asset/{assetId}/display",
+    "kind": "head-alias",
+    "reason": "Laravel HEAD alias; see corresponding GET identity.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/PublicShare/SharedViewerController.php"
+    ],
+    "reviewed": true
+  },
+  {
     "id": "HEAD * /share/{token}/asset/{assetId}/download",
     "kind": "head-alias",
     "reason": "Laravel HEAD alias; see corresponding GET identity.",
@@ -8141,15 +8438,6 @@
     "reviewed": true
   },
   {
-    "id": "HEAD * /share/{token}/asset/{assetId}/display",
-    "kind": "head-alias",
-    "reason": "Laravel HEAD alias; see corresponding GET identity.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/PublicShare/SharedViewerController.php"
-    ],
-    "reviewed": true
-  },
-  {
     "id": "HEAD * /share/{token}/asset/{assetId}/preview",
     "kind": "head-alias",
     "reason": "Laravel HEAD alias; see corresponding GET identity.",
@@ -8169,6 +8457,15 @@
   },
   {
     "id": "HEAD * /share/{token}/assets",
+    "kind": "head-alias",
+    "reason": "Laravel HEAD alias; see corresponding GET identity.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/PublicShare/SharedViewerController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "HEAD * /share/{token}/display",
     "kind": "head-alias",
     "reason": "Laravel HEAD alias; see corresponding GET identity.",
     "sources": [
@@ -8261,15 +8558,6 @@
     "id": "HEAD * /share/{token}/pgf/{grant}/{pin}/{path?}",
     "kind": "public-link",
     "reason": "Recipient share delivery workflow; availability, signature, expiry and revocation follow the issuing feature.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/PublicShare/SharedViewerController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "HEAD * /share/{token}/display",
-    "kind": "head-alias",
-    "reason": "Laravel HEAD alias; see corresponding GET identity.",
     "sources": [
       "packages/Mothership/DAM/src/Http/Controllers/PublicShare/SharedViewerController.php"
     ],
@@ -8435,6 +8723,24 @@
     "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
     "sources": [
       "packages/Mothership/DAM/src/Http/Controllers/UploadRequestController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "PATCH * /admin/home/calendar/events/{event}",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "PATCH * /admin/home/calendar/tasks/{task}",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
     ],
     "reviewed": true
   },
@@ -10260,11 +10566,47 @@
     "reviewed": true
   },
   {
+    "id": "POST * /admin/home/calendar/events",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "POST * /admin/home/calendar/events/{event}/assets",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "POST * /admin/home/calendar/events/{event}/tasks",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
+    ],
+    "reviewed": true
+  },
+  {
     "id": "POST * /admin/home/favorites/{asset}",
     "kind": "internal",
     "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
     "sources": [
       "packages/Mothership/DAM/src/Http/Controllers/HomeFavoriteController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "POST * /admin/home/plaque/generate",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomePlaqueController.php"
     ],
     "reviewed": true
   },
@@ -10319,6 +10661,42 @@
     "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
     "sources": [
       "packages/Mothership/DAM/src/Http/Controllers/HomeVectorizationController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "POST * /admin/home/video/jobs",
+    "kind": "internal",
+    "reason": "Session-authenticated Home Video Downloader relay to the Studio's private video service; the queue owner is always the signed-in account, and the tool's Home widget permission is checked on every call.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeVideoController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "POST * /admin/home/video/jobs/{id}/optimize",
+    "kind": "internal",
+    "reason": "Session-authenticated Home Video Downloader relay to the Studio's private video service; the queue owner is always the signed-in account, and the tool's Home widget permission is checked on every call.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeVideoController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "POST * /admin/home/video/probe",
+    "kind": "internal",
+    "reason": "Session-authenticated Home Video Downloader relay to the Studio's private video service; the queue owner is always the signed-in account, and the tool's Home widget permission is checked on every call.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeVideoController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "POST * /admin/invite",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/Admin/src/Http/Controllers/User/InviteAcceptController.php"
     ],
     "reviewed": true
   },
@@ -10539,11 +10917,56 @@
     "reviewed": true
   },
   {
+    "id": "POST * /admin/settings/users/access/preapprovals",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/Admin/src/Http/Controllers/Settings/UserAccessController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "POST * /admin/settings/users/access/requests/{id}/approve",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/Admin/src/Http/Controllers/Settings/UserAccessController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "POST * /admin/settings/users/access/requests/{id}/link",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/Admin/src/Http/Controllers/Settings/UserAccessController.php"
+    ],
+    "reviewed": true
+  },
+  {
     "id": "POST * /admin/settings/users/create",
     "kind": "internal",
     "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
     "sources": [
       "packages/Mothership/Admin/src/Http/Controllers/Settings/UserController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "POST * /admin/settings/users/invite",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/Admin/src/Http/Controllers/Settings/UserInviteController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "POST * /admin/settings/users/invite/{id}/resend",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/Admin/src/Http/Controllers/Settings/UserInviteController.php"
     ],
     "reviewed": true
   },
@@ -11336,411 +11759,6 @@
     "reason": "Guest upload request portal (P5a): a write-only upload page and its chunk upload calls. The link token and a visit cookie are the credential; nothing is listed or served back.",
     "sources": [
       "packages/Mothership/DAM/src/Http/Controllers/PublicUpload/UploadPortalController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "DELETE * /admin/home/calendar/assets/{link}",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "DELETE * /admin/home/calendar/events/{event}",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "DELETE * /admin/home/calendar/tasks/{task}",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "GET * /admin/home/calendar/assets",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "GET * /admin/home/calendar/events",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "GET * /admin/home/calendar/events/{event}",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "GET * /admin/home/calendar/mine",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "GET * /admin/home/calendar/people",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "GET * /admin/home/plaque/context",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomePlaqueController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "GET * /admin/home/plaque/sets",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomePlaqueController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "HEAD * /admin/home/calendar/assets",
-    "kind": "head-alias",
-    "reason": "Laravel HEAD alias; see corresponding GET identity.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "HEAD * /admin/home/calendar/events",
-    "kind": "head-alias",
-    "reason": "Laravel HEAD alias; see corresponding GET identity.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "HEAD * /admin/home/calendar/events/{event}",
-    "kind": "head-alias",
-    "reason": "Laravel HEAD alias; see corresponding GET identity.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "HEAD * /admin/home/calendar/mine",
-    "kind": "head-alias",
-    "reason": "Laravel HEAD alias; see corresponding GET identity.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "HEAD * /admin/home/calendar/people",
-    "kind": "head-alias",
-    "reason": "Laravel HEAD alias; see corresponding GET identity.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "HEAD * /admin/home/plaque/context",
-    "kind": "head-alias",
-    "reason": "Laravel HEAD alias; see corresponding GET identity.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomePlaqueController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "HEAD * /admin/home/plaque/sets",
-    "kind": "head-alias",
-    "reason": "Laravel HEAD alias; see corresponding GET identity.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomePlaqueController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "PATCH * /admin/home/calendar/events/{event}",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "PATCH * /admin/home/calendar/tasks/{task}",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "POST * /admin/home/calendar/events",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "POST * /admin/home/calendar/events/{event}/assets",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "POST * /admin/home/calendar/events/{event}/tasks",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeCalendarController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "POST * /admin/home/plaque/generate",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomePlaqueController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "DELETE * /admin/home/video/jobs/{id}",
-    "kind": "internal",
-    "reason": "Session-authenticated Home Video Downloader relay to the Studio's private video service; the queue owner is always the signed-in account, and the tool's Home widget permission is checked on every call.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeVideoController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "GET * /admin/home/video/jobs",
-    "kind": "internal",
-    "reason": "Session-authenticated Home Video Downloader relay to the Studio's private video service; the queue owner is always the signed-in account, and the tool's Home widget permission is checked on every call.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeVideoController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "GET * /admin/home/video/jobs/{id}/file",
-    "kind": "internal",
-    "reason": "Session-authenticated Home Video Downloader relay to the Studio's private video service; the queue owner is always the signed-in account, and the tool's Home widget permission is checked on every call.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeVideoController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "GET * /admin/invite",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/Admin/src/Routes/auth-routes.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "GET * /admin/invite/{token}",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/Admin/src/Http/Controllers/User/InviteAcceptController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "HEAD * /admin/home/video/jobs",
-    "kind": "head-alias",
-    "reason": "Laravel HEAD alias; see corresponding GET identity.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeVideoController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "HEAD * /admin/home/video/jobs/{id}/file",
-    "kind": "head-alias",
-    "reason": "Laravel HEAD alias; see corresponding GET identity.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeVideoController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "HEAD * /admin/invite",
-    "kind": "head-alias",
-    "reason": "Laravel HEAD alias; see corresponding GET identity.",
-    "sources": [
-      "packages/Mothership/Admin/src/Routes/auth-routes.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "HEAD * /admin/invite/{token}",
-    "kind": "head-alias",
-    "reason": "Laravel HEAD alias; see corresponding GET identity.",
-    "sources": [
-      "packages/Mothership/Admin/src/Http/Controllers/User/InviteAcceptController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "POST * /admin/home/video/jobs",
-    "kind": "internal",
-    "reason": "Session-authenticated Home Video Downloader relay to the Studio's private video service; the queue owner is always the signed-in account, and the tool's Home widget permission is checked on every call.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeVideoController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "POST * /admin/home/video/jobs/{id}/optimize",
-    "kind": "internal",
-    "reason": "Session-authenticated Home Video Downloader relay to the Studio's private video service; the queue owner is always the signed-in account, and the tool's Home widget permission is checked on every call.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeVideoController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "POST * /admin/home/video/probe",
-    "kind": "internal",
-    "reason": "Session-authenticated Home Video Downloader relay to the Studio's private video service; the queue owner is always the signed-in account, and the tool's Home widget permission is checked on every call.",
-    "sources": [
-      "packages/Mothership/DAM/src/Http/Controllers/HomeVideoController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "POST * /admin/invite",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/Admin/src/Http/Controllers/User/InviteAcceptController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "POST * /admin/settings/users/invite",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/Admin/src/Http/Controllers/Settings/UserInviteController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "POST * /admin/settings/users/invite/{id}/resend",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/Admin/src/Http/Controllers/Settings/UserInviteController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "GET * /admin/settings/users/access",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/Admin/src/Http/Controllers/Settings/UserAccessController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "HEAD * /admin/settings/users/access",
-    "kind": "head-alias",
-    "reason": "Laravel HEAD alias; see corresponding GET identity.",
-    "sources": [
-      "packages/Mothership/Admin/src/Http/Controllers/Settings/UserAccessController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "POST * /admin/settings/users/access/preapprovals",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/Admin/src/Http/Controllers/Settings/UserAccessController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "DELETE * /admin/settings/users/access/preapprovals/{id}",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/Admin/src/Http/Controllers/Settings/UserAccessController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "POST * /admin/settings/users/access/requests/{id}/approve",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/Admin/src/Http/Controllers/Settings/UserAccessController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "POST * /admin/settings/users/access/requests/{id}/link",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/Admin/src/Http/Controllers/Settings/UserAccessController.php"
-    ],
-    "reviewed": true
-  },
-  {
-    "id": "DELETE * /admin/settings/users/access/requests/{id}",
-    "kind": "internal",
-    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
-    "sources": [
-      "packages/Mothership/Admin/src/Http/Controllers/Settings/UserAccessController.php"
     ],
     "reviewed": true
   }

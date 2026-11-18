@@ -556,5 +556,112 @@ class ApiBuildTests(unittest.TestCase):
         self.assertEqual(checkout, classify.reviewed_source({"source": checkout}))
 
 
+class RouteClassificationTests(unittest.TestCase):
+    REPO = Path(__file__).parents[3]
+
+    @staticmethod
+    def load_classifier():
+        spec = importlib.util.spec_from_file_location("classify_routes", BUILD_API.parent / "classify_routes.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        return module
+
+    def inventory(self):
+        return json.loads((self.REPO / "docs/api/routes.json").read_text())
+
+    def overrides(self):
+        return json.loads((self.REPO / "docs/api/classification-overrides.json").read_text())
+
+    def test_every_inventory_route_is_classified(self):
+        classifier = self.load_classifier()
+        unclassified = []
+
+        for route in self.inventory():
+            try:
+                classifier.classify(route)
+            except ValueError:
+                unclassified.append(route["id"])
+
+        self.assertEqual(
+            [],
+            unclassified,
+            "Add a rule to tools/docs/classify_routes.py for these routes: " + ", ".join(unclassified),
+        )
+
+    def test_unknown_route_families_fail_closed_and_name_the_route(self):
+        classifier = self.load_classifier()
+
+        for uri in (
+            "/new-family/items",
+            "/.well-known/security.txt",
+            "/.well-known/oauth-unreviewed",
+            "/.well-known/oauth-authorization-server/extra",
+            "/.well-known/oauth-protected-resource/other",
+            "/pwa/offline/extra",
+        ):
+            route_id = "GET * " + uri
+            route = {"id": route_id, "method": "GET", "uri": uri}
+
+            with self.subTest(uri=uri):
+                with self.assertRaises(ValueError) as caught:
+                    classifier.classify(route)
+
+                self.assertIn(route_id, str(caught.exception))
+
+                with self.assertRaisesRegex(ValueError, "Unclassified route family"):
+                    classifier.classification_rows(
+                        routes=[route],
+                        overrides={route_id: {"kind": "internal", "reason": "Reviewed.", "sources": ["app/Example.php"]}},
+                    )
+
+    def test_committed_classifications_are_the_classifier_output(self):
+        classifier = self.load_classifier()
+        generated = classifier.classification_rows(routes=self.inventory(), overrides=self.overrides())
+        committed = json.loads((self.REPO / "docs/api/classifications.json").read_text())
+        by_id = {row["id"]: row for row in committed}
+        stale = sorted(row["id"] for row in generated if by_id.get(row["id"]) != row)
+        stale += sorted(set(by_id) - {row["id"] for row in generated})
+
+        self.assertEqual(
+            [],
+            stale,
+            "docs/api/classifications.json is generated: put reviewed wording in docs/api/classification-overrides.json and run python3 tools/docs/classify_routes.py",
+        )
+        self.assertEqual(
+            classifier.render(generated),
+            (self.REPO / "docs/api/classifications.json").read_text(),
+            "docs/api/classifications.json is not in classifier order: run python3 tools/docs/classify_routes.py",
+        )
+
+    def test_override_cannot_outlive_its_route_or_cover_a_supported_api_route(self):
+        classifier = self.load_classifier()
+        routes = [
+            {"id": "GET * /admin/example", "method": "GET", "uri": "/admin/example"},
+            {"id": "GET * /api/v1/rest/example", "method": "GET", "uri": "/api/v1/rest/example"},
+        ]
+        cases = (
+            ("GET * /admin/removed", {"reason": "Reviewed."}, "GET \\* /admin/removed"),
+            ("GET * /api/v1/rest/example", {"reason": "Reviewed."}, "GET \\* /api/v1/rest/example"),
+            ("GET * /admin/example", {"reviewed": False}, "unknown fields"),
+        )
+
+        for route_id, fields, message in cases:
+            with self.subTest(route_id=route_id, fields=fields):
+                with self.assertRaisesRegex(ValueError, message):
+                    classifier.classification_rows(routes=routes, overrides={route_id: fields})
+
+    def test_override_replaces_only_the_reviewed_fields(self):
+        classifier = self.load_classifier()
+        route = {"id": "GET * /admin/example", "method": "GET", "uri": "/admin/example"}
+
+        row = classifier.classification_rows(routes=[route], overrides={route["id"]: {"reason": "Reviewed wording."}})[0]
+
+        self.assertEqual("internal", row["kind"])
+        self.assertEqual("Reviewed wording.", row["reason"])
+        self.assertEqual(["app/Documentation/RouteInventory.php"], row["sources"])
+        self.assertIs(True, row["reviewed"])
+
+
 if __name__ == "__main__":
     unittest.main()

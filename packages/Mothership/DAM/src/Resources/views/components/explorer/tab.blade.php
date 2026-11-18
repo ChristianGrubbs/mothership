@@ -328,6 +328,7 @@
                     :bookmarked-dir-ids="bookmarkedDirIds"
                     @toggle-select="toggleSelect"
                     @select-range="selectRange"
+                    @set-selection="setSelection"
                     @navigate="goTo"
                     @open-new-tab="openNewTab"
                     @bookmark="bookmark"
@@ -470,6 +471,7 @@ app.component('v-dam-tab', {
             // VIS-11: on a phone the media chips and the sort/filter row sit behind one "Filter & sort" button.
             phoneFiltersOpen: false,
             selectionBarHeight: 0,
+            selectionBarBottom: 0,
             sortBy:       initialSortBy,
             sortOrder:    initialSortOrder,
             smartSearch:  @json((bool) config('ai-index.search_enabled')),
@@ -964,7 +966,11 @@ app.component('v-dam-tab', {
                 this._observedBar = bar || null;
                 if (bar) this._selectionBarObserver.observe(bar);
             }
-            this.selectionBarHeight = bar && getComputedStyle(bar).position === 'fixed' ? Math.ceil(bar.getBoundingClientRect().height) : 0;
+            const fixed = !! bar && getComputedStyle(bar).position === 'fixed';
+            this.selectionBarHeight = fixed ? Math.ceil(bar.getBoundingClientRect().height) : 0;
+            // The phone tab bar covers the bottom of the screen, so the fixed bar sits on top of it.
+            const tabbar = fixed ? bar.ownerDocument?.querySelector('[data-bridge-tabbar]') : null;
+            this.selectionBarBottom = tabbar ? Math.ceil(tabbar.getBoundingClientRect().height) : 0;
         },
 
         storedClipboard() {

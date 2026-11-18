@@ -12,6 +12,13 @@ return [
     'asset_disk' => env('MOTHERSHIP_ASSET_DISK'),
 
     /*
+     * Optional home-network address of the `s3` disk's bucket, such as http://192.0.2.10:9010. While the bucket
+     * answers there, the app's own storage traffic uses it; otherwise it uses AWS_ENDPOINT. Browser links always
+     * use the public address. Unset keeps all traffic on AWS_ENDPOINT.
+     */
+    'asset_disk_lan_endpoint' => env('AWS_LAN_ENDPOINT'),
+
+    /*
      * With a remote asset disk, chunked uploads stage on the local `mothership-staging` disk, and each
      * assembled upload stays there as a warm copy for the first preview jobs for this many hours (ADR 0017).
      */
@@ -139,7 +146,7 @@ return [
     ],
 
     'explorer' => [
-        'enabled'           => env('DAM_EXPLORER_ENABLED', false),
+        'enabled'           => env('DAM_EXPLORER_ENABLED', true),
         'bookmarks_enabled' => env('DAM_EXPLORER_BOOKMARKS_ENABLED', false),
         'show_tree'         => env('DAM_EXPLORER_SHOW_TREE', true),
 

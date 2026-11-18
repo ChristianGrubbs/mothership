@@ -1,18 +1,18 @@
 {
-  "accounted": 1592,
+  "accounted": 1594,
   "counts": {
     "api": 288,
     "authentication": 10,
-    "head-alias": 492,
+    "head-alias": 493,
     "health": 1,
-    "internal": 757,
+    "internal": 758,
     "page": 2,
     "public-link": 40,
     "static": 2,
     "unsupported": 0
   },
   "missing": [],
-  "registered": 1592,
+  "registered": 1594,
   "routes": [
     {
       "id": "DELETE * /admin/ai-agent/agents/{id}",
@@ -2021,6 +2021,11 @@
     },
     {
       "id": "GET * /admin/home/stylepress/thumbnail/{style}",
+      "kind": "internal",
+      "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory."
+    },
+    {
+      "id": "GET * /admin/home/summary",
       "kind": "internal",
       "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory."
     },
@@ -4496,6 +4501,11 @@
     },
     {
       "id": "HEAD * /admin/home/stylepress/thumbnail/{style}",
+      "kind": "head-alias",
+      "reason": "Laravel HEAD alias; see corresponding GET identity."
+    },
+    {
+      "id": "HEAD * /admin/home/summary",
       "kind": "head-alias",
       "reason": "Laravel HEAD alias; see corresponding GET identity."
     },

@@ -1,6 +1,6 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
-const {bladeComponent} = require('../fixtures/blade.cjs');
+const {bladeComponent, bladeFixture} = require('../fixtures/blade.cjs');
 const {launchBrowser} = require('../launch-browser.cjs');
 
 const browserTest = process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH && process.env.MOTHERSHIP_VUE_RUNTIME_PATH ? test : test.skip;
@@ -11,6 +11,7 @@ async function mount(page) {
     await page.setContent('<body><div id="app"></div>');
     await page.addScriptTag({path: process.env.MOTHERSHIP_VUE_RUNTIME_PATH});
     await page.evaluate(() => { window.definitions = {}; window.app = {component(name, value) { definitions[name] = value; }}; });
+    await page.addScriptTag({content: bladeFixture('explorer-marquee.js')});
     await page.addScriptTag({content: list.script});
     await page.evaluate(({template}) => {
         window.sent = [];

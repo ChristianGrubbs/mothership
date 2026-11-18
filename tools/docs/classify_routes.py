@@ -1,8 +1,14 @@
-"""Apply the approved scope rules; unrecognized route families fail closed."""
+"""Apply the approved scope rules and reviewed overrides; unrecognized route families fail closed.
+
+docs/api/classifications.json is generated: change a row through a rule here or through
+docs/api/classification-overrides.json, then rerun this script.
+"""
 import json
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
+OVERRIDES = REPO / "docs/api/classification-overrides.json"
+OVERRIDE_FIELDS = {"kind", "reason", "sources"}
 
 def classify(route):
     uri = route["uri"]
@@ -10,6 +16,9 @@ def classify(route):
     if uri.startswith("/api/"): return None
     if uri in ("/", "/admin"): return "page", "Application entry redirects to login."
     if uri == "/up": return "health", "Framework health endpoint."
+    if uri == "/app.webmanifest": return "internal", "Public browser PWA installation manifest; not a bearer integration operation."
+    if uri == "/pwa/offline": return "internal", "Credential-free browser offline fallback; not a bearer integration operation."
+    if uri in ("/.well-known/oauth-authorization-server", "/.well-known/oauth-protected-resource/mcp"): return "authentication", "MCP OAuth discovery/consent or protocol method handling; see mcp-oauth.md."
     if uri.startswith(("/oauth/", "/sanctum/", "/broadcasting/")): return "authentication", "Framework authentication/session infrastructure; see the API usage guide."
     if uri.startswith("/embed/"): return "public-link", "Tokenized media embed (P6 D26): a player page and its media bytes; the token, revocation, expiry and the asset's availability decide, every refusal answering like an unknown token."
     if uri.startswith("/c/"): return "public-link", "Collection short address (P4 D23): redirects to a public collection's share link, or after sign-in to the collection page; it grants nothing."
@@ -27,12 +36,29 @@ def reviewed_source(route):
     if not source or source.startswith("vendor/") or not (REPO/source).is_file(): return "app/Documentation/RouteInventory.php"
     return source
 
-if __name__ == "__main__":
+def validate_overrides(*, routes, overrides):
+    """An override refines a classified route; it never classifies a new family or outlives its route."""
+    by_id={route["id"]:route for route in routes}
+    for key, fields in overrides.items():
+        if key not in by_id: raise ValueError("Classification override names a route missing from the inventory: " + key)
+        if classify(by_id[key]) is None: raise ValueError("Classification override names a supported API route: " + key)
+        unknown=set(fields)-OVERRIDE_FIELDS
+        if unknown: raise ValueError("Classification override has unknown fields " + repr(sorted(unknown)) + ": " + key)
+
+def classification_rows(*, routes, overrides):
+    validate_overrides(routes=routes, overrides=overrides)
     rows=[]
-    for route in json.loads((REPO / "docs/api/routes.json").read_text()):
+    for route in routes:
         result=classify(route)
         if result is None: continue
         kind, reason=result
-        rows.append({"id":route["id"], "kind":kind, "reason":reason, "sources":[reviewed_source(route)], "reviewed":True})
-    (REPO/"docs/api/classifications.json").write_text(json.dumps(rows,indent=2)+"\n")
+        rows.append({"id":route["id"], "kind":kind, "reason":reason, "sources":[reviewed_source(route)], "reviewed":True, **overrides.get(route["id"], {})})
+    return rows
+
+def render(rows):
+    return json.dumps(rows,indent=2)+"\n"
+
+if __name__ == "__main__":
+    rows=classification_rows(routes=json.loads((REPO / "docs/api/routes.json").read_text()), overrides=json.loads(OVERRIDES.read_text()))
+    (REPO/"docs/api/classifications.json").write_text(render(rows))
     print(json.dumps({"event":"routes.classified", "count":len(rows)}))

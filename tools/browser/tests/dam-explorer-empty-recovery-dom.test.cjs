@@ -2,7 +2,7 @@ const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const {bladeComponent} = require('../fixtures/blade.cjs');
+const {bladeComponent, bladeFixture} = require('../fixtures/blade.cjs');
 const {launchBrowser} = require('../launch-browser.cjs');
 
 const root = path.resolve(__dirname, '../../..');
@@ -35,6 +35,7 @@ async function mount(page, {mode, width}) {
         }
     }
     await page.evaluate(() => { window.definitions = {}; window.app = {component(name, value) { definitions[name] = value; }}; });
+    await page.addScriptTag({content: bladeFixture('explorer-marquee.js')});
     for (const component of [tab, grid, list]) await page.addScriptTag({content: component.script});
     await page.evaluate(({template, mode, allTemplates}) => {
         const definition = definitions['v-dam-tab'];

@@ -36,6 +36,23 @@
         })();
     </script>
 
+    {{-- Docking entrances: armed before first paint, only when motion is allowed. The timer and the first input always
+         release the page, so nothing stays hidden if the bundle is slow or fails. --}}
+    <script>
+        (() => {
+            if (! Element.prototype.animate || matchMedia('(prefers-reduced-motion: reduce)').matches || document.visibilityState === 'hidden') {
+                return;
+            }
+
+            const root = document.documentElement;
+            const release = () => root.classList.remove('dock-armed');
+
+            root.classList.add('dock-armed');
+            setTimeout(release, 900);
+            ['keydown', 'pointerdown', 'input'].forEach((type) => window.addEventListener(type, release, { capture: true, once: true }));
+        })();
+    </script>
+
     @stack('meta')
     @if (request()->routeIs('admin.session.create'))
         <x-admin::layouts.pwa />

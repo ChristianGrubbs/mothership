@@ -92,6 +92,7 @@ final class DamTables
         'dam_home_generations',
         'dam_home_tool_files',
         'dam_home_widget_state',
+        'dam_home_visits',
         'dam_calendar_events',
         'dam_calendar_tasks',
         'dam_calendar_assets',

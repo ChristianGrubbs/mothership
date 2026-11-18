@@ -143,3 +143,26 @@ test('the asset panel stays beside the column with the nav collapsed and right t
         }
     });
 });
+
+// The phone tab bar is fixed over the bottom of the screen. A drawer that ran underneath it kept its last control, a
+// suggestion's Dismiss, behind the bar even when scrolled to the end, and a tap there landed on the tab bar instead.
+test('the phone Directory drawer stops at the top of the tab bar, so its last control can be tapped',()=>{
+    const blade=source('packages/Mothership/DAM/src/Resources/views/asset/index.blade.php');
+    const body=blade.match(/measureDrawerBottom\(\) \{([\s\S]*?)\n\s*\},/);
+    assert.ok(body,'the drawer must measure the tab bar');
+    const measure=new Function('document',`return function(){${body[1]}}`);
+    const drawerBottom=({desktop=false,height})=>{
+        const state={isDesktop:()=>desktop,drawerBottom:-1};
+        const tabbar=height===null?null:{getBoundingClientRect:()=>({height})};
+        measure({querySelector:selector=>selector==='[data-bridge-tabbar]'?tabbar:null}).call(state);
+
+        return state.drawerBottom;
+    };
+
+    assert.equal(drawerBottom({height:78.3}),79,'the drawer clears the whole tab bar, rounded up');
+    assert.equal(drawerBottom({height:0}),0,'a hidden tab bar leaves the drawer on the screen edge');
+    assert.equal(drawerBottom({height:null}),0,'a page without a tab bar leaves the drawer on the screen edge');
+    assert.equal(drawerBottom({desktop:true,height:78.3}),0,'the desktop column is not a drawer');
+    assert.match(blade,/bottom: drawerBottom \? drawerBottom \+ 'px' : undefined/,'the measured height must reach the drawer');
+    assert.match(blade,/drawerOpen\(open\) \{\s*if \(open\) this\.measureDrawerBottom\(\);/,'the drawer measures each time it opens');
+});

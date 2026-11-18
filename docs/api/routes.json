@@ -6734,6 +6734,21 @@
         "source": "packages/Mothership/DAM/src/Http/Controllers/HomeStylePressController.php"
     },
     {
+        "id": "GET * /admin/home/summary",
+        "method": "GET",
+        "domain": "*",
+        "uri": "/admin/home/summary",
+        "name": "admin.home.summary",
+        "action": "Mothership\\DAM\\Http\\Controllers\\HomeController@summary",
+        "middleware": [
+            "web",
+            "admin",
+            "dam"
+        ],
+        "wheres": {},
+        "source": "packages/Mothership/DAM/src/Http/Controllers/HomeController.php"
+    },
+    {
         "id": "GET * /admin/home/tools/{widget}/{path}",
         "method": "GET",
         "domain": "*",
@@ -15138,6 +15153,21 @@
         ],
         "wheres": {},
         "source": "packages/Mothership/DAM/src/Http/Controllers/HomeStylePressController.php"
+    },
+    {
+        "id": "HEAD * /admin/home/summary",
+        "method": "HEAD",
+        "domain": "*",
+        "uri": "/admin/home/summary",
+        "name": "admin.home.summary",
+        "action": "Mothership\\DAM\\Http\\Controllers\\HomeController@summary",
+        "middleware": [
+            "web",
+            "admin",
+            "dam"
+        ],
+        "wheres": {},
+        "source": "packages/Mothership/DAM/src/Http/Controllers/HomeController.php"
     },
     {
         "id": "HEAD * /admin/home/tools/{widget}/{path}",
