@@ -96,10 +96,12 @@
             rows.innerHTML = models.length
                 ? models.map(rowHtml).join('')
                 : rowHtml({tone: 'seen', time: '--:--', from: 'No arrivals', cargo: 'Connect a craft', quantity: '--', status: '--', sentence: 'No arrivals yet. Connect a craft and what it makes lands here.'});
-            more.hidden = board.more <= 0;
+            more.hidden = board.more <= 0 && !board.truncated;
             if (board.more > 0) {
                 const since = lead.since ? ` since ${dayAndTime(lead.since, now)}` : '';
                 more.innerHTML = `<a href="#hm-cargo">+ ${board.more.toLocaleString()}${board.truncated ? ' or more' : ' more'}${esc(since)} · see Cargo</a>`;
+            } else if (board.truncated) {
+                more.textContent = 'Counts cover the newest files only';
             }
             if (!flapped) { flapped = true; flap(rows); }
         }
@@ -299,7 +301,7 @@
             if (!admin) { card.hidden = true; return; }
             const head = tag => `<div class="hm-ch"><h2>Signal</h2>${tag}</div>`;
             if (!feed.loaded) { card.innerHTML = `${head('')}<p class="hm-empty">Reading your feeds…</p>`; return; }
-            const trending = feed.trending.length ? `<h3 class="hm-tr"><span>Trending on GitHub</span><span>Stars today</span></h3>${feed.trending.map(repo => `<a class="hm-repo" href="${esc(`https://github.com/${repo.repo}`)}" target="_blank" rel="noopener noreferrer"><span><b>${esc(repo.repo)}</b><span>${esc(repo.description || 'No description provided.')}</span></span>${repo.starsToday != null ? `<span class="hm-mono">+${new Intl.NumberFormat('en', {notation: 'compact', maximumFractionDigits: 1}).format(Number(repo.starsToday) || 0)}</span>` : ''}</a>`).join('')}` : '';
+            const trending = feed.trending.length ? `<h3 class="hm-tr"><span>Trending on GitHub</span><span>${feed.trendingStale ? 'Out of date' : 'Stars today'}</span></h3>${feed.trending.map(repo => `<a class="hm-repo" href="${esc(`https://github.com/${repo.repo}`)}" target="_blank" rel="noopener noreferrer"><span><b>${esc(repo.repo)}</b><span>${esc(repo.description || 'No description provided.')}</span></span>${repo.starsToday != null ? `<span class="hm-mono">+${new Intl.NumberFormat('en', {notation: 'compact', maximumFractionDigits: 1}).format(Number(repo.starsToday) || 0)}</span>` : ''}</a>`).join('')}` : '';
             if (feed.failedAt) {
                 const had = feed.answeredAt ? ` These are the stories from ${esc(clock(feed.answeredAt))}.` : '';
                 card.innerHTML = `${head('<span class="hm-tag hm-mono hm-r"><i class="hm-lamp r"></i>Not answering</span>')}<p class="hm-empty">Your Umbrel’s feed adapter did not answer at ${esc(clock(feed.failedAt))}.${had}</p>${feed.stories.map(storyRow).join('')}<button type="button" class="hm-btn hm-wide" data-signal-retry>Try again</button>${trending}`;
@@ -314,7 +316,10 @@
         }
         async function loadSignal({reveal = false} = {}) {
             const stories = request(`/service/rss/v1/stories?limit=${STORY_LIMIT}`);
-            const trending = request('/service/trending/v1/trending').then(result => (result.repos || []).slice(0, TRENDING_LIMIT)).catch(() => feed.trending);
+            // The adapter can answer with an old list, so its own status decides whether the list is called current.
+            const trending = request('/service/trending/v1/trending')
+                .then(result => ({repos: (result.repos || []).slice(0, TRENDING_LIMIT), stale: ['error', 'stale'].includes(result.status)}))
+                .catch(() => ({repos: feed.trending, stale: feed.trending.length > 0}));
             try {
                 const result = await stories;
                 const incoming = result.stories || [];
@@ -326,7 +331,7 @@
                 feed.answeredAt = new Date();
                 feed.failedAt = null;
             } catch { feed.failedAt = new Date(); }
-            feed.trending = await trending;
+            ({repos: feed.trending, stale: feed.trendingStale} = await trending);
             if (signal.aborted || !root.isConnected) return;
             feed.loaded = true;
             paintSignal();

@@ -178,8 +178,10 @@ class HomeLandings
 
         // A file this person may list can also sit in a folder they may not see, and that folder's name stays hidden.
         $permissions = app(DirectoryPermissionService::class);
+        /** @var Collection<int, Directory> $directories */
+        $directories = $newest->directories;
         $folder = $assets->count() > 1
-            ? $newest->directories->first(fn (Directory $directory): bool => $directory->parent_id !== null
+            ? $directories->first(fn (Directory $directory): bool => $directory->parent_id !== null
                 && $permissions->canView(directoryId: (int) $directory->id)
                 && $assets->every(fn (Asset $asset): bool => $asset->directories->contains('id', $directory->id)))
             : null;

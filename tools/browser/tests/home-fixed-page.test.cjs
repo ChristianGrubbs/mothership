@@ -125,6 +125,7 @@ browserTest('a broken picture shows its file type, and Docked says when it read 
         await page.locator('.hm-pic-kind').waitFor();
         assert.equal(await page.locator('.hm-pic-kind').textContent(),'.png');
         assert.equal((await page.locator('[data-docked] .hm-axis').textContent()).trim(),'Saves among the newest files');
+        assert.equal((await page.locator('[data-board-more]').textContent()).trim(),'Counts cover the newest files only');
         assert.deepEqual(errors,[]);
         await page.close();
     }finally{await browser.close();}

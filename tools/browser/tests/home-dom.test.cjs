@@ -23,7 +23,7 @@ async function fixturePage(browser,{superuser=true}={}){
                 if(window.__feed.mode==='empty')return response({stories:[]});
                 return response({stories:window.__feed.mode==='second'?[story('2','Second headline'),story('1','First headline')]:[story('1','First headline')]});
             }
-            if(address.includes('/service/trending/v1/trending'))return response({repos:[{repo:'org/project',description:'<img src=x onerror="window.__owned=1"> fast',starsToday:1234}]});
+            if(address.includes('/service/trending/v1/trending'))return window.__feed.trending==='fail'?response({message:'offline'},503):response({status:window.__feed.trending||'ok',repos:[{repo:'org/project',description:'<img src=x onerror="window.__owned=1"> fast',starsToday:1234}]});
             return response(window.__homeAnswer(address)??{});
         };
     });
@@ -87,6 +87,31 @@ browserTest('a feed cannot write a script link or markup into Signal',async()=>{
         assert.match(await card.locator('.hm-repo').textContent(),/<img src=x/);
         assert.match(await card.locator('.hm-repo .hm-mono').textContent(),/^\+1\.2K$/);
         assert.equal(await page.evaluate(()=>window.__owned),undefined);
+        await page.close();
+    }finally{await browser.close();}
+});
+
+browserTest('Trending keeps its list and says when that list is out of date',async()=>{
+    const {chromium}=require(playwrightPath);
+    const browser=await chromium.launch({headless:true,channel:process.env.MOTHERSHIP_BROWSER_CHANNEL||'chrome'});
+    try{
+        const page=await fixturePage(browser);
+        const label=page.locator('.hm-tr span').nth(1);
+        await label.getByText('Stars today').waitFor();
+
+        await page.evaluate(()=>{window.__feed.trending='stale';});
+        await pollSignal(page);
+        await label.getByText('Out of date').waitFor();
+        assert.equal(await page.locator('.hm-repo').count(),1);
+
+        await page.evaluate(()=>{window.__feed.trending='ok';});
+        await pollSignal(page);
+        await label.getByText('Stars today').waitFor();
+
+        await page.evaluate(()=>{window.__feed.trending='fail';});
+        await pollSignal(page);
+        await label.getByText('Out of date').waitFor();
+        assert.equal(await page.locator('.hm-repo').count(),1,'a failed request keeps the last list');
         await page.close();
     }finally{await browser.close();}
 });
