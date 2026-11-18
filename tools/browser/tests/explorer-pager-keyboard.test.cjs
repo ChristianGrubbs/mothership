@@ -238,7 +238,6 @@ const host = (binding) => `
         @forward="move(1)"
         @navigate="open($event)"
         @drop="log('drop', $event.targetDir.name + ':' + $event.targetDir.id + ':' + $event.payload.type + ':' + $event.payload.id)"
-        @open-new-tab="log('tab', $event.name)"
     ></v-dam-explorer-breadcrumb>
 `;
 
@@ -506,7 +505,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 375, height: 812 
 }
 
 // A level hidden behind the ellipsis still takes a drop and opens in a new tab (VIS-10 review).
-vueTest('hidden breadcrumb levels stay drop targets and open in a new tab', async () => {
+vueTest('hidden breadcrumb levels stay drop targets and offer no new tab', async () => {
     const { chromium } = require(process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH);
     const browser = await chromium.launch({ headless: true, channel: process.env.MOTHERSHIP_BROWSER_CHANNEL || 'chrome' });
 
@@ -533,12 +532,11 @@ vueTest('hidden breadcrumb levels stay drop targets and open in a new tab', asyn
         assert.deepEqual(await page.evaluate(() => window.events), [['drop', 'Alpha:2:dam-asset:7']]);
         assert.equal(await toggle.getAttribute('aria-expanded'), 'false', 'the menu closes after the drop');
 
-        // The context menu on a hidden level offers Open in new tab.
+        // The Library has one view, so a hidden level has no new-tab entry.
         await toggle.click();
         await page.locator('[data-breadcrumb-hidden]', { hasText: 'Alpha' }).click({ button: 'right' });
-        await page.getByText('Open in new tab', { exact: false }).first().click();
-        assert.deepEqual(await page.evaluate(() => window.events.at(-1)), ['tab', 'Alpha']);
-        assert.equal(await page.evaluate(() => window.events.length), 2, 'nothing navigated or dropped');
+        assert.equal(await page.getByText('Open in new tab', { exact: false }).count(), 0);
+        assert.equal(await page.evaluate(() => window.events.length), 1, 'nothing navigated or dropped');
         assert.deepEqual((await page.locator('nav button').allTextContents()).map((text) => text.trim()), ['Root', '…', 'Gamma', 'Delta']);
     } finally {
         await browser.close();

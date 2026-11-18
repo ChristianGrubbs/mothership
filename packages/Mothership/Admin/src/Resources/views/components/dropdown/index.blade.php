@@ -289,7 +289,10 @@
                             li.setAttribute('role', 'none');
                         }
 
-                        item.setAttribute('role', 'menuitem');
+                        // An item that carries a checked state keeps the role that state belongs to.
+                        if (! ['menuitemcheckbox', 'menuitemradio'].includes(item.getAttribute('role'))) {
+                            item.setAttribute('role', 'menuitem');
+                        }
                         item.setAttribute('tabindex', '-1');
 
                         return item;

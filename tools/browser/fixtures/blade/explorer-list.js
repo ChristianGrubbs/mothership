@@ -2,7 +2,7 @@
 app.component('v-dam-explorer-list', {
     template: '#v-dam-explorer-list-template',
     mixins: [window.MothershipExplorerMarquee],
-    emits: ['navigate','open-new-tab','bookmark','sort-change','refresh','internal-drop','toggle-select','select-range','set-selection','empty-action','stack-drop'],
+    emits: ['navigate','bookmark','sort-change','refresh','internal-drop','toggle-select','select-range','set-selection','empty-action','stack-drop'],
 
     props: {
         directories:          { type: Array, default: () => [] },

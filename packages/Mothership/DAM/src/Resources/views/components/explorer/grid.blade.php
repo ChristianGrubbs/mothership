@@ -4,13 +4,13 @@
 <script type="text/x-template" id="v-dam-explorer-grid-template">
 
     <div ref="space" class="relative pr-4 min-h-72" @dragover.prevent @drop.prevent="onSpaceDrop($event)" @pointerdown="onSpacePointerDown">
-        <div v-if="isLoading" class="grid grid-cols-1 min-[380px]:grid-cols-2 lg:grid-cols-3 xl:!grid-cols-4 2xl:!grid-cols-5 gap-4 animate-pulse">
+        <div v-if="isLoading" class="grid grid-cols-1 min-[380px]:grid-cols-2 xl:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3 min-[640px]:gap-5 xl:gap-6 animate-pulse">
             <div v-for="n in 10" :key="n" class="aspect-square bg-gray-100 dark:bg-cherry-800 rounded-lg"></div>
         </div>
 
         <template v-else>
             <template v-if="directories.length">
-                <div class="grid grid-cols-[repeat(auto-fill,minmax(80px,1fr))] md:grid-cols-[repeat(auto-fill,minmax(96px,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-2 mb-6">
+                <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[repeat(auto-fill,minmax(11.5rem,1fr))] gap-3 mb-8">
                     <v-dam-explorer-folder-card
                         v-for="dir in directories"
                         :key="dir.id"
@@ -37,7 +37,7 @@
                 <p class="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">
                     @lang('dam::app.admin.explorer.sections.files')
                 </p>
-                <div class="grid grid-cols-1 min-[380px]:grid-cols-2 lg:grid-cols-3 xl:!grid-cols-4 2xl:!grid-cols-5 gap-4">
+                <div class="grid grid-cols-1 min-[380px]:grid-cols-2 xl:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3 min-[640px]:gap-5 xl:gap-6">
                     <v-dam-explorer-asset-card
                         v-for="asset in assets"
                         :key="asset.id"
@@ -88,7 +88,6 @@
             :selection="selection"
             @close="closeCtx"
             @navigate="$emit('navigate', $event)"
-            @open-new-tab="$emit('open-new-tab', $event)"
             @bookmark="$emit('bookmark', $event)"
             @refresh="$emit('refresh')"
         ></v-dam-explorer-ctx>
@@ -99,7 +98,7 @@
 app.component('v-dam-explorer-grid', {
     template: '#v-dam-explorer-grid-template',
     mixins: [window.MothershipExplorerMarquee],
-    emits: ['navigate', 'open-new-tab', 'bookmark', 'refresh', 'internal-drop', 'toggle-select', 'select-range', 'set-selection', 'empty-action', 'stack-drop'],
+    emits: ['navigate', 'bookmark', 'refresh', 'internal-drop', 'toggle-select', 'select-range', 'set-selection', 'empty-action', 'stack-drop'],
 
     props: {
         directories:          { type: Array, default: () => [] },

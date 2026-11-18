@@ -2,7 +2,7 @@
 @include('dam::components.explorer.folder-picker')
 @push('scripts')
 <script type="text/x-template" id="v-dam-tab-template">
-    <div class="relative flex flex-col flex-1 min-h-0 overflow-hidden p-4 gap-3">
+    <div class="relative flex flex-col flex-1 min-h-0 overflow-hidden p-4 gap-4 min-[640px]:p-6 min-[640px]:gap-5">
 
         <div class="flex items-center gap-2 flex-wrap">
             @if (config('dam.explorer.show_tree'))
@@ -27,7 +27,7 @@
             <button type="button" class="text-sm text-primary-600 dark:text-primary-300 whitespace-nowrap" @click="showAllAssets" :aria-current="scope === 'all' ? 'page' : undefined">All assets</button>
 
             <v-dam-explorer-breadcrumb
-                class="min-[640px]:basis-[16rem] max-[639px]:order-last max-[639px]:basis-full"
+                class="min-w-0 min-[640px]:flex-1 min-[640px]:basis-[16rem] max-[639px]:order-last max-[639px]:basis-full"
                 :breadcrumbs="breadcrumb"
                 :can-go-back="canGoBack"
                 :can-go-forward="canGoForward"
@@ -36,32 +36,9 @@
                 @back="goBack"
                 @forward="goForward"
                 @navigate="goTo"
-                @open-new-tab="openNewTab"
                 @drop="onInternalDrop"
             ></v-dam-explorer-breadcrumb>
 
-            @if (bouncer()->hasPermission('dam.directory.download_zip'))
-            <button
-                v-if="currentDirId"
-                type="button"
-                class="w-8 h-8 flex items-center justify-center rounded-md transition-colors text-zinc-600 dark:text-white hover:bg-gray-100 dark:hover:bg-cherry-800 cursor-pointer shrink-0"
-                title="@lang('dam::app.admin.dam.index.directory.actions.download-zip')"
-                @click="downloadCurrentDir"
-            >
-                <i class="icon-dam-zip text-xl"></i>
-            </button>
-            @endif
-            @if (bouncer()->hasPermission('dam.directory.share'))
-            <button
-                v-if="currentDirId"
-                type="button"
-                class="w-8 h-8 flex items-center justify-center rounded-md transition-colors text-zinc-600 dark:text-white hover:bg-gray-100 dark:hover:bg-cherry-800 cursor-pointer shrink-0"
-                title="@lang('dam::app.admin.dam.index.directory.actions.share')"
-                @click="shareCurrentDir"
-            >
-                <i class="icon-dam-link text-xl"></i>
-            </button>
-            @endif
             {{-- No bookmark star: the Library sidebar lists Web Pages folders instead of bookmarks (851efd1a), so there is no panel to show one in. --}}
 
             @if (bouncer()->hasPermission('dam.asset.upload'))
@@ -86,17 +63,58 @@
             />
             @endif
 
-            <button
-                type="button"
-                class="shrink-0 h-8 rounded-md border px-2.5 text-xs font-semibold whitespace-nowrap transition-colors"
-                :class="[groupBy === 'stack' ? 'border-primary-600 bg-primary-50 text-primary-700 dark:bg-primary-900/40 dark:text-primary-200' : 'border-gray-200 text-gray-600 hover:bg-gray-100 dark:border-cherry-800 dark:text-gray-300 dark:hover:bg-cherry-800', phoneFiltersOpen ? '' : 'max-[639px]:hidden']"
-                :aria-pressed="groupBy === 'stack' ? 'true' : 'false'"
-                title="@lang('dam::app.admin.explorer.group-by-stack-hint')"
-                data-explorer-group-stack
-                @click="toggleGroupBy"
-            >@lang('dam::app.admin.explorer.group-by-stack')</button>
-
             <v-dam-explorer-view-toggle :model-value="viewMode" @update:model-value="setView($event)"></v-dam-explorer-view-toggle>
+
+            {{-- Occasional actions wait here, so the row keeps to where you are and what you can add. --}}
+            <div class="shrink-0" data-explorer-more>
+                <x-admin::dropdown position="bottom-right" :teleport="true">
+                    <x-slot:toggle>
+                        <button
+                            type="button"
+                            class="flex h-9 w-9 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-600 transition-colors hover:bg-gray-50 dark:border-cherry-700 dark:bg-cherry-900 dark:text-gray-200 dark:hover:bg-cherry-800 max-[639px]:h-11 max-[639px]:w-11"
+                            title="@lang('dam::app.admin.explorer.list.header.actions')"
+                            aria-label="@lang('dam::app.admin.explorer.list.header.actions')"
+                            aria-haspopup="menu"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle></svg>
+                        </button>
+                    </x-slot:toggle>
+
+                    <x-slot:menu class="shadow-md !p-0 z-10">
+                        <li
+                            class="flex items-center justify-between gap-4 px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-cherry-800 cursor-pointer text-sm text-gray-700 dark:text-gray-300"
+                            role="menuitemcheckbox"
+                            :aria-checked="groupBy === 'stack' ? 'true' : 'false'"
+                            title="@lang('dam::app.admin.explorer.group-by-stack-hint')"
+                            data-explorer-group-stack
+                            @click="toggleGroupBy"
+                        >
+                            @lang('dam::app.admin.explorer.group-by-stack')
+                            <span v-if="groupBy === 'stack'" class="icon-done text-lg text-primary-700 dark:text-primary-300" aria-hidden="true"></span>
+                        </li>
+                        @if (bouncer()->hasPermission('dam.directory.download_zip'))
+                        <li
+                            v-if="currentDirId"
+                            class="flex items-center gap-2 px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-cherry-800 cursor-pointer text-sm text-gray-700 dark:text-gray-300"
+                            @click="downloadCurrentDir"
+                        >
+                            <i class="icon-dam-zip text-base" aria-hidden="true"></i>
+                            @lang('dam::app.admin.dam.index.directory.actions.download-zip')
+                        </li>
+                        @endif
+                        @if (bouncer()->hasPermission('dam.directory.share'))
+                        <li
+                            v-if="currentDirId"
+                            class="flex items-center gap-2 px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-cherry-800 cursor-pointer text-sm text-gray-700 dark:text-gray-300"
+                            @click="shareCurrentDir"
+                        >
+                            <i class="icon-dam-link text-base" aria-hidden="true"></i>
+                            @lang('dam::app.admin.dam.index.directory.actions.share')
+                        </li>
+                        @endif
+                    </x-slot:menu>
+                </x-admin::dropdown>
+            </div>
 
             @if (bouncer()->hasPermission('dam.asset.upload') || bouncer()->hasPermission('dam.directory.store'))
             <div v-if="canUploadHere" class="shrink-0">
@@ -104,7 +122,7 @@
                     <x-slot:toggle>
                         <button
                             type="button"
-                            class="primary-button h-8 !py-0 flex items-center gap-x-1.5 whitespace-nowrap"
+                            class="primary-button h-9 !py-0 flex items-center gap-x-1.5 whitespace-nowrap max-[639px]:h-11"
                         >
                             <span class="text-xl leading-none">+</span>
                             @lang('dam::app.admin.dam.index.new')
@@ -172,13 +190,9 @@
                     <span class="text-xl leading-none">+</span>
                     @lang('dam::app.admin.dam.index.new')
                 </button>
-                <span id="new-unavailable-hint" class="text-[10px] leading-tight md:text-xs text-gray-500 dark:text-gray-400 max-w-[8rem] md:max-w-none md:whitespace-nowrap">@lang('dam::app.admin.explorer.toolbar.new-unavailable')</span>
+                <span id="new-unavailable-hint" class="max-[1239px]:sr-only text-[10px] leading-tight md:text-xs text-gray-500 dark:text-gray-400 max-w-[8rem] md:max-w-none md:whitespace-nowrap">@lang('dam::app.admin.explorer.toolbar.new-unavailable')</span>
             </div>
             @endif
-        </div>
-
-        <div class="flex items-center gap-2 flex-wrap max-[639px]:flex-nowrap max-[639px]:overflow-x-auto max-[639px]:-mx-1 max-[639px]:px-1" :class="{ 'max-[639px]:hidden': ! phoneFiltersOpen }" id="explorer-phone-media-types" role="group" aria-label="@lang('dam::app.admin.explorer.filter-recovery.media-type')">
-            <button v-for="(label, id) in mediaTypeLabels" :key="id" type="button" :aria-pressed="mediaType === id" @click="setMediaType(id)" class="rounded-full border px-3 py-1 text-sm whitespace-nowrap shrink-0" :class="mediaType === id ? 'bg-primary-600 text-white border-primary-600' : 'text-zinc-600 dark:text-white border-gray-300 dark:border-cherry-700'">@{{ label }}</button>
         </div>
 
         @include('dam::components.explorer.toolbar')
@@ -302,7 +316,6 @@
                     @select-range="selectRange"
                     @set-selection="setSelection"
                     @navigate="goTo"
-                    @open-new-tab="openNewTab"
                     @bookmark="bookmark"
                     @refresh="fetch"
                     @internal-drop="onInternalDrop"
@@ -330,7 +343,6 @@
                     @select-range="selectRange"
                     @set-selection="setSelection"
                     @navigate="goTo"
-                    @open-new-tab="openNewTab"
                     @bookmark="bookmark"
                     @sort-change="onSort"
                     @refresh="fetch"
@@ -494,7 +506,7 @@ app.component('v-dam-tab', {
             foreignSelections:  {},
             folderPicker:       { open: false, mode: null },
             ctxTarget:          null,
-            sidebarVisible:     storedSidebar !== null ? storedSidebar !== 'false' : true,
+            sidebarVisible:     storedSidebar !== null ? storedSidebar !== 'false' : (window.matchMedia?.('(min-width: 1240px)')?.matches ?? true),
             bookmarkedDirIds:   [],
             expandedFilter:     null,
             available: {
@@ -1930,10 +1942,6 @@ app.component('v-dam-tab', {
             this.$emitter.emit('dam:explorer-navigate', { directoryId: entry.dirId });
             this.$emitter.emit('dam:explorer-tree-sync', { id: entry.dirId });
             this.fetch();
-        },
-
-        openNewTab(dir) {
-            this.$emitter.emit('dam:open-in-new-tab', { directoryId: dir.id, name: dir.name });
         },
 
         bookmark(dir) {

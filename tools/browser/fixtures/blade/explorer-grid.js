@@ -2,7 +2,7 @@
 app.component('v-dam-explorer-grid', {
     template: '#v-dam-explorer-grid-template',
     mixins: [window.MothershipExplorerMarquee],
-    emits: ['navigate', 'open-new-tab', 'bookmark', 'refresh', 'internal-drop', 'toggle-select', 'select-range', 'set-selection', 'empty-action', 'stack-drop'],
+    emits: ['navigate', 'bookmark', 'refresh', 'internal-drop', 'toggle-select', 'select-range', 'set-selection', 'empty-action', 'stack-drop'],
 
     props: {
         directories:          { type: Array, default: () => [] },

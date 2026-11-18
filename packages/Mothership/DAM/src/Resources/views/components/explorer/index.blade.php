@@ -18,43 +18,6 @@
             <button type="button" class="font-semibold underline hover:no-underline" @click="resetRestoredView">@lang('dam::app.admin.explorer.restored.reset')</button>
         </div>
 
-        <div
-            class="flex items-end gap-0 bg-gray-100 dark:bg-cherry-800 border-b border-gray-200 dark:border-cherry-700 px-2 pt-1.5 overflow-x-auto overflow-y-hidden flex-shrink-0"
-            style="scrollbar-width: thin;"
-        >
-            <div
-                v-for="tab in tabs"
-                :key="tab.id"
-                class="flex items-center gap-1.5 px-3 py-1.5 min-w-[84px] sm:min-w-[110px] max-w-[140px] sm:max-w-[180px] flex-shrink-0 rounded-t-md border border-b-0 text-sm cursor-pointer select-none transition-colors"
-                :class="[
-                    tab.id === activeTabId
-                        ? 'bg-white dark:bg-cherry-900 border-gray-200 dark:border-cherry-700 text-gray-800 dark:text-white font-semibold z-10 -mb-px'
-                        : 'bg-transparent border-transparent text-gray-500 hover:bg-white/60 dark:hover:bg-cherry-800 dark:text-white',
-                    tabDragHover === tab.id ? 'ring-2 ring-inset ring-primary-400' : ''
-                ]"
-                @click="setActive(tab.id)"
-                @dragover.prevent="onTabDragOver($event, tab.id)"
-                @dragleave="onTabDragLeave($event, tab.id)"
-            >
-                <i class="icon-dam-folder text-base shrink-0" :class="tab.id === activeTabId ? 'text-primary-500' : 'text-gray-400'"></i>
-                <span class="truncate flex-1 text-sm">@{{ tab.label }}</span>
-                <span
-                    v-if="tabs.length > 1"
-                    class="tab-close-btn shrink-0 w-4 h-4 flex items-center justify-center rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 text-base leading-none"
-                    @click.stop="closeTab(tab.id)"
-                    :title="'@lang('dam::app.admin.explorer.tab.close')'"
-                >×</span>
-            </div>
-
-            <button
-                v-if="tabs.length < 20"
-                type="button"
-                class="w-7 h-7 mb-0.5 ml-1 flex items-center justify-center rounded-md text-gray-400 hover:bg-gray-200 dark:hover:bg-cherry-800 hover:text-gray-700 text-lg font-light shrink-0"
-                @click="newTabFromCurrent()"
-                :title="'@lang('dam::app.admin.explorer.tab.new')'"
-            >+</button>
-        </div>
-
         <template v-for="tab in tabs" :key="tab.id">
             <div v-show="tab.id === activeTabId" class="flex flex-col flex-1 min-h-0 overflow-hidden">
                 <v-dam-tab
@@ -88,7 +51,7 @@ app.component('v-dam-explorer', {
     },
 
     data() {
-        return { tabs: [], activeTabId: null, _kbHandler: null, tabDragHover: null, restoredView: false };
+        return { tabs: [], activeTabId: null, _kbHandler: null, restoredView: false };
     },
 
     computed: {
@@ -143,10 +106,6 @@ app.component('v-dam-explorer', {
             }
         });
 
-        this.$emitter.on('dam:open-in-new-tab', ({ directoryId, name }) => {
-            this.newTab(directoryId, name ?? '…');
-        });
-
         this.$emitter.on('dam:bookmarks-ready', () => {
             const tab = this.tabs.find(t => t.id === this.activeTabId);
             if (tab?.directoryId) {
@@ -155,17 +114,10 @@ app.component('v-dam-explorer', {
         });
 
         this.$emitter.on('dam:directory-deleted', ({ id }) => {
-            const matching = this.tabs.filter(t => t.directoryId === id);
-            if (! matching.length) return;
-            matching.forEach(t => {
-                if (this.tabs.length === 1) {
-                    const fresh = this.makeTab();
-                    this.tabs.splice(0, 1, fresh);
-                    this.activeTabId = fresh.id;
-                } else {
-                    this.closeTab(t.id);
-                }
-            });
+            if (! this.tabs.some(t => t.directoryId === id)) return;
+            const fresh = this.makeTab();
+            this.tabs.splice(0, this.tabs.length, fresh);
+            this.activeTabId = fresh.id;
             this.persistTabs();
         });
 
@@ -277,6 +229,9 @@ app.component('v-dam-explorer', {
                 const snapshot = JSON.parse((key && localStorage.getItem(key)) || '{}');
                 saved = Array.isArray(snapshot?.tabs) ? snapshot.tabs.slice(0, 20).map(tab => this.normalizeSavedTab(tab)) : [];
                 activeIdx = Number.isInteger(snapshot?.activeIdx) ? Math.min(Math.max(snapshot.activeIdx, 0), Math.max(0, saved.length - 1)) : 0;
+                // The Library shows one view. Someone who had several tabs open keeps the one they were looking at.
+                saved = saved.length ? [saved[activeIdx]] : [];
+                activeIdx = 0;
             } catch {}
 
             if (requested.explicit) {
@@ -317,15 +272,7 @@ app.component('v-dam-explorer', {
             if (requested.page && this.tabs[0]) this.tabs[0].page = requested.page;
         },
 
-        newTabFromCurrent() {
-            const active = this.tabs.find(t => t.id === this.activeTabId);
-            this.newTab(active?.directoryId ?? null, active?.label ?? '…');
-            const created = this.tabs.find(t => t.id === this.activeTabId);
-            if (created && active) { created.scope = active.scope; created.mediaType = active.mediaType; }
-        },
-
         newTab(directoryId = null, label = '…') {
-            if (this.tabs.length >= 20) return;
             const tab = this.makeTab(directoryId, label);
             this.tabs.push(tab);
             this.activeTabId = tab.id;
@@ -333,26 +280,6 @@ app.component('v-dam-explorer', {
                 this.$emitter.emit('dam:explorer-navigate', { directoryId });
             }
             this.persistTabs();
-        },
-
-        closeTab(id) {
-            if (this.tabs.length <= 1) return;
-            const idx = this.tabs.findIndex(t => t.id === id);
-            this.tabs = this.tabs.filter(t => t.id !== id);
-            if (this.activeTabId === id) this.activeTabId = this.tabs[Math.max(0, idx - 1)].id;
-            const active = this.tabs.find(t => t.id === this.activeTabId);
-            if (active?.directoryId) this.$emitter.emit('dam:explorer-navigate', { directoryId: active.directoryId });
-            this.persistTabs();
-        },
-
-        setActive(id) {
-            this.activeTabId = id;
-            const tab = this.tabs.find(t => t.id === id);
-            if (tab?.directoryId) {
-                this.$emitter.emit('dam:explorer-navigate', { directoryId: tab.directoryId });
-            }
-            this.persistTabs();
-            if (tab) this.syncLocation(tab, { push: false });
         },
 
         viewKey(tab) {
@@ -432,31 +359,6 @@ app.component('v-dam-explorer', {
         onLabelChange(id, label) {
             const tab = this.tabs.find(t => t.id === id);
             if (tab) { tab.label = label; this.persistTabs(); }
-        },
-
-        onTabDragOver(e, tabId) {
-            if (tabId === this.activeTabId) return;
-            if (! e.dataTransfer.types.includes('application/json')) return;
-            this.tabDragHover = tabId;
-            if (this._tabSpringTimer?.tabId === tabId) return;
-            clearTimeout(this._tabSpringTimer?.id);
-            const timerId = setTimeout(() => {
-                if (this._tabSpringTimer?.tabId === tabId) {
-                    this.setActive(tabId);
-                    this._tabSpringTimer = null;
-                    this.tabDragHover = null;
-                }
-            }, 1200);
-            this._tabSpringTimer = { tabId, id: timerId };
-        },
-
-        onTabDragLeave(e, tabId) {
-            if (this._tabSpringTimer?.tabId !== tabId) return;
-            if (! e.currentTarget.contains(e.relatedTarget)) {
-                clearTimeout(this._tabSpringTimer?.id);
-                this._tabSpringTimer = null;
-                this.tabDragHover = null;
-            }
         },
     },
 });
