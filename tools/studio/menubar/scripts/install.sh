@@ -1,0 +1,181 @@
+#!/bin/zsh
+# Builds The Mothership menu bar app, installs it for this user and starts it at login.
+# Usage:
+#   install.sh --wrapper <stack-wrapper> --app-env <app.env> --site-url <https://host/up> --disk <path>
+#              --coordinator <lease-tool> --deploy-lease <worktree:/path>
+#              [--umbrel-ssh <user@host> --umbrel-key <private-key> [--umbrel-capacity-file <json>]]
+#              [--craft-tool <craft_updates.py>]
+#   install.sh --uninstall
+# Installing never starts or stops the stack. Everything is staged and checked first. If the switch fails, the previous version is put back.
+set -euo pipefail
+
+label=app.themothership.menubar
+applications="$HOME/Applications"
+app="$applications/The Mothership.app"
+support="$HOME/Library/Application Support/The Mothership Menu Bar"
+config="$support/config.json"
+agent="$HOME/Library/LaunchAgents/$label.plist"
+domain="gui/$(id -u)"
+package=${0:A:h:h}
+
+if [[ ${1:-} == --uninstall ]]; then
+  launchctl bootout "$domain/$label" 2>/dev/null || true
+  rm -f "$agent"
+  rm -rf "$app"
+  print -r -- "Removed the app and its login item. The site was not touched."
+  exit 0
+fi
+
+wrapper="" app_env="" site_url="" disk="" umbrel_ssh="" umbrel_key="" umbrel_capacity_file=""
+craft_tool="" coordinator="" deploy_lease=""
+while (( $# )); do
+  case $1 in
+    --wrapper) wrapper=${2:a} ;;
+    --app-env) app_env=${2:a} ;;
+    --site-url) site_url=$2 ;;
+    --disk) disk=${2:a} ;;
+    --umbrel-ssh) umbrel_ssh=$2 ;;
+    --umbrel-key) umbrel_key=${2:a} ;;
+    --umbrel-capacity-file) umbrel_capacity_file=${2:a} ;;
+    --craft-tool) craft_tool=${2:a} ;;
+    --coordinator) coordinator=${2:a} ;;
+    --deploy-lease) deploy_lease=$2 ;;
+    *) print -r -- "unknown option: $1" >&2; exit 64 ;;
+  esac
+  shift 2
+done
+[[ -x $wrapper && -f $app_env && -n $site_url && -d $disk ]] || {
+  print -r -- "usage: install.sh --wrapper <path> --app-env <path> --site-url <url> --disk <path>" >&2
+  exit 64
+}
+if [[ -n $umbrel_ssh || -n $umbrel_key ]]; then
+  [[ $umbrel_ssh =~ '^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+$' && -f $umbrel_key ]] || {
+    print -r -- "--umbrel-ssh needs user@host and --umbrel-key needs an existing key file" >&2
+    exit 64
+  }
+fi
+if [[ -n $umbrel_capacity_file && ( -z $umbrel_ssh || ! -d ${umbrel_capacity_file:h} ) ]]; then
+  print -r -- "--umbrel-capacity-file needs --umbrel-ssh and an existing folder" >&2
+  exit 64
+fi
+if [[ -n $craft_tool && ! -f $craft_tool ]]; then
+  print -r -- "--craft-tool needs an existing file" >&2
+  exit 64
+fi
+if [[ ! -x $coordinator || $deploy_lease != worktree:/* ]]; then
+  print -r -- "--coordinator needs an executable and --deploy-lease needs worktree:/path" >&2
+  exit 64
+fi
+
+identity=$(security find-identity -p codesigning -v | awk '/Apple Development/ { print $2; exit }')
+[[ -n $identity ]] || identity=-
+
+mkdir -p "$applications" "$support" "${agent:h}"
+staged_app="$app.new" staged_config="$config.new" staged_agent="$agent.new"
+previous_app="$app.previous" previous_config="$config.previous" previous_agent="$agent.previous"
+build=$(mktemp -d "${TMPDIR:-/tmp}/mothership-bar.XXXXXX")
+trap 'rm -rf "$build" "$staged_app" "$staged_config" "$staged_agent"' EXIT
+
+zsh "$package/scripts/build-app.sh" "$build" "$identity"
+rm -rf "$staged_app"
+ditto "$build/The Mothership.app" "$staged_app"
+
+WRAPPER=$wrapper APP_ENV=$app_env SITE_URL=$site_url DISK=$disk CONFIG=$staged_config \
+  UMBREL_SSH=$umbrel_ssh UMBREL_KEY=$umbrel_key UMBREL_CAPACITY_FILE=$umbrel_capacity_file \
+  CRAFT_TOOL=$craft_tool COORDINATOR=$coordinator DEPLOY_LEASE=$deploy_lease \
+  /usr/bin/python3 - <<'PY'
+import json, os
+config = {
+    "wrapperPath": os.environ["WRAPPER"],
+    "appEnvPath": os.environ["APP_ENV"],
+    "siteURL": os.environ["SITE_URL"],
+    "originURL": "http://127.0.0.1:18090/up",
+    "containerBinary": "/opt/homebrew/bin/container",
+    "tunnelLabel": "app.themothership.tunnel",
+    "tunnelReadyURL": "http://127.0.0.1:20241/ready",
+    "ollamaURL": "http://127.0.0.1:11434",
+    "diskPath": os.environ["DISK"],
+    "containerPrefix": "mothership-private-",
+    "uptimeService": "com.apple.container.container-runtime-linux.mothership-private-nginx",
+    "deployGuard": {"coordinator": os.environ["COORDINATOR"], "lease": os.environ["DEPLOY_LEASE"]},
+}
+if os.environ["UMBREL_SSH"]:
+    config["umbrelStore"] = {
+        "sshTarget": os.environ["UMBREL_SSH"],
+        "keyPath": os.environ["UMBREL_KEY"],
+        "dataPath": "/data",
+        "container": "mothership-s3",
+        "bucket": "mothership",
+    }
+if os.environ["UMBREL_CAPACITY_FILE"]:
+    config["umbrelCapacityFile"] = os.environ["UMBREL_CAPACITY_FILE"]
+if os.environ["CRAFT_TOOL"]:
+    config["craftTool"] = {"python": "/opt/homebrew/bin/python3", "script": os.environ["CRAFT_TOOL"]}
+with open(os.environ["CONFIG"], "w", encoding="utf-8") as handle:
+    json.dump(config, handle, indent=2)
+PY
+chmod 600 "$staged_config"
+
+APP_BINARY="$app/Contents/MacOS/MothershipBar" LABEL=$label AGENT=$staged_agent /usr/bin/python3 - <<'PY'
+import os, plistlib
+agent = {
+    "Label": os.environ["LABEL"],
+    "ProgramArguments": [os.environ["APP_BINARY"], "--login"],
+    "RunAtLoad": True,
+    "KeepAlive": {"SuccessfulExit": False},
+    "ThrottleInterval": 30,
+    "AbandonProcessGroup": True,
+    "LimitLoadToSessionType": "Aqua",
+    "ProcessType": "Interactive",
+}
+with open(os.environ["AGENT"], "wb") as handle:
+    plistlib.dump(agent, handle)
+PY
+plutil -lint "$staged_agent" >/dev/null
+
+# Loading the login item launches the app now. This login is marked as handled first, so installing
+# never starts the stack, even if it is down on purpose.
+"$staged_app/Contents/MacOS/MothershipBar" --mark-login-handled
+
+typeset -A replaced
+
+# Each step returns on failure itself: errexit is off inside a function called from `||`.
+put_in_place() { # name staged live previous
+  if [[ -e $3 ]]; then mv "$3" "$4" || return 1; fi
+  mv "$2" "$3" || return 1
+  replaced[$1]=1
+}
+
+# Removes only what this run installed, and restores only what this run moved aside.
+undo_one() { # name live previous
+  if [[ -n ${replaced[$1]:-} ]]; then rm -rf "$2"; fi
+  if [[ -e $3 ]]; then mv "$3" "$2" || print -r -- "Could not restore $2. A copy is at $3." >&2; fi
+}
+
+restore_previous() {
+  print -r -- "Install failed. Putting the previous version back." >&2
+  launchctl bootout "$domain/$label" 2>/dev/null || true
+  undo_one app "$app" "$previous_app"
+  undo_one config "$config" "$previous_config"
+  undo_one agent "$agent" "$previous_agent"
+  if [[ -e $agent ]]; then
+    launchctl bootstrap "$domain" "$agent" || print -r -- "The previous version could not be reloaded." >&2
+  fi
+  exit 1
+}
+
+switch_to_staged() {
+  put_in_place app "$staged_app" "$app" "$previous_app" || return 1
+  put_in_place config "$staged_config" "$config" "$previous_config" || return 1
+  put_in_place agent "$staged_agent" "$agent" "$previous_agent" || return 1
+  launchctl bootstrap "$domain" "$agent" || return 1
+}
+
+rm -rf "$previous_app"
+rm -f "$previous_config" "$previous_agent"
+launchctl bootout "$domain/$label" 2>/dev/null || true
+switch_to_staged || restore_previous
+
+rm -rf "$previous_app"
+rm -f "$previous_config" "$previous_agent"
+print -r -- "Installed $app and started it. Label: $label"
