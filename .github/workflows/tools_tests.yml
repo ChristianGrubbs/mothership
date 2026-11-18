@@ -1,0 +1,79 @@
+name: Tool Tests
+
+# The Python suites under tools/ had no CI step except tools/studio/tests
+# (js_tests.yml), so the docs, media and RSS tools could regress with every
+# check green. By 2026-09-30 that had already happened: three docs content
+# tests were red, the manual checker failed on three articles, and
+# docs/api/coverage.json had missed the self-signup routes (#102).
+#
+# Pull requests run automatically; pushes never do, so nothing re-runs on main
+# after a merge (matching js_tests.yml). The whole job takes about a minute on
+# the operator's self-hosted pool. workflow_dispatch runs it by hand.
+#
+# 2026-10-12 operator directive: PRs run fast checks only; slow and optional suites run nightly with a daytime guard.
+on:
+  pull_request:
+  workflow_dispatch:
+
+# A PR groups by its head branch and any other event by its ref type and name,
+# so a branch's runs share one branch-<name> group whichever event opened them.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref && format('branch-{0}', github.head_ref) || format('{0}-{1}', github.ref_type, github.ref_name) }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tools:
+    # Self-hosted pool on the operator's Windows PC (runners windows-gpu-1 and
+    # windows-gpu-2, both Linux/X64 carrying the custom `windows-gpu` label).
+    # Never GitHub-hosted.
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","linux","x64","windows-gpu"]') }}
+    timeout-minutes: 15
+    name: Python Tool Tests
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      # The panoforge remap tests need numpy; every other suite is stdlib-only.
+      - name: Install test dependencies
+        run: python -m pip install --disable-pip-version-check numpy
+
+      # unittest exits non-zero when discovery finds nothing, so an emptied or
+      # renamed test folder fails here rather than passing as an empty run.
+      # `!cancelled()` on every later step: one red suite must not hide the rest.
+      - name: Docs tool tests
+        run: python -m unittest discover -s tools/docs/tests -v
+
+      - name: Manual integrity
+        if: '!cancelled()'
+        run: python tools/docs/check_manual.py
+
+      # Fails when openapi.json or coverage.json is not what the committed route
+      # inventory and contracts build. A stale source-review.json only warns:
+      # it hashes every PHP file, and refreshing it is a person's re-review.
+      - name: Generated API docs are current
+        if: '!cancelled()'
+        run: python tools/docs/build_api.py --check
+
+      # The two real-ffmpeg cases skip themselves when ffmpeg is absent; the
+      # rest use tools/media/tests/fake_bin.
+      - name: Media tool tests
+        if: '!cancelled()'
+        run: python -m unittest discover -s tools/media/tests -v
+
+      # The nightly window guard and summary (.github/scripts/nightly_guard.py, nightly_summary.py).
+      - name: Nightly CI script tests
+        if: '!cancelled()'
+        run: python -m unittest discover -s tools/ci/tests -v
+
+      - name: RSS service tests
+        if: '!cancelled()'
+        run: python -m unittest discover -s tools/rss -p 'test_*.py' -v

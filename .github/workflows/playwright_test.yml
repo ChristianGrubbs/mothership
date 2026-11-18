@@ -1,0 +1,434 @@
+name: Playwright Tests
+
+# 2026-09-16: not a merge gate, so not a pull_request trigger. The operator ruled
+# on 2026-09-15 that Playwright E2E does not gate merges (Pest, Pint, PHPStan and
+# the JS/browser suites do). Left on pull_request it still queued eight 55–70 min
+# shards per PR onto the two self-hosted windows-gpu runners — about eight
+# runner-hours per PR, cancelled every time the branch moved — and that queue was
+# where PR turnaround went. Since 2026-09-15 no PR-triggered run ever completed.
+#
+# It runs nightly against main (schedule fires on the default branch only) and by
+# hand through workflow_dispatch, e.g. `gh workflow run playwright_test.yml` to
+# check main or `--ref <branch>` for a branch on demand. Pushes and pull requests
+# never trigger it.
+#
+# 2026-10-12 operator directive: PRs run fast checks only; slow and optional suites run nightly with a daytime guard.
+#
+# 2026-10-14 nightly repair (run 38551812119 at c0bbe197: shard 1 ran 05:45-07:08 CDT, into the
+# day, and shards 2-8 "passed" in seconds without running). The overnight contract is now:
+#
+# * Trigger. GitHub's cron is the only trigger (operator decision 2026-10-14: no external timer).
+#   It has fired 4h45-11h42 late and skipped 2026-10-13 entirely; a run it creates outside the
+#   window is deferred and the nightly summary goes red/deferred, so such a night has no nightly
+#   coverage, reported visibly rather than as a pass. A hand dispatch with `nightly: true` gets
+#   the same window, and a second nightly on one commit defers as a duplicate.
+# * Window. The "Nightly gate" job (no services) defers a nightly run created outside 00:00-05:55
+#   America/Chicago or duplicating tonight's run, so its legs never start. Each leg runs the guard
+#   as its first real step and starts PostgreSQL only after it (.github/scripts/ci_service.sh;
+#   no job-level `services:`), so a leg a runner picks up at 05:55 or later, or without enough
+#   window left, exits before starting anything. Once a leg runs, its watchdog cancels the whole
+#   run at 05:55. Nothing spills into the operator's day.
+#   A plain workflow_dispatch (nightly unset) runs unguarded, as before.
+# * Scope. The nightly skips tests/01-catalog (Mothership catalog pages, retired 2026-09-29); the
+#   operator kept those specs dispatch-only, so a plain workflow_dispatch still runs them.
+# * Capacity. Nightly runs use both windows-gpu runners (max-parallel 2); a dispatch keeps one.
+#   A local feed stub replaces the public Signal API that cost about 21 s per page load (R1).
+# * Evidence. Every shard writes nightly-totals JSON (planned/passed/failed/flaky/skipped/not-run)
+#   and the always-run "Nightly summary" job reports executed/passed, executed/failed, deferred,
+#   cancelled and not-run per shard, failing when any required shard is not executed/passed.
+#   Confirm a night with `ci-verify --repo ChristianGrubbs/mothership --run <id> --json`.
+# Nightly runs carry a "Nightly:" run-name; the gate's duplicate check reads it (the runs API does
+# not expose dispatch inputs), so a plain on-demand dispatch never counts as tonight's nightly.
+run-name: "${{ (github.event_name == 'schedule' || inputs.nightly == true) && 'Nightly: Playwright Tests' || (github.event.pull_request.title || github.workflow) }}"
+
+on:
+  schedule:
+    # 06:23 UTC = 01:23 CDT / 00:23 CST: inside the window year-round, off the top of the hour.
+    - cron: '23 6 * * *'
+  workflow_dispatch:
+    inputs:
+      nightly:
+        description: 'Apply the overnight window, as the cron run does (leave unset for an on-demand run)'
+        type: boolean
+        default: false
+
+# A dispatch on a PR branch groups by that branch and any other event by its ref
+# type and name, so the nightly and a dispatch on main share one branch-main
+# group and a tag dispatch gets its own tag-<name> group.
+# A nightly never cancels an in-progress nightly (the later trigger queues, then defers as a
+# duplicate); an on-demand dispatch still replaces an older run in its group.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref && format('branch-{0}', github.head_ref) || format('{0}-{1}', github.ref_type, github.ref_name) }}
+  cancel-in-progress: ${{ !(github.event_name == 'schedule' || inputs.nightly == true) }}
+
+# actions: write lets the window watchdog cancel this run at 06:00 and the summary read its jobs.
+permissions:
+  contents: read
+  actions: write
+
+env:
+  FORCE_COLOR: 1
+
+jobs:
+  nightly_gate:
+    # Runs first and starts no service containers: a nightly run that GitHub created outside the
+    # 00:00-06:00 America/Chicago window, or that duplicates tonight's earlier run on this commit,
+    # is deferred here, so its test jobs are skipped before any database or browser starts.
+    name: Nightly gate
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","linux","x64","windows-gpu"]') }}
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+      reason: ${{ steps.gate.outputs.reason }}
+      duplicate_of: ${{ steps.gate.outputs.duplicate_of }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/scripts
+
+      # Not named like the per-job guard steps (.github/ci-verify.yml guard_steps): this job's
+      # decision is its work, so ci-verify counts it as executed.
+      - name: Decide whether tonight's run may start
+        id: gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          NIGHTLY_INPUT: ${{ inputs.nightly }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/nightly_guard.py gate
+
+  playwright_tests:
+    needs: nightly_gate
+    if: needs.nightly_gate.outputs.run == 'true'
+    name: ${{ matrix.suite == 'acceptance' && 'Playwright Acceptance | 1440, 1024, 375 px' || format('Playwright E2E | Shard {0}/{1}', matrix.shard-index, matrix.shard-total) }}
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","linux","x64","windows-gpu"]') }}
+    # 2026-09-15: a shard is ~160 upstream tests at ~20 s each on one worker (artisan serve is
+    # single-threaded), so a healthy shard takes 55–70 minutes. Two shards outliving their
+    # cancelled runs held both runners for the whole queue; the default 360-minute job timeout
+    # never reaped them. 90 minutes is the honest ceiling, not a wish.
+    timeout-minutes: 90
+
+    strategy:
+      fail-fast: false
+      # 2026-09-25: one shard at a time, so a run holds at most one of the two windows-gpu
+      # runners and the other stays free for PR checks (a dispatch on another ref has its
+      # own concurrency group and can still overlap). Queued all at once, the eight shards
+      # held both runners for four to five hours each afternoon and PR runs sat queued
+      # behind them. Serial wall-clock is the shards' sum: 7–8 hours on the last two
+      # nightlies, 12 at the 90-minute timeout.
+      #
+      # 2026-10-14: nightly runs take both runners (max-parallel 2). At night nothing else needs
+      # the pool, and eight shards one at a time cannot fit the 00:00-06:00 window. On-demand
+      # dispatches keep one shard at a time so daytime PR checks keep a runner.
+      max-parallel: ${{ fromJSON((github.event_name == 'schedule' || inputs.nightly == true) && '2' || '1') }}
+      matrix:
+        shard-index: [1,2,3,4,5,6,7,8]
+        shard-total: [8]
+        # 2026-10-14: the real-workflow acceptance suite (tests/e2e-pw/tests/acceptance, its own
+        # config) rides the same setup as one more leg: PhotoEdit from the asset page, panorama
+        # A->B->A under a slow network and stack preview Next, each at 1440, 1024 and 375 px.
+        include:
+          - suite: acceptance
+            shard-index: 0
+            shard-total: 0
+
+    # PostgreSQL, matching production and the Pest merge gate (see pest_tests.yml), is started by a
+    # step after the window guard (.github/scripts/ci_service.sh), not by a job-level `services:` block.
+    env:
+      # This job creates its own loopback app and disposable test database.
+      PW_DISPOSABLE_FIXTURE: "1"
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      GROQ_INVALID_KEY: ${{ secrets.GROQ_INVALID_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      MOTHERSHIP_URL: ${{ secrets.MOTHERSHIP_URL }}
+      ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+      INVALID_ADMIN_EMAIL: ${{ secrets.INVALID_ADMIN_EMAIL }}
+      INVALID_ADMIN_PASSWORD: ${{ secrets.INVALID_ADMIN_PASSWORD }}
+      # E2E only: lets webhook-delivery.spec.js point Mothership at a localhost
+      # catcher (127.0.0.1:<port>). SafeWebhookUrl blocks loopback by default
+      # in prod; this flag re-allows loopback ONLY — private / link-local /
+      # multicast / reserved IP ranges stay blocked.
+      WEBHOOK_ALLOW_LOOPBACK: 'true'
+      # One identity per leg for the guard, the totals file and the nightly summary; the label must
+      # equal the job name, which is how the summary matches totals to jobs.
+      ITEM_KEY: ${{ matrix.suite == 'acceptance' && 'playwright-acceptance' || format('playwright-shard-{0}', matrix.shard-index) }}
+      ITEM_LABEL: ${{ matrix.suite == 'acceptance' && 'Playwright Acceptance | 1440, 1024, 375 px' || format('Playwright E2E | Shard {0}/{1}', matrix.shard-index, matrix.shard-total) }}
+      ITEM_KIND: playwright
+      # Names this job's service containers (.github/scripts/ci_service.sh).
+      CI_SVC_TAG: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-${{ strategy.job-index }}
+
+    steps:
+      # Checkout first so the guard can run from the repository; ci-verify treats steps before the
+      # guard as setup (.github/ci-verify.yml).
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Nightly window guard (00:00-06:00 America/Chicago)
+        id: guard
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          NIGHTLY_INPUT: ${{ inputs.nightly }}
+          GITHUB_TOKEN: ${{ github.token }}
+          # DRAFT estimates: a shard after the R1 fix is expected to take well under 30 minutes and
+          # the acceptance leg under 15 (12 tests, about a minute locally); tune from the first
+          # nightly's timings.
+          MIN_MINUTES: ${{ matrix.suite == 'acceptance' && '15' || '30' }}
+          JOB_TIMEOUT_MINUTES: '90'
+        run: python3 .github/scripts/nightly_guard.py
+
+      # PostgreSQL starts only after the guard admits the leg (a job-level `services:` block would
+      # start it before the first step, even for a leg released after the window).
+      - name: Start service containers
+        if: steps.guard.outputs.run == 'true'
+        env:
+          CI_SVC_DEADLINE: ${{ steps.guard.outputs.cut_epoch }}
+        run: >-
+          bash .github/scripts/ci_service.sh start POSTGRES 5432
+          -e POSTGRES_USER=mothership -e POSTGRES_PASSWORD=mothership -e POSTGRES_DB=mothership
+          --health-cmd="pg_isready -U mothership" --health-interval=5s --health-timeout=3s --health-retries=3
+          --tmpfs /var/lib/postgresql/data:rw,noexec,nosuid,size=600m --tmpfs /tmp:rw,noexec,nosuid,size=100m
+          postgres:16
+
+      - name: Pick a per-runner app port
+        if: steps.guard.outputs.run == 'true'
+        # Concurrent shards on one self-hosted host must not share port 8000, or
+        # they test against each other's server and database. Hosted runners are
+        # one job per VM, so 8000 stays the default there. Every E2E base-URL
+        # fallback reads BASE_URL / API_BASE_URL.
+        run: |
+          n="${RUNNER_NAME##*-}"
+          if [[ "$n" =~ ^[0-9]+$ ]]; then port=$((8000 + n)); else port=8000; fi
+          echo "APP_PORT=$port" >> "$GITHUB_ENV"
+          echo "BASE_URL=http://127.0.0.1:$port" >> "$GITHUB_ENV"
+          echo "API_BASE_URL=http://127.0.0.1:$port" >> "$GITHUB_ENV"
+          echo "FEED_STUB_PORT=$((port + 100))" >> "$GITHUB_ENV"
+          echo "app port $port on runner $RUNNER_NAME"
+
+      - name: Set up Node.js
+        if: steps.guard.outputs.run == 'true'
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Setup PHP
+        if: steps.guard.outputs.run == 'true'
+        uses: shivammathur/setup-php@2.37.2
+        with:
+          php-version: '8.4'
+          extensions: curl, fileinfo, gd, intl, mbstring, openssl, pdo, pdo_pgsql, tokenizer, zip
+          ini-values: error_reporting=E_ALL
+          tools: composer:v2
+          coverage: none
+
+      - name: Install Composer dependencies
+        if: steps.guard.outputs.run == 'true'
+        uses: ramsey/composer-install@v3
+        with:
+          composer-options: "--optimize-autoloader"
+
+      - name: Cache npm dependencies
+        if: steps.guard.outputs.run == 'true'
+        uses: actions/cache@v5
+        with:
+          path: tests/e2e-pw/node_modules
+          key: ${{ runner.os }}-npm-${{ hashFiles('tests/e2e-pw/package-lock.json') }}
+          restore-keys: ${{ runner.os }}-npm-
+
+      # Both runners in this pool (windows-gpu-1 and windows-gpu-2) live on one
+      # host and share one home directory, so a shared ~/.cache/ms-playwright
+      # let one job's cache restore rewrite Chromium while another job was
+      # launching it: run 37743529318 lost 13 browser tests to "spawn ETXTBSY"
+      # at 07:40:49 while main's run restored that cache 07:40:35-07:40:50.
+      # Each runner instance keeps its own browser directory beside its
+      # workspace, which a checkout never cleans.
+      - name: Use a per-runner Playwright browser directory
+        if: steps.guard.outputs.run == 'true'
+        run: echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_WORKSPACE/.ms-playwright" >> "$GITHUB_ENV"
+
+      - name: Cache Playwright browsers
+        if: steps.guard.outputs.run == 'true'
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
+          key: ${{ runner.os }}-playwright-${{ hashFiles('tests/e2e-pw/package-lock.json') }}
+
+      - name: Install npm & Playwright browsers
+        if: steps.guard.outputs.run == 'true'
+        run: |
+          cd tests/e2e-pw
+          npm install --no-progress --prefer-offline
+          # Browser only: system packages and Google Chrome (the image and model configs use channel 'chrome')
+          # are installed on the runner host when it is provisioned; `--with-deps` raced the other
+          # shards on apt's lists lock (exit 100).
+          npx playwright install chromium
+
+      - name: Setting Environment
+        if: steps.guard.outputs.run == 'true'
+        run: |
+          cp .env.example .env
+          sed -i "s|^\(APP_ENV=\s*\).*$|\1testing|" .env
+          sed -i "s|^\(APP_DEBUG=\s*\).*$|\1false|" .env
+          sed -i "s|^\(APP_URL=\s*\).*$|\1http://127.0.0.1:${APP_PORT}|" .env
+          sed -i "s|^\(DB_CONNECTION=\s*\).*$|\1pgsql|" .env
+          sed -i "s|^\(DB_HOST=\s*\).*$|\1127.0.0.1|" .env
+          sed -i "s|^\(DB_PORT=\s*\).*$|\1${SVC_POSTGRES_PORT}|" .env
+          sed -i "s|^\(DB_DATABASE=\s*\).*$|\1mothership|" .env
+          sed -i "s|^\(DB_USERNAME=\s*\).*$|\1mothership|" .env
+          sed -i "s|^\(DB_PASSWORD=\s*\).*$|\1mothership|" .env
+          # The API E2E specs fire many requests back-to-back; lift the REST rate
+          # limit for the test server so they don't trip the 120/min throttle (429).
+          echo "REST_API_RATE_LIMIT=100000" >> .env
+          # Login-heavy shards (loginpage, notifications re-auth, ajax-nav, security)
+          # sign in as the same admin many times within a minute; raise the admin
+          # login throttle so those legitimate logins don't cascade into 429s. The
+          # rate-limit security spec reads this same value to still assert throttling.
+          echo "ADMIN_LOGIN_RATE_LIMIT=20" >> .env
+          # The oauth spec requests well over a dozen tokens as the same admin from
+          # the same address, and that limiter keys on `username|ip`, so the 10/min
+          # production default throttles the suite against itself.
+          echo "OAUTH_TOKEN_RATE_LIMIT=100000" >> .env
+
+          # The webhook-delivery spec's catcher listens on the runner's loopback;
+          # SafeWebhookUrl blocks loopback unless this opt-in is set.
+          echo "WEBHOOK_ALLOW_LOOPBACK=true" >> .env
+
+          # The specs drive the PIM surface (catalog, products, families).
+          # .env.example ships it off, and EnsurePimEnabled then 403s every one
+          # of those routes. phpunit.xml forces it on for the Pest suites.
+          sed -i "s|^\(MOTHERSHIP_PIM_ENABLED=\s*\).*$|\1true|" .env
+          # The acceptance leg mirrors the Studio host, which runs with the PIM off
+          # (tools/studio/runtime.py); with it on, the Agenting PIM panel covers the asset page.
+          if [ "${{ matrix.suite }}" = acceptance ]; then
+            sed -i "s|^\(MOTHERSHIP_PIM_ENABLED=\s*\).*$|\1false|" .env
+          fi
+
+          # 2026-10-14 R1: the Signal ticker on every admin page fetched the public feed API, whose
+          # 401 body never completed from the runners, so each networkidle wait sat out the ticker's
+          # 20 s abort. Point the feed proxies at the local stub started below instead.
+          echo "MOTHERSHIP_HOME_RSS_API=http://127.0.0.1:${FEED_STUB_PORT}/mothership-api" >> .env
+          echo "MOTHERSHIP_HOME_TRENDING_API=http://127.0.0.1:${FEED_STUB_PORT}/mothership-api" >> .env
+
+          # Every page names the commit under test in its mothership-build-commit meta tag.
+          echo "MOTHERSHIP_BUILD_COMMIT=${{ github.sha }}" >> .env
+
+      - name: Running Mothership Installer & Start Server
+        if: steps.guard.outputs.run == 'true'
+        env:
+          # Fall back to the same literal creds login.js defaults to, so the
+          # seeded admin always matches the test login even when these repo
+          # secrets are unset (e.g. fork PRs, where secrets are unavailable).
+          # Without a fallback the seeder generates a RANDOM password and every
+          # login — and thus every E2E test — fails.
+          INSTALLER_ADMIN_EMAIL: ${{ secrets.INSTALLER_ADMIN_EMAIL || 'admin@example.com' }}
+          INSTALLER_ADMIN_PASSWORD: ${{ secrets.INSTALLER_ADMIN_PASSWORD || 'admin123' }}
+        run: |
+          php artisan mothership:install --skip-env-check --skip-admin-creation --with-demo-data
+          php artisan db:seed --class=DiscardQaFixtureSeeder
+          php artisan db:seed --class='Mothership\DAM\Database\Seeders\DirectoryTableSeeder'
+          echo "MOTHERSHIP_360_PROCESSING_ENABLED=true" >> .env
+          php tests/e2e-pw/seed-panorama.php --env-file "$GITHUB_ENV"
+          python3 .github/scripts/ci_feed_stub.py "$FEED_STUB_PORT" > "$RUNNER_TEMP/feed-stub.log" 2>&1 &
+          php artisan serve --host=0.0.0.0 --port="$APP_PORT" > "$RUNNER_TEMP/server.log" 2>&1 &
+          php artisan queue:work --queue=webhooks,default,system,completeness > "$RUNNER_TEMP/queue.log" 2>&1 &
+          echo "Waiting for server..."
+          timeout 30 bash -c 'until curl -s "http://127.0.0.1:$APP_PORT" > /dev/null; do sleep 1; done' || (cat "$RUNNER_TEMP/server.log" && exit 1)
+          curl -fsS "http://127.0.0.1:$FEED_STUB_PORT/mothership-api/v1/announcements"; echo
+          commit="$(curl -fsS "http://127.0.0.1:$APP_PORT/admin/login" | sed -n 's/.*name="mothership-build-commit" content="\([^"]*\)".*/\1/p' | head -1)"
+          echo "app under test serves commit ${commit:-<none>}"
+          echo "APP_COMMIT=$commit" >> "$GITHUB_ENV"
+
+      - name: Run Playwright tests
+        if: steps.guard.outputs.run == 'true'
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ runner.temp }}/playwright-results.json
+          # The acceptance leg fails unless the app reports exactly the commit under test.
+          ACCEPTANCE_EXPECT_COMMIT: ${{ github.sha }}
+          # Retired-PIM tests/01-catalog is dispatch-only (operator, 2026-10-14): skipped in the
+          # nightly, listed and run by a plain workflow_dispatch.
+          PW_SKIP_RETIRED_PIM: ${{ steps.guard.outputs.nightly == 'true' && '1' || '' }}
+        run: |
+          cd tests/e2e-pw
+          if [ "${{ matrix.suite }}" = acceptance ]; then
+            select=(-c playwright.acceptance.config.js)
+          else
+            select=(--shard=${{ matrix.shard-index }}/${{ matrix.shard-total }})
+          fi
+          PLAYWRIGHT_JSON_OUTPUT_NAME="$RUNNER_TEMP/playwright-planned.json" npx playwright test --list --reporter=json "${select[@]}" > /dev/null
+          # The guard's budget ends this shard before the window watchdog does, so Playwright itself
+          # reports which tests did not run instead of being cancelled blind.
+          npx playwright test --reporter=list,html,json --global-timeout=${{ steps.guard.outputs.global_timeout_ms }} "${select[@]}"
+
+      # Removes this job's service containers whatever happened (success, failure, cancel by the watchdog),
+      # ahead of reporting and uploads so a stalled upload cannot use up the cancellation grace first.
+      - name: Stop service containers
+        if: always()
+        env:
+          CI_SVC_DEADLINE: ${{ steps.guard.outputs.cut_epoch }}
+        run: bash .github/scripts/ci_service.sh stop
+
+      - name: Record nightly totals
+        if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: python3 .github/scripts/nightly_totals.py playwright --results "$RUNNER_TEMP/playwright-results.json" --planned "$RUNNER_TEMP/playwright-planned.json"
+
+      - name: Upload nightly totals
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-totals-${{ env.ITEM_KEY }}
+          path: ${{ runner.temp }}/nightly-totals/
+          retention-days: 14
+
+      - name: Upload test results
+        if: failure() && steps.guard.outputs.run == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-${{ env.ITEM_KEY }}-${{ github.run_id }}
+          path: |
+            tests/e2e-pw/playwright-report
+            tests/e2e-pw/playwright-report-acceptance
+            tests/e2e-pw/test-results
+            storage/logs/laravel.log
+          retention-days: 1
+
+  nightly_summary:
+    name: Nightly summary
+    needs: [nightly_gate, playwright_tests]
+    if: always()
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","linux","x64","windows-gpu"]') }}
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/scripts
+
+      - name: Download nightly totals
+        # A run the gate deferred uploaded no totals; the summary still reports every job.
+        continue-on-error: true
+        uses: actions/download-artifact@v5
+        with:
+          pattern: nightly-totals-*
+          path: nightly-totals
+          merge-multiple: true
+
+      - name: Summarize the night
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TOTALS_DIR: nightly-totals
+          SUMMARY_JOB: Nightly summary
+          GATE_JOB: Nightly gate
+          GATE_RUN: ${{ needs.nightly_gate.outputs.run }}
+          GATE_REASON: ${{ needs.nightly_gate.outputs.reason }}
+          GATE_DUPLICATE_OF: ${{ needs.nightly_gate.outputs.duplicate_of }}
+        run: python3 .github/scripts/nightly_summary.py
+
+      - name: Upload nightly summary
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-summary-playwright-${{ github.run_id }}
+          path: nightly-summary.json
+          retention-days: 30

@@ -1,0 +1,6 @@
+{
+  "name": "mothership/sphere-seam",
+  "description": "Native Mothership panorama seam repair module",
+  "type": "library",
+  "autoload": { "psr-4": { "Mothership\\SphereSeam\\": "src/" } }
+}

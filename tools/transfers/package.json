@@ -1,0 +1,25 @@
+{
+  "name": "pairdrop",
+  "version": "1.11.2",
+  "type": "module",
+  "description": "Authenticated The Mothership adaptation of the PairDrop WebRTC transport",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test tests/security.test.js tests/relay.test.js tests/lifecycle.test.js tests/protocol.test.js",
+    "test:browser": "node --test tests/browser.test.js tests/relay.browser.test.js",
+    "test:theme": "node --test tests/theme.browser.test.js"
+  },
+  "author": "",
+  "license": "GPL-3.0-only",
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.16.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "playwright-core": "1.58.2"
+  }
+}

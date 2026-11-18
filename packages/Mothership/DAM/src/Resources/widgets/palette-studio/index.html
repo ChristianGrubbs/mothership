@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f6f7f8">
+    <title>Palette Studio · The Mothership</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="palette-core.js"></script>
+    <script src="app.js" defer></script>
+</head>
+<body>
+    <!-- Every edit is saved as it happens, so nothing here is unexported work: data-agh-ephemeral keeps Home from
+         asking before it closes the tool. -->
+    <main class="shell" data-agh-ephemeral>
+        <header class="page-head">
+            <p class="eyebrow">THE MOTHERSHIP · COLOUR</p>
+            <h1>Palette Studio</h1>
+            <p>Build a palette, check its contrast and colour-vision safety, then copy it into code or save it as an image.</p>
+            <p class="keys" aria-label="Keyboard shortcuts"><kbd>Space</kbd> generate · <kbd>1</kbd>–<kbd>8</kbd> select a swatch · <kbd>C</kbd> copy its hex · <kbd>S</kbd> save</p>
+        </header>
+
+        <section class="toolbar" aria-label="Palette">
+            <div class="name-field">
+                <label for="palette-name">Palette name</label>
+                <div class="name-row">
+                    <input id="palette-name" data-name maxlength="60" autocomplete="off" spellcheck="false">
+                    <span class="save-state" data-save-state></span>
+                </div>
+            </div>
+            <div class="toolbar-actions">
+                <div class="generate">
+                    <label class="visually-hidden" for="harmony">Harmony</label>
+                    <select id="harmony" data-harmony>
+                        <option value="complementary">Complementary</option>
+                        <option value="analogous">Analogous</option>
+                        <option value="triadic">Triadic</option>
+                        <option value="split-complementary">Split-complementary</option>
+                        <option value="tetradic">Tetradic</option>
+                        <option value="monochromatic">Monochromatic</option>
+                    </select>
+                    <button type="button" data-generate>Generate</button>
+                </div>
+                <button type="button" data-surprise>Surprise me</button>
+                <button type="button" data-nudge>Nudge</button>
+                <button class="primary" type="button" data-save>Save</button>
+            </div>
+        </section>
+
+        <div class="vision-bar">
+            <label for="vision">View as</label>
+            <select id="vision" data-vision>
+                <option value="none">Original colours</option>
+                <option value="deuteranopia">Deuteranopia (no green cones)</option>
+                <option value="protanopia">Protanopia (no red cones)</option>
+                <option value="tritanopia">Tritanopia (no blue cones)</option>
+                <option value="achromatopsia">Achromatopsia (no colour)</option>
+            </select>
+            <p class="vision-note" data-vision-note hidden>
+                <span data-vision-text></span>
+                <button type="button" class="link" data-vision-off>Show original colours</button>
+            </p>
+        </div>
+
+        <section class="swatches" aria-label="Swatches">
+            <ol class="swatch-list" data-swatches></ol>
+            <button type="button" class="add-swatch" data-add><span aria-hidden="true">+</span> Add swatch</button>
+        </section>
+
+        <div class="work">
+            <section class="panel editor" aria-labelledby="editor-title">
+                <div class="section-head"><div><h2 id="editor-title">Swatch <span data-editor-index>1</span></h2><p>Edit any value; the others follow. An incomplete value keeps the last valid colour.</p></div><span class="editor-chip" data-editor-chip aria-hidden="true"></span></div>
+                <div class="fields">
+                    <label>Hex<input data-field="hex" autocomplete="off" spellcheck="false" aria-describedby="field-error"></label>
+                    <label>RGB<input data-field="rgb" autocomplete="off" spellcheck="false" placeholder="r, g, b" aria-describedby="field-error"></label>
+                    <label>HSL<input data-field="hsl" autocomplete="off" spellcheck="false" placeholder="h, s%, l%" aria-describedby="field-error"></label>
+                    <label>OKLCH<input data-field="oklch" autocomplete="off" spellcheck="false" placeholder="L% C h" aria-describedby="field-error"></label>
+                </div>
+                <p class="field-error" id="field-error" role="status" data-field-error></p>
+                <div class="sliders">
+                    <label>Hue <output data-out="h"></output><input type="range" data-slider="h" min="0" max="360" step="1"></label>
+                    <label>Saturation <output data-out="s"></output><input type="range" data-slider="s" min="0" max="100" step="1"></label>
+                    <label>Lightness <output data-out="l"></output><input type="range" data-slider="l" min="0" max="100" step="1"></label>
+                </div>
+            </section>
+
+            <section class="panel preview" aria-labelledby="preview-title">
+                <div class="section-head"><div><h2 id="preview-title">Preview</h2><p>The palette on a sample card: lightest swatch as the page, highest-contrast swatch as text, the selected swatch as the button.</p></div></div>
+                <div class="sample" data-sample>
+                    <h3 data-sample-heading>Quarterly report</h3>
+                    <p data-sample-body>Sign-ups rose in every region this quarter. The chart compares the three largest.</p>
+                    <div class="sample-chart" aria-label="Sample bar chart" role="img">
+                        <span data-bar style="height: 46%"></span><span data-bar style="height: 82%"></span><span data-bar style="height: 64%"></span>
+                    </div>
+                    <div class="sample-actions">
+                        <button type="button" data-sample-primary tabindex="-1">Continue</button>
+                        <button type="button" data-sample-disabled disabled tabindex="-1">Unavailable</button>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <section class="panel" aria-labelledby="scales-title">
+            <div class="section-head"><div><h2 id="scales-title">Scales</h2><p>Ten stops per swatch at evenly spaced OKLCH lightness. Click a value to copy it.</p></div></div>
+            <div class="scales" data-scales></div>
+        </section>
+
+        <section class="panel" aria-labelledby="contrast-title">
+            <div class="section-head"><div><h2 id="contrast-title">Contrast</h2><p>Every swatch against every other, with WCAG 2.2 results. Normal text needs 4.5:1 for AA and 7:1 for AAA; large text needs 3:1 and 4.5:1.</p></div><p class="contrast-summary" data-contrast-summary></p></div>
+            <div class="table-wrap" data-contrast-wrap>
+                <table class="contrast">
+                    <thead><tr><th scope="col">Pair</th><th scope="col">Sample</th><th scope="col">Ratio</th><th scope="col">AA normal</th><th scope="col">AA large</th><th scope="col">AAA normal</th><th scope="col">AAA large</th></tr></thead>
+                    <tbody data-contrast></tbody>
+                </table>
+            </div>
+            <p class="empty" data-contrast-empty hidden>Add a second swatch to check contrast.</p>
+        </section>
+
+        <section class="panel" aria-labelledby="export-title">
+            <div class="section-head"><div><h2 id="export-title">Export</h2><p>Copy the palette as code, or download it as a 1600 × 900 PNG named after the palette.</p></div></div>
+            <div class="exports" data-exports></div>
+            <div class="export-bar"><span><small>Image</small><strong data-png-name>Palette.png</strong></span><button class="primary-outline" type="button" data-png>Download PNG</button></div>
+        </section>
+
+        <section class="panel" aria-labelledby="library-title">
+            <div class="section-head">
+                <div><h2 id="library-title">Library</h2><p>Saved palettes, favourites first. Changes are kept with your account.</p></div>
+                <div class="library-actions">
+                    <label class="file-button">Import JSON<input type="file" accept="application/json,.json" data-import></label>
+                    <button type="button" data-export-library>Export library</button>
+                </div>
+            </div>
+            <ul class="library" data-library></ul>
+            <p class="empty" data-library-empty hidden>No saved palettes yet. Save this one, or import a library file.</p>
+        </section>
+
+        <div class="toast" role="status" aria-live="polite" data-toast hidden><span data-toast-text></span><button type="button" class="link" data-toast-action hidden></button></div>
+    </main>
+</body>
+</html>

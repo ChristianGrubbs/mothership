@@ -1,0 +1,157 @@
+name: Docker Images
+
+# Builds the web, fpm and queue images on a pull request that can change what goes
+# into them, then checks each image's PostgreSQL client, libpq and PHP
+# extensions and round-trips a dump the way DamUpdater does. A second job runs
+# `nginx -t` against the nginx image's config. Nothing is pushed.
+#
+# Filtered to the images' build inputs other than application code: packages/
+# changes on nearly every PR and reaches the images only as autoloaded PHP,
+# which none of these checks exercise. workflow_dispatch runs it by hand, e.g.
+# to check main after a base-image pin update.
+on:
+  pull_request:
+    paths:
+      - 'dockerfiles/**'
+      - 'composer.json'
+      - 'composer.lock'
+      - '.dockerignore'
+      - '.github/workflows/docker_images.yml'
+      - '.github/scripts/check-docker-image.sh'
+  workflow_dispatch:
+
+# A PR groups by its head branch and any other event by its ref type and name,
+# so a branch's runs share one branch-<name> group whichever event opened them.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref && format('branch-{0}', github.head_ref) || format('{0}-{1}', github.ref_type, github.ref_name) }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  images:
+    # One job rather than a matrix: it holds one slot of the two-runner pool,
+    # and the fpm build reuses the composer stage the web build just cached.
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","linux","x64","windows-gpu"]') }}
+    timeout-minutes: 60
+    name: Build and check web, fpm and queue images
+
+    env:
+      # The server major the images' pg_dump and psql must equal. The Studio runs
+      # postgres:16-alpine (compose.dev.yaml, tools/studio/runtime.py), as does the
+      # service below; the round trip checks the service's major against this.
+      PG_MAJOR: '16'
+      TAG: ${{ github.run_id }}-${{ github.run_attempt }}
+      PGHOST: postgres
+      PGUSER: mothership
+      PGPASSWORD: mothership
+      PGDATABASE: roundtrip
+
+    services:
+      # Reached from the image containers over the job's service network by its
+      # alias, so it publishes no host port.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mothership
+          POSTGRES_PASSWORD: mothership
+          POSTGRES_DB: roundtrip
+        options: >-
+          --health-cmd="pg_isready -U mothership"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=10
+          --tmpfs /var/lib/postgresql/data:rw,noexec,nosuid,size=200m
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Reject the previous unpatched PHP runtime
+        run: |
+          if docker run --rm -i --network none --entrypoint sh \
+            php:8.4.25-cli-trixie@sha256:2b87a5d0c0465ade44b1bbec46e8f63520448a7bd7ec90a284dd8b8f0b07fd53 \
+            -s runtime < .github/scripts/check-docker-image.sh > runtime-rejection.log 2>&1; then
+            cat runtime-rejection.log
+            echo 'Unpatched PHP unexpectedly passed'
+            exit 1
+          else
+            status=$?
+          fi
+          cat runtime-rejection.log
+          test "$status" -eq 1
+          grep -F 'Unpatched or unexpected PHP runtime: 8.4.25' runtime-rejection.log
+
+      # The default builder (docker driver) leaves each image in the host's store for
+      # the checks and keeps its BuildKit cache on the host, so the next run is warm.
+      # --pull refreshes floating composer:2; PHP and its Debian base stay digest-pinned.
+      - name: Build web image
+        if: ${{ !cancelled() }}
+        run: docker build --pull --file dockerfiles/web.Dockerfile --tag "mothership-ci/web:$TAG" .
+
+      - name: Build fpm image
+        if: ${{ !cancelled() }}
+        run: docker build --pull --file dockerfiles/fpm.Dockerfile --tag "mothership-ci/fpm:$TAG" .
+
+      - name: Build queue image
+        if: ${{ !cancelled() }}
+        run: docker build --pull --file dockerfiles/q.Dockerfile --tag "mothership-ci/q:$TAG" .
+
+      - name: Check queue PHP runtime
+        if: ${{ !cancelled() }}
+        run: >-
+          docker run --rm -i --network none --entrypoint sh
+          "mothership-ci/q:$TAG" -s runtime < .github/scripts/check-docker-image.sh
+
+      # !cancelled() on every later step: a red web image must not hide the fpm result.
+      - name: Check web image
+        if: ${{ !cancelled() }}
+        env:
+          NETWORK: ${{ job.services.postgres.network }}
+        run: >-
+          docker run --rm -i --network "$NETWORK" --entrypoint sh
+          -e PG_MAJOR -e PGHOST -e PGUSER -e PGPASSWORD -e PGDATABASE -e REQUIRE_APACHE=1
+          "mothership-ci/web:$TAG" -s all < .github/scripts/check-docker-image.sh
+
+      - name: Check fpm image
+        if: ${{ !cancelled() }}
+        env:
+          NETWORK: ${{ job.services.postgres.network }}
+        run: >-
+          docker run --rm -i --network "$NETWORK" --entrypoint sh
+          -e PG_MAJOR -e PGHOST -e PGUSER -e PGPASSWORD -e PGDATABASE -e REQUIRE_FPM=1
+          "mothership-ci/fpm:$TAG" -s all < .github/scripts/check-docker-image.sh
+
+      - name: Remove the images
+        if: always()
+        run: docker image rm --force "mothership-ci/web:$TAG" "mothership-ci/fpm:$TAG" "mothership-ci/q:$TAG" || true
+
+  # dockerfiles/nginx.conf is copied into the nginx image unchecked: a stray
+  # garbage line from PR #16 (ab6c4a8) lived there until an outage diagnosis
+  # found it. Builds that image and runs `nginx -t` in it. The fastcgi_pass
+  # upstream mothership-fpm only resolves on the Studio's compose network, so it is
+  # pointed at loopback here; `nginx -t` checks syntax and directives, not
+  # whether the upstream answers.
+  nginx:
+    # Same self-hosted pool as the images job. Never GitHub-hosted.
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","linux","x64","windows-gpu"]') }}
+    timeout-minutes: 10
+    name: nginx config test
+
+    env:
+      TAG: ${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Build nginx image
+        run: docker build --pull --file dockerfiles/nginx.Dockerfile --tag "mothership-ci/nginx:$TAG" .
+
+      - name: nginx -t
+        run: docker run --rm --add-host mothership-fpm:127.0.0.1 "mothership-ci/nginx:$TAG" nginx -t
+
+      - name: Remove the image
+        if: always()
+        run: docker image rm --force "mothership-ci/nginx:$TAG" || true

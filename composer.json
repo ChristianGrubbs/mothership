@@ -1,0 +1,173 @@
+{
+    "name": "mothership/mothership",
+    "type": "project",
+    "description": "Mothership Laravel PIM",
+    "keywords": [
+        "framework",
+        "laravel"
+    ],
+    "license": "MIT",
+    "require": {
+        "php": "^8.4.1",
+        "ext-calendar": "*",
+        "ext-curl": "*",
+        "ext-intl": "*",
+        "ext-mbstring": "*",
+        "ext-openssl": "*",
+        "ext-pdo": "*",
+        "ext-pdo_mysql": "*",
+        "ext-tokenizer": "*",
+        "astrotomic/laravel-translatable": "^11.16.0",
+        "bacon/bacon-qr-code": "^3.1",
+        "barryvdh/laravel-dompdf": "^2.0.0|^3.0",
+        "diglactic/laravel-breadcrumbs": "^10.0",
+        "elasticsearch/elasticsearch": "^8.17",
+        "enshrined/svg-sanitize": "^1.0.0",
+        "guzzlehttp/guzzle": "^7.0.1",
+        "intervention/image": "^4.1.2",
+        "kalnoy/nestedset": "^7.0",
+        "khaled.alshamaa/ar-php": "^6.0.0",
+        "konekt/concord": "^1.16",
+        "laravel/ai": "^0.11.0",
+        "laravel/framework": "^13.0",
+        "laravel/mcp": "0.9.4",
+        "laravel/octane": "^2.3",
+        "laravel/passport": "^13.7",
+        "laravel/sanctum": "^4.0",
+        "laravel/socialite": "^5.0",
+        "laravel/tinker": "^3.0",
+        "laravel/ui": "^4.0",
+        "league/flysystem-aws-s3-v3": "^3.32",
+        "maatwebsite/excel": "^3.1.46",
+        "openspout/openspout": "^4.28",
+        "owen-it/laravel-auditing": "^14.0",
+        "predis/predis": "^3.4",
+        "prettus/l5-repository": "^4.0",
+        "pusher/pusher-php-server": "^7.0",
+        "shetabit/visitor": "^4.1",
+        "symfony/intl": "^7.0"
+    },
+    "require-dev": {
+        "barryvdh/laravel-debugbar": "^4.2",
+        "driftingly/rector-laravel": "^2.5",
+        "fakerphp/faker": "^1.23",
+        "larastan/larastan": "^3.10",
+        "laravel/boost": "^2.1",
+        "laravel/pint": "^1.29.1",
+        "mockery/mockery": "^1.6",
+        "nunomaduro/collision": "^8.0",
+        "pestphp/pest": "^5.0",
+        "pestphp/pest-plugin-laravel": "^5.0",
+        "phpunit/phpunit": "^13.2",
+        "rector/rector": "^2.5",
+        "spatie/laravel-ignition": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/",
+            "Database\\Factories\\": "database/factories/",
+            "Database\\Seeders\\": "database/seeders/",
+            "Mothership\\Admin\\": "packages/Mothership/Admin/src",
+            "Mothership\\Attribute\\": "packages/Mothership/Attribute/src",
+            "Mothership\\Category\\": "packages/Mothership/Category/src",
+            "Mothership\\Core\\": "packages/Mothership/Core/src",
+            "Mothership\\DataGrid\\": "packages/Mothership/DataGrid/src",
+            "Mothership\\DataTransfer\\": "packages/Mothership/DataTransfer/src",
+            "Mothership\\DebugBar\\": "packages/Mothership/DebugBar/src",
+            "Mothership\\HistoryControl\\": "packages/Mothership/HistoryControl/src",
+            "Mothership\\Installer\\": "packages/Mothership/Installer/src",
+            "Mothership\\MagicAI\\": "packages/Mothership/MagicAI/src",
+            "Mothership\\Notification\\": "packages/Mothership/Notification/src",
+            "Mothership\\Product\\": "packages/Mothership/Product/src",
+            "Mothership\\Theme\\": "packages/Mothership/Theme/src",
+            "Mothership\\User\\": "packages/Mothership/User/src",
+            "Mothership\\AdminApi\\": "packages/Mothership/AdminApi/src",
+            "Mothership\\ElasticSearch\\": "packages/Mothership/ElasticSearch/src",
+            "Mothership\\Webhook\\": "packages/Mothership/Webhook/src",
+            "Mothership\\Completeness\\": "packages/Mothership/Completeness/src",
+            "Mothership\\AiAgent\\": "packages/Mothership/AiAgent/src",
+            "Mothership\\Measurement\\": "packages/Mothership/Measurement/src",
+            "Mothership\\AppUrlGuard\\": "packages/Mothership/AppUrlGuard/src",
+            "Mothership\\SphereSeam\\": "packages/Mothership/SphereSeam/src",
+            "Mothership\\DAM\\": "packages/Mothership/DAM/src"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/",
+            "Mothership\\Admin\\Tests\\": "packages/Mothership/Admin/tests",
+            "Mothership\\Core\\Tests\\": "packages/Mothership/Core/tests",
+            "Mothership\\DataGrid\\Tests\\": "packages/Mothership/DataGrid/tests",
+            "Mothership\\User\\Tests\\": "packages/Mothership/User/tests",
+            "Mothership\\AdminApi\\Tests\\": "packages/Mothership/AdminApi/tests",
+            "Mothership\\Installer\\Tests\\": "packages/Mothership/Installer/tests",
+            "Mothership\\Completeness\\Tests\\": "packages/Mothership/Completeness/tests",
+            "Mothership\\Category\\Tests\\": "packages/Mothership/Category/tests",
+            "Mothership\\Product\\Tests\\": "packages/Mothership/Product/tests",
+            "Mothership\\Attribute\\Tests\\": "packages/Mothership/Attribute/tests",
+            "Mothership\\DataTransfer\\Tests\\": "packages/Mothership/DataTransfer/tests",
+            "Mothership\\Measurement\\Tests\\": "packages/Mothership/Measurement/tests",
+            "Mothership\\DAM\\Tests\\": "packages/Mothership/DAM/tests"
+        }
+    },
+    "scripts": {
+        "post-autoload-dump": [
+            "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
+            "@php artisan package:discover --ansi"
+        ],
+        "post-create-project-cmd": [
+            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
+            "@php artisan key:generate --ansi"
+        ],
+        "phpstan": [
+            "./vendor/bin/phpstan analyse --memory-limit=2G"
+        ],
+        "phpstan-baseline": [
+            "./vendor/bin/phpstan analyse --memory-limit=2G --no-progress --generate-baseline phpstan-baseline.neon --allow-empty-baseline"
+        ],
+        "rector": [
+            "./vendor/bin/rector process"
+        ],
+        "rector-dry": [
+            "./vendor/bin/rector process --dry-run"
+        ],
+        "test": [
+            "./vendor/bin/pest"
+        ],
+        "test:tia": [
+            "./vendor/bin/pest --tia --filtered"
+        ],
+        "test:tia:parallel": [
+            "./vendor/bin/pest --tia --filtered --parallel --processes=3"
+        ]
+    },
+    "scripts-descriptions": {
+        "phpstan": "Run PHPStan static analysis at level 1 against the application.",
+        "rector": "Apply Rector automated refactorings to the application.",
+        "rector-dry": "Preview Rector refactorings without modifying files.",
+        "test": "Run the full Pest suite.",
+        "test:tia": "Run only the tests impacted by the current changes (requires pcov or Xdebug).",
+        "test:tia:parallel": "Run impacted tests across parallel workers (requires pcov or Xdebug)."
+    },
+    "extra": {
+        "laravel": {
+            "dont-discover": [
+                "shetabit/visitor"
+            ]
+        }
+    },
+    "config": {
+        "platform": {
+            "php": "8.4.1"
+        },
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "php-http/discovery": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

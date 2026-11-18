@@ -1,0 +1,21 @@
+{
+    "name": "mothership",
+    "version": "3.1.0",
+    "private": true,
+    "description": "The Mothership - digital asset library",
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "lint:blade": "node tools/frontend/lint-blade-scripts.cjs",
+        "test:lint-blade": "node --test tools/frontend/tests/lint-blade-scripts.test.cjs"
+    },
+    "dependencies": {
+        "vue-multiselect": "^3.0.0"
+    },
+    "devDependencies": {
+        "@playwright/test": "^1.58.2",
+        "axios": "^1.6.4",
+        "laravel-vite-plugin": "^1.2.0",
+        "vite": "^6.3.0"
+    }
+}

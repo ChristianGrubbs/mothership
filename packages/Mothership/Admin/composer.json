@@ -1,0 +1,20 @@
+{
+    "name": "mothership/admin",
+    "license": "MIT",
+    "description" : "Admin package",
+    "require": {},
+    "autoload": {
+        "psr-4": {
+            "Mothership\\Admin\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Mothership\\Admin\\Providers\\AdminServiceProvider"
+            ],
+            "aliases": {}
+        }
+    },
+    "minimum-stability": "dev"
+}

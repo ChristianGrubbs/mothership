@@ -1,0 +1,53 @@
+
+<div class="flex flex-col gap-4">
+    <x-admin::form.control-group>
+        <x-admin::form.control-group.label>
+            @lang('dam::app.admin.dam.share.modal.name-label')
+        </x-admin::form.control-group.label>
+
+        <x-admin::form.control-group.control
+            type="text"
+            name="share_name"
+            v-model="{{ $nameModel }}"
+            :placeholder="trans('dam::app.admin.dam.share.modal.name-hint')"
+            ::disabled="{{ $disabledExpr }}"
+            rules="max:255"
+        />
+
+        <x-admin::form.control-group.error control-name="share_name" />
+    </x-admin::form.control-group>
+
+    <x-admin::form.control-group>
+        <x-admin::form.control-group.label>
+            @lang('dam::app.admin.dam.share.modal.expiry')
+        </x-admin::form.control-group.label>
+
+        <v-multiselect
+            v-model="{{ $expiryModel }}"
+            :options="{{ $expiryOptionsRef }}"
+            track-by="value"
+            label="label"
+            :allow-empty="false"
+            :close-on-select="true"
+            :clear-on-select="false"
+            :searchable="false"
+            :show-labels="false"
+            :disabled="{{ $noExpiryModel }} || {{ $disabledExpr }}"
+            :placeholder="@js(trans('dam::app.admin.dam.share.modal.expiry'))"
+        ></v-multiselect>
+    </x-admin::form.control-group>
+
+    <x-admin::form.control-group>
+        <div class="flex items-center gap-3">
+            <x-admin::form.control-group.control
+                type="switch"
+                name="no_expiry"
+                v-model="{{ $noExpiryModel }}"
+                ::disabled="{{ $disabledExpr }}"
+            />
+            <x-admin::form.control-group.label class="!mb-0 cursor-pointer">
+                @lang('dam::app.admin.dam.share.modal.no-expiry')
+            </x-admin::form.control-group.label>
+        </div>
+    </x-admin::form.control-group>
+</div>

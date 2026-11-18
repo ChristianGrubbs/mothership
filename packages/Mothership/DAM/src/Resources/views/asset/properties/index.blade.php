@@ -1,0 +1,395 @@
+
+<v-properties>
+    {!! view_render_event('dam.admin.dam.properties.create.before') !!}
+    <div class="flex  gap-4 justify-between items-center max-sm:flex-wrap">
+        <p class="text-xl text-gray-800 dark:text-slate-50 font-bold">
+            @lang('dam::app.admin.dam.asset.properties.index.title')
+        </p>
+
+        <div class="flex gap-x-2.5 items-center">
+            @if (bouncer()->hasPermission('dam.asset.property.create') && empty($detailsNote))
+                <button
+                    type="button"
+                    class="primary-button"
+                >
+                    @lang('dam::app.admin.dam.asset.properties.index.create-btn')
+                </button>
+            @endif
+        </div>
+    </div>
+
+    <x-admin::shimmer.datagrid />
+</v-properties>
+
+{!! view_render_event('dam.admin.dam.properties.create.after') !!}
+
+@pushOnce('scripts')
+    <script
+        type="text/x-template"
+        id="v-properties-template"
+    >
+        <div class="flex gap-4 justify-between items-center max-sm:flex-wrap">
+            <p class="text-xl text-gray-800 dark:text-slate-50 font-bold">
+                @lang('dam::app.admin.dam.asset.properties.index.title')
+            </p>
+
+            <div class="flex gap-x-2 5 items-center">
+                @if (bouncer()->hasPermission('dam.asset.property.create') && empty($detailsNote))
+                    <button
+                        type="button"
+                        class="primary-button"
+                        @click="selectedProperties=0; selectedProperty={}; $refs.propertyUpdateOrCreateModal.toggle();codeIsNew=true;"
+                    >
+                        @lang('dam::app.admin.dam.asset.properties.index.create-btn')
+                    </button>
+                @endif
+            </div>
+        </div>
+
+        @if (bouncer()->hasPermission('dam.asset.property.view'))
+            <x-admin::datagrid
+                :src="route('admin.dam.asset.properties.index', $id)"
+                ref="datagrid"
+            >
+                <template #body="{ columns, records, performAction, available, selectAllRecords, setCurrentSelectionMode, applied }">
+                    <div
+                        v-for="record in records"
+                        :key="record.id"
+                        class="row grid gap-2.5 items-center px-4 py-4 border-b dark:border-cherry-800 text-gray-600 dark:text-gray-300 transition-all hover:bg-primary-50 dark:hover:bg-cherry-800"
+                        :style="`grid-template-columns: repeat(${columns.length + (available.actions.length ? 1 : 0) + (available.massActions.length ? 1 : 0)}, minmax(0, 1fr))`"
+                    >
+                        @if (bouncer()->hasPermission('dam.asset.property.delete') && empty($detailsNote))
+                            <p v-if="available.massActions.length">
+                                <label :for="`mass_action_select_record_${record[available.meta.primary_column]}`">
+                                    <input
+                                        type="checkbox"
+                                        class="peer sr-only"
+                                        :aria-label="'{{ __('admin::app.components.datagrid.table.select-row') }}'.replace(':name', () => record.name)"
+                                        :name="`mass_action_select_record_${record[available.meta.primary_column]}`"
+                                        :value="record[available.meta.primary_column]"
+                                        :id="`mass_action_select_record_${record[available.meta.primary_column]}`"
+                                        v-model="applied.massActions.indices"
+                                        @change="setCurrentSelectionMode"
+                                    >
+
+                                    <span class="icon-checkbox-normal peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary-600 dark:peer-focus-visible:outline-primary-400 peer-checked:icon-checkbox-check peer-checked:text-primary-700 cursor-pointer rounded-md text-2xl">
+                                    </span>
+                                </label>
+                            </p>
+                        @endif
+
+                        <p class="break-words">@{{ record.name }}</p>
+
+                        <p class="break-words">@{{ record.type }}</p>
+
+                        <p class="break-words">@{{ record.language }}</p>
+
+                        <p class="break-words">@{{ record.value }}</p>
+
+                        <div class="flex justify-end max-[639px]:sticky max-[639px]:right-0 max-[639px]:justify-self-end max-[639px]:pl-2 max-[639px]:z-[1] max-[639px]:whitespace-nowrap max-[639px]:bg-white dark:max-[639px]:bg-cherry-900">
+                            {{-- Real buttons, so the keyboard and screen readers reach each action. The negative vertical margin keeps the row height and icon position the old link-wrapped icons had. --}}
+                            @if (bouncer()->hasPermission('dam.asset.property.update') && empty($detailsNote))
+                                <button
+                                    type="button"
+                                    class="cursor-pointer icon-edit rounded-md p-1.5 -mt-1.5 -mb-px text-2xl transition-all hover:bg-primary-100 dark:hover:bg-gray-800 max-sm:place-self-center"
+                                    :class="record.actions.find(action => action.index === 'edit')?.icon"
+                                    title="@lang('dam::app.admin.dam.asset.properties.index.datagrid.edit')"
+                                    aria-label="@lang('dam::app.admin.dam.asset.properties.index.datagrid.edit')"
+                                    data-row-action="edit"
+                                    @click="selectedProperties=1; editModel(record.actions.find(action => action.index === 'edit')?.url)"
+                                ></button>
+                            @endif
+
+                            @if (bouncer()->hasPermission('dam.asset.property.delete') && empty($detailsNote))
+                                <button
+                                    type="button"
+                                    class="cursor-pointer icon-delete rounded-md p-1.5 -mt-1.5 -mb-px text-2xl transition-all hover:bg-primary-100 dark:hover:bg-gray-800 max-sm:place-self-center"
+                                    :class="record.actions.find(action => action.index === 'delete')?.icon"
+                                    title="@lang('dam::app.admin.dam.asset.properties.index.datagrid.delete')"
+                                    aria-label="@lang('dam::app.admin.dam.asset.properties.index.datagrid.delete')"
+                                    data-row-action="delete"
+                                    @click="performAction(record.actions.find(action => action.index === 'delete'))"
+                                ></button>
+                            @endif
+                        </div>
+                    </div>
+                </template>
+            </x-admin::datagrid>
+        @endif
+
+        <x-admin::form
+            v-slot="{ meta, errors, handleSubmit }"
+            as="div"
+            ref="modalForm"
+        >
+            <form
+               @submit="handleSubmit($event, updateOrCreate)"
+               ref="propertyCreateForm"
+            >
+                <x-admin::modal ref="propertyUpdateOrCreateModal">
+                    <x-slot:header>
+                        <p
+                            class="text-lg text-gray-800 dark:text-white font-bold"
+                            v-if="selectedProperties"
+                        >
+                            @lang('dam::app.admin.dam.asset.properties.index.edit.title')
+                        </p>
+
+                        <p
+                            class="text-lg text-gray-800 dark:text-white font-bold"
+                            v-else
+                        >
+                           @lang('dam::app.admin.dam.asset.properties.index.create.title')
+                        </p>
+                    </x-slot:header>
+
+                    <x-slot:content>
+                        {!! view_render_event('dam.admin.dam.properties.create.before') !!}
+
+                        <x-admin::form.control-group.control
+                            type="hidden"
+                            name="id"
+                            v-model="selectedProperty.id"
+                        />
+
+                        <x-admin::form.control-group>
+                            <x-admin::form.control-group.label class="required">
+                                @lang('dam::app.admin.dam.asset.properties.index.create.name')
+                            </x-admin::form.control-group.label>
+
+                            <x-admin::form.control-group.control
+                                type="text"
+                                name="name"
+                                rules="required"
+                                :value="old('name')"
+                                v-model="selectedProperty.name"
+                                :label="trans('dam::app.admin.dam.asset.properties.index.create.name')"
+                                :placeholder="trans('dam::app.admin.dam.asset.properties.index.create.name')"
+                            />
+
+                            <x-admin::form.control-group.error control-name="name" />
+                        </x-admin::form.control-group>
+
+                        <x-admin::form.control-group>
+                            <x-admin::form.control-group.label class="required">
+                                @lang('dam::app.admin.dam.asset.properties.index.create.type')
+                            </x-admin::form.control-group.label>
+
+                            @php
+                                $supportedTypes = ['text'];
+
+                                $attributeTypes = [];
+
+                                foreach($supportedTypes as $type) {
+                                    $attributeTypes[] = [
+                                        'id'    => $type,
+                                        'label' => trans('admin::app.catalog.attributes.create.'. $type)
+                                    ];
+                                }
+
+                            @endphp
+
+                            <x-admin::form.control-group.control
+                                type="select"
+                                name="type"
+                                class="cursor-pointer"
+                                rules="required"
+                                :value="old('type')"
+                                v-model="selectedProperty.type"
+                                :label="trans('dam::app.admin.dam.asset.properties.index.create.type')"
+                                :placeholder="trans('dam::app.admin.dam.asset.properties.index.create.type')"
+                                ::options="propertyTypeOptions"
+                                track-by="id"
+                                label-by="label"
+                                ::disabled="true!== codeIsNew"
+                            />
+
+                            <x-admin::form.control-group.error control-name="type" />
+                        </x-admin::form.control-group>
+
+                        <x-admin::form.control-group>
+                            <x-admin::form.control-group.label class="required">
+                                @lang('dam::app.admin.dam.asset.properties.index.create.language')
+                            </x-admin::form.control-group.label>
+
+                            <x-admin::form.control-group.control
+                                type="select"
+                                id="language"
+                                name="language"
+                                rules="required"
+                                ::options="languageOptions"
+                                :value="old('language')"
+                                v-model="selectedProperty.language"
+                                :label="trans('dam::app.admin.dam.asset.properties.index.create.language')"
+                                :placeholder="trans('dam::app.admin.dam.asset.properties.index.create.language')"
+                                track-by="id"
+                                label-by="name"
+                                ::disabled="true!== codeIsNew"
+                            />
+
+                            <x-admin::form.control-group.error control-name="language" />
+                        </x-admin::form.control-group>
+
+                        <x-admin::form.control-group>
+                            <x-admin::form.control-group.label class="required">
+                                @lang('dam::app.admin.dam.asset.properties.index.create.value')
+                            </x-admin::form.control-group.label>
+
+                            <x-admin::form.control-group.control
+                                type="text"
+                                name="value"
+                                rules="required"
+                                :value="old('value')"
+                                v-model="selectedProperty.value"
+                                :label="trans('dam::app.admin.dam.asset.properties.index.create.value')"
+                                :placeholder="trans('dam::app.admin.dam.asset.properties.index.create.value')"
+                            />
+
+                            <x-admin::form.control-group.error control-name="value" />
+                        </x-admin::form.control-group>
+
+                        <x-admin::form.control-group>
+                            <label class="flex items-center gap-2 cursor-pointer select-none">
+                                <input
+                                    type="checkbox"
+                                    name="is_filterable"
+                                    value="1"
+                                    class="w-4 h-4 accent-primary-600"
+                                    :checked="!!selectedProperty.is_filterable"
+                                    @change="selectedProperty.is_filterable = $event.target.checked ? 1 : 0"
+                                />
+                                <span class="text-sm text-gray-700 dark:text-slate-200">
+                                    @lang('dam::app.admin.dam.asset.properties.index.create.add-to-filter')
+                                </span>
+                                <span
+                                    class="icon-information text-base text-gray-400 dark:text-slate-400 cursor-help"
+                                    title="@lang('dam::app.admin.dam.asset.properties.index.create.add-to-filter-help')"
+                                    tabindex="0"
+                                ></span>
+                            </label>
+                        </x-admin::form.control-group>
+
+                        <x-admin::form.control-group v-if="!!selectedProperty.is_filterable">
+                            <div class="flex items-center gap-1.5">
+                                <x-admin::form.control-group.label class="required !mb-0">
+                                    @lang('dam::app.admin.dam.asset.properties.index.create.sort-order')
+                                </x-admin::form.control-group.label>
+                                <span
+                                    class="icon-information text-base text-gray-400 dark:text-slate-400 cursor-help"
+                                    title="@lang('dam::app.admin.dam.asset.properties.index.create.sort-order-help')"
+                                    tabindex="0"
+                                ></span>
+                            </div>
+
+                            <x-admin::form.control-group.control
+                                type="number"
+                                name="sort_order"
+                                min="0"
+                                max="9999"
+                                step="1"
+                                class="mt-1.5"
+                                rules="required|integer|min_value:0|max_value:9999"
+                                v-model="selectedProperty.sort_order"
+                                :label="trans('dam::app.admin.dam.asset.properties.index.create.sort-order')"
+                                :placeholder="trans('dam::app.admin.dam.asset.properties.index.create.sort-order-placeholder')"
+                            />
+
+                            <x-admin::form.control-group.error control-name="sort_order" />
+                        </x-admin::form.control-group>
+                    </x-slot:content>
+
+                    <x-slot:footer>
+                        <div class="flex gap-x2 5 items-center">
+                            <button
+                                type="submit"
+                                class="primary-button"
+                            >
+                                @lang("dam::app.admin.dam.asset.properties.index.create.save-btn")
+                            </button>
+                        </div>
+                    </x-slot:footer>
+                </x-admin::modal>
+            </form>
+        </x-admin::form>
+    </script>
+
+    <script type="module">
+        app.component('v-properties', {
+            template: '#v-properties-template',
+
+            data() {
+                return {
+                    selectedProperty: {},
+
+                    codeIsNew: true,
+
+                    selectedProperties: 0,
+                }
+            },
+
+            computed: {
+                propertyTypeOptions() {
+                    const options = @js($attributeTypes);
+                    const value = this.selectedProperty.type;
+                    if (value && !options.some(option => option.id === value)) {
+                        options.push({id: value, label: String(value)});
+                    }
+                    return options;
+                },
+                languageOptions() {
+                    const options = @js(core()->getAllActiveLocales()->toArray());
+                    const value = this.selectedProperty.language;
+                    if (value && !options.some(option => String(option.id) === String(value))) {
+                        const locale = options.find(option => option.code === value);
+                        options.push({id: value, name: locale?.name || String(value)});
+                    }
+                    return options;
+                },
+            },
+
+            methods: {
+                updateOrCreate(params, { resetForm, setErrors }) {
+                    let formData = new FormData(this.$refs.propertyCreateForm);
+
+                    if (params.id) {
+                        formData.append('_method', 'put');
+                    }
+
+                    this.$axios.post(params.id ? "{{ route('admin.dam.asset.properties.update',  $id) }}" : "{{ route('admin.dam.asset.property.store',  $id) }}", formData)
+                    .then((response) => {
+                        this.$refs.propertyUpdateOrCreateModal.close();
+
+                        this.$refs.datagrid.get();
+
+                        this.$emitter.emit('add-flash', { type: 'success', message: response.data.message })
+
+                        resetForm();
+                    })
+                    .catch(error => {
+                        if (error.response?.status === 422) {
+                            setErrors(error.response.data.errors);
+                        } else {
+                            this.$emitter.emit('add-flash', {type: 'error', message: error.response?.data?.message || 'Unable to save the property. Try again.'});
+                        }
+                    })
+                },
+
+                editModel(url) {
+
+                    this.codeIsNew = false;
+
+                    this.$axios.get(url)
+                        .then((response) => {
+                            this.selectedProperty = response.data;
+
+                            this.$refs.propertyUpdateOrCreateModal.toggle();
+                        })
+                        .catch(error => {
+
+                            this.$emitter.emit('add-flash', { type: 'error', message: error.response?.data?.message || 'Unable to load the property. Try again.' })
+                        });
+                },
+            }
+        })
+    </script>
+@endPushOnce

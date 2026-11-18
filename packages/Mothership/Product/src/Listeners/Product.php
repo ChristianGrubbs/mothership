@@ -1,0 +1,42 @@
+<?php
+
+namespace Mothership\Product\Listeners;
+
+use Mothership\Product\Repositories\ProductRepository;
+
+class Product
+{
+    /**
+     * Create a new listener instance.
+     */
+    public function __construct(
+        protected ProductRepository $productRepository,
+    ) {}
+
+    /**
+     * Returns parents bundle product ids associated with simple product
+     *
+     * @param  \Mothership\Product\Contracts\Product  $product
+     */
+    public function getAllRelatedProductIds($product): array
+    {
+        $productIds = [$product->id];
+
+        if ($product->type == 'simple') {
+            if ($product->parent_id) {
+                $productIds[] = $product->parent_id;
+            }
+
+            $productIds = array_merge(
+                $productIds,
+            );
+        } elseif ($product->type == 'configurable') {
+            $productIds = [
+                ...$product->variants->pluck('id')->toArray(),
+                ...$productIds,
+            ];
+        }
+
+        return $productIds;
+    }
+}

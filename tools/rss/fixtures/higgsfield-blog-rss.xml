@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Higgsfield Blog</title>
+    <link>https://higgsfield.ai/blog</link>
+    <description>Guides, editorials, and product deep-dives on creating with AI at Higgsfield.</description>
+    <language>en</language>
+    <atom:link href="https://higgsfield.ai/blog/rss.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Sat, 17 Oct 2026 15:28:00 GMT</lastBuildDate>
+    <item>
+      <title>Higgsfield Community: Where Your AI Work Goes After You Generate It</title>
+      <link>https://higgsfield.ai/blog/higgsfield-community</link>
+      <guid isPermaLink="true">https://higgsfield.ai/blog/higgsfield-community</guid>
+      <pubDate>Sat, 17 Oct 2026 15:28:00 GMT</pubDate>
+      <category>Editorials</category>
+    </item>
+    <item>
+      <title>9 Best AI Tools for Motion Designers in 2026</title>
+      <link>https://higgsfield.ai/blog/best-ai-tools-motion-designers</link>
+      <guid isPermaLink="true">https://higgsfield.ai/blog/best-ai-tools-motion-designers</guid>
+      <pubDate>Wed, 14 Oct 2026 21:29:00 GMT</pubDate>
+      <category>Listicles</category>
+    </item>
+    <item>
+      <title>7 Best Veo Alternatives to Keep Consistency In Your Generations</title>
+      <link>https://higgsfield.ai/blog/best-veo-alternatives-character-consistency</link>
+      <guid isPermaLink="true">https://higgsfield.ai/blog/best-veo-alternatives-character-consistency</guid>
+      <pubDate>Wed, 14 Oct 2026 19:00:00 GMT</pubDate>
+      <category>Listicles</category>
+    </item>
+  </channel>
+</rss>

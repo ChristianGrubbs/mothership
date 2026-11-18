@@ -1,0 +1,1253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Sound Effect Maker · The Mothership</title>
+<style>
+/* Tokens. The fallback values match Home's current tokens (light and dark). A host that defines --host-* custom
+   properties on this document (for example a stylesheet the platform injects into tool frames) overrides them;
+   the platform's theme message sets data-theme on <html>. Opened from disk, the fallbacks and the system theme apply. */
+.sfx {
+    --paper: var(--host-paper, #fff);
+    --wash: var(--host-wash, #f6f7f8);
+    --ink: var(--host-ink, #101114);
+    --soft: var(--host-soft, #5b5f66);
+    --line: var(--host-line, #e9eaec);
+    --line-strong: var(--host-line-strong, #c9cdd0);
+    --accent: var(--host-accent, #bc232c);
+    --accent-strong: var(--host-accent-strong, #a51d25);
+    --on-accent: var(--host-on-accent, #fff);
+    --tint: var(--host-tint, #f8e4e5);
+    --radius: 14px;
+    --shadow: 0 18px 48px -40px rgba(16, 17, 20, .55);
+}
+:root[data-theme="dark"] .sfx {
+    --paper: var(--host-paper, #17181c); --wash: var(--host-wash, #101114); --ink: var(--host-ink, #f2f3f4);
+    --soft: var(--host-soft, #9aa0a6); --line: var(--host-line, #2c2f33); --line-strong: var(--host-line-strong, #4a4e54);
+    --accent: var(--host-accent, #ff6b72); --accent-strong: var(--host-accent-strong, #ff8a90); --on-accent: var(--host-on-accent, #17181c);
+    --tint: var(--host-tint, #3a1d20); --shadow: none;
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .sfx {
+        --paper: var(--host-paper, #17181c); --wash: var(--host-wash, #101114); --ink: var(--host-ink, #f2f3f4);
+        --soft: var(--host-soft, #9aa0a6); --line: var(--host-line, #2c2f33); --line-strong: var(--host-line-strong, #4a4e54);
+        --accent: var(--host-accent, #ff6b72); --accent-strong: var(--host-accent-strong, #ff8a90); --on-accent: var(--host-on-accent, #17181c);
+        --tint: var(--host-tint, #3a1d20); --shadow: none;
+    }
+}
+html, body { margin: 0; }
+body { background: #f6f7f8; }
+:root[data-theme="dark"] body { background: #101114; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) body { background: #101114; } }
+.sfx { min-height: 100vh; background: var(--wash); color: var(--ink); font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; line-height: 1.4; outline: none; }
+.sfx *, .sfx *::before, .sfx *::after { box-sizing: border-box; }
+.sfx [hidden] { display: none !important; }
+.sfx button, .sfx input, .sfx select { font: inherit; color: inherit; }
+.sfx :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sfx-shell { width: min(100%, 1180px); margin: 0 auto; padding: clamp(20px, 3vw, 40px) clamp(16px, 3vw, 36px) 64px; }
+.sfx-head { margin-bottom: 22px; }
+.sfx-eyebrow { margin: 0; color: var(--accent); font-size: 11px; font-weight: 750; letter-spacing: .14em; }
+.sfx-head h1 { margin: 6px 0 8px; font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, sans-serif; font-size: clamp(28px, 4.5vw, 42px); letter-spacing: -.035em; line-height: 1.05; }
+.sfx-lede { max-width: 64ch; margin: 0; color: var(--soft); font-size: 15px; line-height: 1.5; }
+.sfx-layout { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 980px) { .sfx-layout { grid-template-columns: minmax(0, 1fr) 340px; } }
+.sfx-main, .sfx-side { display: grid; gap: 20px; min-width: 0; }
+.sfx-panel { min-width: 0; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); box-shadow: var(--shadow); }
+.sfx-panel h2 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+.sfx-panel-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 14px; margin-bottom: 14px; }
+.sfx-panel-head p { margin: 2px 0 0; color: var(--soft); font-size: 13px; }
+
+/* Buttons: one primary (Play); everything else is outline or plain. */
+.sfx-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 16px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--paper); font-weight: 650; cursor: pointer; white-space: nowrap; transition: background .15s, border-color .15s; }
+.sfx-btn:hover:not(:disabled) { border-color: var(--ink); }
+.sfx-btn:disabled { opacity: .45; cursor: not-allowed; }
+.sfx-btn svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.sfx-btn.is-primary { border-color: var(--accent); background: var(--accent); color: var(--on-accent); min-width: 128px; }
+.sfx-btn.is-primary:hover { border-color: var(--accent-strong); background: var(--accent-strong); }
+.sfx-btn.is-plain { border-color: transparent; background: transparent; padding: 0 10px; }
+.sfx-btn.is-plain:hover:not(:disabled) { border-color: transparent; background: var(--wash); }
+.sfx kbd { padding: 1px 6px; border: 1px solid currentColor; border-radius: 5px; font: inherit; font-size: 11px; font-weight: 600; opacity: .75; }
+
+/* Generators */
+.sfx-gens { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.sfx-gen { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-height: 84px; padding: 14px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--paper); cursor: pointer; text-align: left; transition: border-color .15s, background .15s; }
+.sfx-gen:hover { border-color: var(--ink); }
+.sfx-gen svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.sfx-gen strong { font-size: 14px; }
+.sfx-gen[aria-pressed="true"] { border-color: var(--ink); background: var(--wash); box-shadow: inset 0 0 0 1px var(--ink); }
+.sfx-gen-extra { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+
+/* Sound */
+.sfx-sound-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 12px; }
+.sfx-sound-head h2 { font-size: 18px; overflow-wrap: anywhere; }
+.sfx-sound-state { color: var(--soft); font-size: 13px; }
+.sfx-sound-state[data-state="changed"] { color: var(--ink); font-weight: 650; }
+.sfx-sound-state[data-state="changed"]::before { content: "● "; color: var(--accent); }
+.sfx-wave { position: relative; display: block; width: 100%; height: clamp(140px, 22vw, 200px); padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--wash); cursor: pointer; overflow: hidden; }
+.sfx-wave canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.sfx-wave-tip { position: absolute; right: 10px; bottom: 8px; padding: 2px 8px; border-radius: 999px; background: var(--paper); color: var(--soft); font-size: 12px; pointer-events: none; }
+.sfx-readout { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 28px; margin: 14px 0 16px; }
+.sfx-stat { display: flex; align-items: baseline; gap: 6px; }
+.sfx-stat strong { font-size: 26px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.sfx-stat span { color: var(--soft); font-size: 13px; }
+.sfx-stat[data-clip="true"] span::after { content: " · clipped"; color: var(--ink); font-weight: 650; }
+.sfx-progress { color: var(--soft); font-size: 13px; font-variant-numeric: tabular-nums; margin-left: auto; }
+.sfx-transport { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* Controls */
+.sfx-seg { display: inline-flex; padding: 3px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--wash); }
+.sfx-seg button { min-height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: transparent; color: var(--soft); font-weight: 650; cursor: pointer; }
+.sfx-seg button[aria-checked="true"] { background: var(--paper); color: var(--ink); box-shadow: 0 1px 2px rgba(16, 17, 20, .18), inset 0 0 0 1px var(--line-strong); }
+.sfx-sliders { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 18px 24px; }
+.sfx-slider { display: grid; gap: 4px; min-width: 0; }
+.sfx-slider-top { display: flex; justify-content: space-between; gap: 10px; }
+.sfx-slider-top label { font-weight: 650; }
+.sfx-slider output { color: var(--ink); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sfx-slider input[type="range"] { width: 100%; height: 28px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.sfx-hint { color: var(--soft); font-size: 12.5px; }
+.sfx-group + .sfx-group { margin-top: 26px; }
+.sfx-group h3 { margin: 0 0 12px; color: var(--soft); font-size: 11px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+.sfx-shapes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-bottom: 26px; }
+.sfx-shape { display: grid; justify-items: center; gap: 6px; min-height: 64px; padding: 10px 4px 8px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--paper); cursor: pointer; font-size: 12.5px; font-weight: 600; }
+.sfx-shape svg { width: 40px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.sfx-shape[aria-checked="true"] { border-color: var(--ink); background: var(--wash); box-shadow: inset 0 0 0 1px var(--ink); }
+
+/* Library */
+.sfx-count { margin-left: 2px; color: var(--soft); font-weight: 500; }
+.sfx-list { max-height: 320px; margin: 0 0 12px; padding: 4px; overflow: auto; border: 1px solid var(--line); border-radius: 12px; list-style: none; }
+.sfx-list:focus-visible { outline-offset: 0; }
+.sfx-item { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 10px 6px 12px; border-radius: 9px; cursor: pointer; }
+.sfx-item:hover { background: var(--wash); }
+.sfx-item[aria-selected="true"] { background: var(--tint); box-shadow: inset 3px 0 0 var(--accent); font-weight: 650; }
+.sfx-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sfx-item-dur { color: var(--soft); font-size: 12.5px; font-variant-numeric: tabular-nums; font-weight: 500; }
+.sfx-item input { flex: 1; min-width: 0; min-height: 32px; padding: 0 8px; border: 1px solid var(--accent); border-radius: 6px; background: var(--paper); }
+.sfx-empty { display: grid; justify-items: center; gap: 6px; margin: 0 0 12px; padding: 22px 16px; border: 1.5px dashed var(--line-strong); border-radius: 12px; color: var(--soft); text-align: center; font-size: 13px; }
+.sfx-empty strong { color: var(--ink); font-size: 14px; }
+.sfx-tools { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px; margin-bottom: 14px; }
+.sfx-tools .sfx-btn { min-height: 40px; min-width: 40px; padding: 0 8px; font-size: 13px; }
+.sfx-tools [data-up], .sfx-tools [data-down] { font-size: 16px; }
+.sfx-files { display: grid; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+.sfx-files .sfx-btn { width: 100%; justify-content: flex-start; }
+.sfx-files input[type="file"] { display: none; }
+
+/* Settings */
+.sfx-setting { display: grid; gap: 6px; }
+.sfx-setting + .sfx-setting { margin-top: 16px; }
+.sfx-setting > label, .sfx-setting-label { font-weight: 650; }
+.sfx-select { min-height: 44px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--paper); }
+.sfx-switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; cursor: pointer; }
+.sfx-switch input { appearance: none; position: relative; width: 44px; height: 26px; flex: none; margin: 0; border-radius: 999px; background: var(--line-strong); cursor: pointer; transition: background .15s; }
+.sfx-switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .3); transition: transform .15s; }
+.sfx-switch input:checked { background: var(--accent); }
+.sfx-switch input:checked::after { transform: translateX(18px); }
+.sfx-keys { margin: 22px 0 0; color: var(--soft); font-size: 12.5px; }
+
+/* Status toast */
+.sfx-status { position: fixed; left: 50%; bottom: 18px; z-index: 5; display: flex; align-items: center; gap: 12px; max-width: calc(100% - 32px); margin: 0; padding: 10px 12px 10px 16px; border-radius: 12px; background: var(--ink); color: var(--paper); font-size: 13px; font-weight: 550; transform: translateX(-50%); box-shadow: 0 10px 30px -10px rgba(0, 0, 0, .5); }
+.sfx-status:empty { display: none; }
+.sfx-status[data-tone="error"]::before { content: "!"; display: grid; place-items: center; width: 18px; height: 18px; flex: none; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-weight: 800; font-size: 12px; }
+.sfx-status button { min-height: 32px; padding: 0 10px; border: 1px solid currentColor; border-radius: 999px; background: transparent; color: inherit; font-weight: 700; cursor: pointer; }
+
+@media (max-width: 700px) {
+    .sfx-gens { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sfx-shapes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .sfx-panel { padding: 16px; }
+    .sfx-transport .sfx-btn { flex: 1 1 auto; }
+}
+@media (prefers-reduced-motion: reduce) { .sfx *, .sfx *::before, .sfx *::after { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="sfx" data-sfx tabindex="-1">
+<div class="sfx-shell">
+    <header class="sfx-head">
+        <p class="sfx-eyebrow">THE MOTHERSHIP · AUDIO</p>
+        <h1>Sound Effect Maker</h1>
+        <p class="sfx-lede">Make short sound effects, shape them, and save them as WAV files. Everything runs on your device.</p>
+    </header>
+
+    <div class="sfx-layout">
+        <main class="sfx-main">
+            <section class="sfx-panel" aria-labelledby="sfx-start-title">
+                <div class="sfx-panel-head"><div><h2 id="sfx-start-title">Start from an effect</h2><p>Each click makes a fresh take on that effect.</p></div></div>
+                <div class="sfx-gens" role="group" aria-label="Effects">
+                    <button type="button" class="sfx-gen" data-gen="coin" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><ellipse cx="12" cy="12" rx="3" ry="5"/></svg><strong>Coin pickup</strong></button>
+                    <button type="button" class="sfx-gen" data-gen="whoosh" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h11a3 3 0 1 0-3-3"/><path d="M3 12h15a3 3 0 1 1-3 3"/><path d="M3 16h7"/></svg><strong>Whoosh</strong></button>
+                    <button type="button" class="sfx-gen" data-gen="alarm" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg><strong>Alarm</strong></button>
+                    <button type="button" class="sfx-gen" data-gen="explosion" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2 5.5 5.5-2.5-2.5 5.5 5 2.5-5.5 1.5 1.5 6-5-3.5-5 3.5 1-6-5.5-1.5 5-2.5-2.5-5.5 5.5 2.5z"/></svg><strong>Explosion</strong></button>
+                </div>
+                <div class="sfx-gen-extra">
+                    <button type="button" class="sfx-btn" data-surprise><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/></svg>Surprise me</button>
+                    <button type="button" class="sfx-btn" data-nudge><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12c2-4 4-4 6 0s4 4 6 0 4-4 6 0"/></svg>Nudge</button>
+                </div>
+            </section>
+
+            <section class="sfx-panel" aria-labelledby="sfx-sound-name">
+                <div class="sfx-sound-head">
+                    <h2 id="sfx-sound-name" data-name>Sound</h2>
+                    <span class="sfx-sound-state" data-sound-state data-state="new">Not saved</span>
+                </div>
+                <button type="button" class="sfx-wave" data-wave aria-label="Replay the sound"><canvas data-canvas aria-hidden="true"></canvas><span class="sfx-wave-tip" aria-hidden="true">Click to replay</span></button>
+                <div class="sfx-readout">
+                    <div class="sfx-stat"><strong data-duration>0.00</strong><span>seconds</span></div>
+                    <div class="sfx-stat" data-peak-wrap><strong data-peak>0.0</strong><span>dB peak</span></div>
+                    <span class="sfx-progress" data-progress aria-live="off"></span>
+                </div>
+                <div class="sfx-transport">
+                    <button type="button" class="sfx-btn is-primary" data-play><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg><span data-play-label>Play</span> <kbd>Space</kbd></button>
+                    <button type="button" class="sfx-btn" data-save><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg><span data-save-label>Save</span> <kbd>S</kbd></button>
+                    <button type="button" class="sfx-btn" data-wav><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14"/></svg>Download WAV</button>
+                </div>
+            </section>
+
+            <section class="sfx-panel" aria-labelledby="sfx-shape-title">
+                <div class="sfx-panel-head">
+                    <div><h2 id="sfx-shape-title">Shape it</h2><p data-mode-note>Eight broad controls. Advanced shows every setting.</p></div>
+                    <div class="sfx-seg" role="radiogroup" aria-label="Controls">
+                        <button type="button" role="radio" aria-checked="true" data-mode="simple">Simple</button>
+                        <button type="button" role="radio" aria-checked="false" data-mode="advanced" tabindex="-1">Advanced</button>
+                    </div>
+                </div>
+                <div class="sfx-sliders" data-simple></div>
+                <div data-advanced hidden>
+                    <div class="sfx-group">
+                        <h3 id="sfx-shape-label">Waveform shape</h3>
+                        <div class="sfx-shapes" role="radiogroup" aria-labelledby="sfx-shape-label" data-shapes></div>
+                    </div>
+                    <div data-groups></div>
+                </div>
+            </section>
+        </main>
+
+        <aside class="sfx-side">
+            <section class="sfx-panel" aria-labelledby="sfx-lib-title">
+                <div class="sfx-panel-head"><h2 id="sfx-lib-title">Saved sounds<span class="sfx-count" data-count></span></h2></div>
+                <ul class="sfx-list" role="listbox" aria-labelledby="sfx-lib-title" tabindex="0" data-list></ul>
+                <div class="sfx-empty" data-empty><strong>No saved sounds yet</strong><span>Press Save (or S) to keep the sound you are editing. Saved sounds stay here after you reload.</span></div>
+                <div class="sfx-tools" role="toolbar" aria-label="Selected sound" data-tools>
+                    <button type="button" class="sfx-btn is-plain" data-rename>Rename</button>
+                    <button type="button" class="sfx-btn is-plain" data-duplicate>Duplicate</button>
+                    <button type="button" class="sfx-btn is-plain" data-up aria-label="Move up" title="Move up">↑</button>
+                    <button type="button" class="sfx-btn is-plain" data-down aria-label="Move down" title="Move down">↓</button>
+                    <button type="button" class="sfx-btn is-plain" data-delete>Delete</button>
+                </div>
+                <div class="sfx-files">
+                    <button type="button" class="sfx-btn" data-zip><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14"/></svg>Download all as ZIP</button>
+                    <button type="button" class="sfx-btn" data-export><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h7l4 4v12H7z"/><path d="M14 4v4h4M10 13h5M10 16h5"/></svg>Export library (JSON)</button>
+                    <button type="button" class="sfx-btn" data-import><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M5 19h14"/></svg>Import library (JSON)</button>
+                    <input type="file" accept="application/json,.json" data-import-file tabindex="-1" aria-hidden="true">
+                </div>
+            </section>
+
+            <section class="sfx-panel" aria-labelledby="sfx-settings-title">
+                <div class="sfx-panel-head"><h2 id="sfx-settings-title">Playback and export</h2></div>
+                <div class="sfx-setting">
+                    <label for="sfx-rate">Sample rate</label>
+                    <select id="sfx-rate" class="sfx-select" data-rate>
+                        <option value="11025">11,025 Hz (lo-fi)</option>
+                        <option value="22050">22,050 Hz</option>
+                        <option value="44100">44,100 Hz (CD)</option>
+                        <option value="48000">48,000 Hz (video)</option>
+                    </select>
+                    <span class="sfx-hint">Used for playback and for every WAV you download.</span>
+                </div>
+                <div class="sfx-setting sfx-slider">
+                    <div class="sfx-slider-top"><label for="sfx-master">Master volume</label><output for="sfx-master" data-master-out></output></div>
+                    <input id="sfx-master" type="range" min="0" max="100" step="1" data-master>
+                    <span class="sfx-hint">Playback only. Downloads are not affected.</span>
+                </div>
+                <div class="sfx-setting">
+                    <label class="sfx-switch"><span class="sfx-setting-label">Play after each edit</span><input type="checkbox" role="switch" data-autoplay></label>
+                </div>
+            </section>
+        </aside>
+    </div>
+    <p class="sfx-keys">Shortcuts: <kbd>Space</kbd> plays · <kbd>S</kbd> saves · <kbd>↑</kbd> <kbd>↓</kbd> move through saved sounds.</p>
+</div>
+<div class="sfx-status" role="status" aria-live="polite" data-status></div>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+/* ---------------------------------------------------------------- model */
+
+// Every parameter is stored as a plain number in a fixed range (the waveform as a name), so the library JSON is
+// readable and the render below is the only place that maps a value to sound. Format: docs/features/sound-effect-maker.md
+const WAVES = ['square', 'sawtooth', 'triangle', 'sine', 'noise'];
+const PARAMS = {
+    wave:          { def: 'square' },
+    pitch:         { min: 0,  max: 1, def: 0.5 },
+    attack:        { min: 0,  max: 1, def: 0 },
+    decay:         { min: 0,  max: 1, def: 0.15 },
+    sustain:       { min: 0,  max: 1, def: 0.2 },
+    release:       { min: 0,  max: 1, def: 0.35 },
+    sustainVolume: { min: 0,  max: 1, def: 0.5 },
+    slide:         { min: -1, max: 1, def: 0 },
+    deltaSlide:    { min: -1, max: 1, def: 0 },
+    jump:          { min: -1, max: 1, def: 0 },
+    jumpTime:      { min: 0,  max: 1, def: 0.3 },
+    repeat:        { min: 0,  max: 1, def: 0 },
+    tremolo:       { min: 0,  max: 1, def: 0 },
+    noise:         { min: 0,  max: 1, def: 0 },
+    crush:         { min: 0,  max: 1, def: 0 },
+    delay:         { min: 0,  max: 1, def: 0 },
+    cutoff:        { min: 0,  max: 1, def: 1 },
+    volume:        { min: 0,  max: 1, def: 0.7 },
+};
+const KINDS = { coin: 'Coin pickup', whoosh: 'Whoosh', alarm: 'Alarm', explosion: 'Explosion', surprise: 'Surprise' };
+const FORMAT = 'mothership-sound-library';
+const MAX_SECONDS = 9;
+
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const round4 = v => Math.round(v * 10000) / 10000;
+const sq = v => v * v;
+const signedSq = v => v * Math.abs(v);
+
+function normalizeParams(input) {
+    const out = {};
+    const src = input && typeof input === 'object' ? input : {};
+    for (const [key, spec] of Object.entries(PARAMS)) {
+        if (key === 'wave') { out.wave = WAVES.includes(src.wave) ? src.wave : spec.def; continue; }
+        const n = Number(src[key]);
+        out[key] = Number.isFinite(n) ? round4(clamp(n, spec.min, spec.max)) : spec.def;
+    }
+    return out;
+}
+const normalizeSeed = seed => (Number.isFinite(Number(seed)) ? Number(seed) >>> 0 : 1);
+
+// Seconds of each envelope stage. Squared so the low end of each slider has fine control.
+function timing(p) {
+    const attack = sq(p.attack) * 1.0, decay = sq(p.decay) * 1.5, sustain = sq(p.sustain) * 2.0, release = sq(p.release) * 2.5;
+    return { attack, decay, sustain, release, total: Math.max(0.01, attack + decay + sustain + release) };
+}
+const delaySettings = p => ({ on: p.delay > 0.001, time: 0.06 + 0.24 * p.delay, feedback: 0.25 + 0.4 * p.delay, wet: 0.6 * p.delay });
+function durationOf(p) {
+    const d = delaySettings(p);
+    return Math.min(MAX_SECONDS, timing(p).total + (d.on ? Math.min(2.5, d.time * 6) : 0));
+}
+
+// mulberry32: a small, fast, seedable generator, so noise is identical for the same seed.
+function rng(seed) {
+    let a = seed >>> 0;
+    return () => {
+        a = (a + 0x6D2B79F5) >>> 0;
+        let t = a;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+/**
+ * The one render function: parameters + seed + sample rate -> mono samples, computed sample by sample.
+ * The same three inputs always give the same Float32Array (noise included), so a saved sound is reproducible.
+ */
+function renderSamples(params, seed, sampleRate) {
+    const p = normalizeParams(params);
+    const sr = Math.round(sampleRate);
+    const env = timing(p);
+    const dly = delaySettings(p);
+    const length = Math.max(1, Math.ceil(durationOf(p) * sr));
+    const out = new Float32Array(length);
+    const waveRandom = rng(normalizeSeed(seed));
+    const mixRandom = rng((normalizeSeed(seed) ^ 0x9E3779B9) >>> 0);
+
+    const f0 = 40 * Math.pow(2, p.pitch * 8);                   // 40 Hz .. 10.2 kHz
+    const slideOct = signedSq(p.slide) * 8;                      // octaves per second
+    const deltaOct = signedSq(p.deltaSlide) * 16;                // octaves per second per second
+    const jumpOct = (p.jump * 24) / 12;                          // up to two octaves either way
+    const jumpAt = 0.01 + sq(p.jumpTime);
+    const period = p.repeat >= 0.01 ? 0.03 + 0.6 * sq(1 - p.repeat) : 0;
+    const tremDepth = p.tremolo * 0.9, tremRate = 3 + 15 * p.tremolo;
+    const maxF = sr * 0.45;
+    const cutoffHz = 120 * Math.pow(2, p.cutoff * 7.5);
+    const filterOn = cutoffHz < maxF;
+    const alpha = 1 - Math.exp(-2 * Math.PI * Math.min(cutoffHz, maxF) / sr);
+    const crushOn = p.crush > 0.001;
+    const levels = Math.pow(2, Math.round(16 - p.crush * 13) - 1);
+    const hold = Math.max(1, Math.round(sq(p.crush) / 2000 * sr));
+    const delayLen = Math.max(1, Math.round(dly.time * sr));
+    const line = dly.on ? new Float32Array(delayLen) : null;
+    const gain = p.volume * 0.8;
+    const aEnd = env.attack, dEnd = aEnd + env.decay, sEnd = dEnd + env.sustain, rEnd = sEnd + env.release;
+
+    let phase = 0, noiseStep = -1, noiseValue = 0, lp1 = 0, lp2 = 0, held = 0, di = 0;
+    for (let i = 0; i < length; i++) {
+        const t = i / sr;
+        let s = 0;
+        if (t < rEnd) {
+            const tp = period ? t % period : t;
+            let octaves = slideOct * tp + 0.5 * deltaOct * tp * tp;
+            if (jumpOct !== 0 && tp >= jumpAt) octaves += jumpOct;
+            const f = clamp(f0 * Math.pow(2, octaves), 10, maxF);
+            phase += f / sr;
+            phase -= Math.floor(phase);
+            let v;
+            switch (p.wave) {
+                case 'square': v = phase < 0.5 ? 1 : -1; break;
+                case 'sawtooth': v = 2 * phase - 1; break;
+                case 'triangle': v = 1 - 4 * Math.abs(phase - 0.5); break;
+                case 'sine': v = Math.sin(2 * Math.PI * phase); break;
+                default: {
+                    // Sample-and-hold noise, 16 steps per cycle, so pitch and slide still move it.
+                    const step = Math.floor(phase * 16);
+                    if (step !== noiseStep || f / sr >= 1 / 16) { noiseStep = step; noiseValue = waveRandom() * 2 - 1; }
+                    v = noiseValue;
+                }
+            }
+            if (p.noise > 0) v = v * (1 - p.noise) + (mixRandom() * 2 - 1) * p.noise;
+            let e;
+            if (t < aEnd) e = t / aEnd;
+            else if (t < dEnd) e = 1 - (1 - p.sustainVolume) * ((t - aEnd) / env.decay);
+            else if (t < sEnd) e = p.sustainVolume;
+            else e = p.sustainVolume * (1 - (t - sEnd) / env.release);
+            if (tremDepth > 0) e *= 1 - tremDepth * (0.5 + 0.5 * Math.sin(2 * Math.PI * tremRate * t));
+            s = v * e;
+        }
+        if (filterOn) { lp1 += alpha * (s - lp1); lp2 += alpha * (lp1 - lp2); s = lp2; }
+        if (crushOn) { if (i % hold === 0) held = Math.round(s * levels) / levels; s = held; }
+        if (line) { const d = line[di]; line[di] = s + d * dly.feedback; s += d * dly.wet; di = (di + 1) % delayLen; }
+        out[i] = clamp(s * gain, -1, 1);
+    }
+    return out;
+}
+
+function renderBuffer(params, seed, sampleRate) {
+    const samples = renderSamples(params, seed, sampleRate);
+    const buffer = new AudioBuffer({ length: samples.length, numberOfChannels: 1, sampleRate: Math.round(sampleRate) });
+    buffer.copyToChannel(samples, 0);
+    return { buffer, samples };
+}
+
+function peakOf(samples) {
+    let peak = 0;
+    for (let i = 0; i < samples.length; i++) { const a = Math.abs(samples[i]); if (a > peak) peak = a; }
+    return peak;
+}
+
+/* --------------------------------------------------------- generators */
+
+const rand = (lo, hi) => lo + Math.random() * (hi - lo);
+const pick = list => list[Math.floor(Math.random() * list.length)];
+const chance = p => Math.random() < p;
+const newSeed = () => { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0]; };
+
+const GENERATORS = {
+    coin: () => ({
+        wave: pick(['square', 'square', 'triangle', 'sine']), pitch: rand(0.56, 0.74),
+        attack: 0, decay: rand(0.04, 0.12), sustain: rand(0.14, 0.3), release: rand(0.25, 0.42), sustainVolume: rand(0.35, 0.6),
+        jump: pick([5, 7, 12]) / 24 + rand(-0.006, 0.006), jumpTime: rand(0.24, 0.34), slide: chance(0.25) ? rand(0.05, 0.15) : 0,
+        cutoff: rand(0.85, 1), volume: 0.6,
+    }),
+    whoosh: () => ({
+        wave: 'noise', pitch: rand(0.55, 0.78), attack: rand(0.42, 0.6), decay: rand(0.1, 0.25), sustain: rand(0.05, 0.2),
+        release: rand(0.48, 0.62), sustainVolume: rand(0.6, 0.8), slide: pick([-1, 1]) * rand(0.15, 0.3), deltaSlide: rand(-0.1, 0.1),
+        tremolo: chance(0.3) ? rand(0.05, 0.15) : 0, cutoff: rand(0.55, 0.75), volume: 0.75,
+    }),
+    alarm: () => {
+        const siren = chance(0.5);
+        return {
+            wave: pick(['square', 'sawtooth', 'square']), pitch: rand(0.5, 0.62), attack: 0, decay: 0, sustain: rand(0.72, 0.85),
+            release: rand(0.15, 0.25), sustainVolume: 0.8, repeat: rand(0.25, 0.42),
+            slide: siren ? rand(0.5, 0.65) : 0, jump: siren ? 0 : pick([4, 5, 7]) / 24, jumpTime: siren ? 0.3 : rand(0.3, 0.36),
+            cutoff: rand(0.72, 0.88), volume: 0.5,
+        };
+    },
+    explosion: () => ({
+        wave: 'noise', pitch: rand(0.18, 0.32), attack: 0, decay: rand(0.05, 0.15), sustain: rand(0.2, 0.35), release: rand(0.55, 0.7),
+        sustainVolume: rand(0.45, 0.7), slide: -rand(0.15, 0.32), deltaSlide: rand(-0.05, 0.08), tremolo: chance(0.4) ? rand(0.05, 0.2) : 0,
+        crush: chance(0.4) ? rand(0.05, 0.3) : 0, delay: chance(0.4) ? rand(0.1, 0.3) : 0, cutoff: rand(0.6, 0.85), volume: 0.8,
+    }),
+    surprise: () => ({
+        wave: chance(0.2) ? 'noise' : pick(['square', 'sawtooth', 'triangle', 'sine']), pitch: rand(0.25, 0.8),
+        attack: chance(0.7) ? 0 : rand(0.05, 0.4), decay: rand(0.05, 0.35), sustain: rand(0.08, 0.45), release: rand(0.15, 0.55),
+        sustainVolume: rand(0.3, 0.85), slide: chance(0.5) ? rand(-0.45, 0.45) : 0, deltaSlide: chance(0.2) ? rand(-0.3, 0.3) : 0,
+        jump: chance(0.4) ? rand(-0.4, 0.4) : 0, jumpTime: rand(0.1, 0.5), repeat: chance(0.2) ? rand(0.2, 0.6) : 0,
+        tremolo: chance(0.2) ? rand(0.1, 0.5) : 0, noise: chance(0.15) ? rand(0.1, 0.3) : 0, crush: chance(0.2) ? rand(0.1, 0.4) : 0,
+        delay: chance(0.25) ? rand(0.1, 0.4) : 0, cutoff: rand(0.55, 1), volume: 0.6,
+    }),
+};
+
+function nudgeParams(p) {
+    const next = { ...p };
+    for (const [key, spec] of Object.entries(PARAMS)) {
+        if (key === 'wave' || key === 'volume') continue;
+        const span = spec.max - spec.min;
+        // Leave switched-off effects off; move everything else a little.
+        if (spec.def === 0 && Math.abs(p[key]) < 0.001 && !['attack'].includes(key)) continue;
+        next[key] = clamp(p[key] + (Math.random() + Math.random() - 1) * 0.045 * span, spec.min, spec.max);
+    }
+    return normalizeParams(next);
+}
+
+/* ------------------------------------------------------- WAV and ZIP */
+
+function encodeWav(samples, sampleRate) {
+    const n = samples.length, data = n * 2;
+    const view = new DataView(new ArrayBuffer(44 + data));
+    const text = (offset, s) => { for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i)); };
+    text(0, 'RIFF'); view.setUint32(4, 36 + data, true); text(8, 'WAVE');
+    text(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+    text(36, 'data'); view.setUint32(40, data, true);
+    for (let i = 0; i < n; i++) {
+        const s = clamp(samples[i], -1, 1);
+        view.setInt16(44 + i * 2, Math.round(s < 0 ? s * 0x8000 : s * 0x7FFF), true);
+    }
+    return new Uint8Array(view.buffer);
+}
+
+const CRC_TABLE = (() => {
+    const table = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; table[n] = c >>> 0; }
+    return table;
+})();
+function crc32(bytes) {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+// A ZIP of stored (uncompressed) entries: local headers, central directory, end record. Names are UTF-8 (flag bit 11).
+function makeZip(files, when = new Date()) {
+    const encoder = new TextEncoder();
+    const dosTime = (when.getHours() << 11) | (when.getMinutes() << 5) | (when.getSeconds() >> 1);
+    const dosDate = (Math.max(0, when.getFullYear() - 1980) << 9) | ((when.getMonth() + 1) << 5) | when.getDate();
+    const parts = [], central = [];
+    let offset = 0;
+    for (const file of files) {
+        const name = encoder.encode(file.name), data = file.data, crc = crc32(data);
+        const local = new DataView(new ArrayBuffer(30));
+        local.setUint32(0, 0x04034B50, true); local.setUint16(4, 20, true); local.setUint16(6, 0x0800, true); local.setUint16(8, 0, true);
+        local.setUint16(10, dosTime, true); local.setUint16(12, dosDate, true); local.setUint32(14, crc, true);
+        local.setUint32(18, data.length, true); local.setUint32(22, data.length, true); local.setUint16(26, name.length, true); local.setUint16(28, 0, true);
+        const entry = new DataView(new ArrayBuffer(46));
+        entry.setUint32(0, 0x02014B50, true); entry.setUint16(4, 20, true); entry.setUint16(6, 20, true); entry.setUint16(8, 0x0800, true);
+        entry.setUint16(10, 0, true); entry.setUint16(12, dosTime, true); entry.setUint16(14, dosDate, true); entry.setUint32(16, crc, true);
+        entry.setUint32(20, data.length, true); entry.setUint32(24, data.length, true); entry.setUint16(28, name.length, true);
+        entry.setUint16(30, 0, true); entry.setUint16(32, 0, true); entry.setUint16(34, 0, true); entry.setUint16(36, 0, true);
+        entry.setUint32(38, 0, true); entry.setUint32(42, offset, true);
+        parts.push(new Uint8Array(local.buffer), name, data);
+        central.push(new Uint8Array(entry.buffer), name);
+        offset += 30 + name.length + data.length;
+    }
+    const centralSize = central.reduce((sum, part) => sum + part.length, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054B50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+    end.setUint32(12, centralSize, true); end.setUint32(16, offset, true);
+    const all = [...parts, ...central, new Uint8Array(end.buffer)];
+    const out = new Uint8Array(all.reduce((sum, part) => sum + part.length, 0));
+    let at = 0;
+    for (const part of all) { out.set(part, at); at += part.length; }
+    return out;
+}
+
+function fileName(name, extension) {
+    const base = String(name || '').replace(/[\u0000-\u001f\u007f/\\:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim().replace(/^\.+/, '').slice(0, 80);
+    return `${base || 'sound'}.${extension}`;
+}
+
+/* ---------------------------------------------------- library format */
+
+function libraryJson(sounds, sampleRate) {
+    return {
+        format: FORMAT, version: 1, sampleRate,
+        sounds: sounds.map(s => ({ name: s.name, kind: s.kind, seed: s.seed, params: normalizeParams(s.params) })),
+    };
+}
+function parseLibrary(data) {
+    const list = Array.isArray(data) ? data : data && data.format === FORMAT && Array.isArray(data.sounds) ? data.sounds : null;
+    if (!list) throw new Error('That file is not a sound library from this tool.');
+    if (!Array.isArray(data) && data.version !== 1) throw new Error('That library was made by a newer version of this tool.');
+    return list.filter(s => s && typeof s === 'object' && s.params && typeof s.params === 'object').map(s => ({
+        id: uid(), name: String(s.name || 'Imported sound').slice(0, 80), kind: KINDS[s.kind] ? s.kind : 'surprise',
+        seed: normalizeSeed(s.seed), params: normalizeParams(s.params),
+    }));
+}
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`);
+
+// Pure helpers for tests and for other Home tools that want to replay a saved library.
+window.MothershipSoundEffects = Object.freeze({ FORMAT, PARAMS, WAVES, normalizeParams, renderSamples, renderBuffer, durationOf, encodeWav, makeZip, crc32, libraryJson, parseLibrary });
+
+/* ----------------------------------------------------------- storage */
+
+const KEY = { library: 'mothership.sound-effects.library', settings: 'mothership.sound-effects.settings', current: 'mothership.sound-effects.current' };
+const MAX_STORED = 60000; // Home stores each key as one preference value of at most 64 KB.
+function readStore(key) { try { const raw = window.localStorage.getItem(key); return raw ? JSON.parse(raw) : null; } catch { return null; } }
+function writeStore(key, value) {
+    const raw = JSON.stringify(value);
+    if (raw.length > MAX_STORED) return false;
+    try { window.localStorage.setItem(key, raw); return true; } catch { return false; }
+}
+
+/* ---------------------------------------------------------------- UI */
+
+const root = document.querySelector('[data-sfx]');
+const $ = sel => root.querySelector(sel);
+const status = (() => {
+    const el = $('[data-status]');
+    let timer;
+    return (message, { tone = 'info', action = null, ms = 3200 } = {}) => {
+        clearTimeout(timer);
+        el.textContent = message;
+        el.dataset.tone = tone;
+        if (action) {
+            const btn = document.createElement('button');
+            btn.type = 'button'; btn.textContent = action.label;
+            btn.addEventListener('click', () => { el.textContent = ''; action.run(); });
+            el.append(btn);
+        }
+        if (message) timer = setTimeout(() => { el.textContent = ''; }, action ? 8000 : ms);
+    };
+})();
+
+const savedSettings = readStore(KEY.settings) || {};
+const state = {
+    library: [],
+    current: null,          // { name, kind, seed, params, savedId }
+    selectedId: null,
+    settings: {
+        sampleRate: [11025, 22050, 44100, 48000].includes(savedSettings.sampleRate) ? savedSettings.sampleRate : 44100,
+        master: Number.isFinite(savedSettings.master) ? clamp(savedSettings.master, 0, 1) : 0.8,
+        autoplay: savedSettings.autoplay !== false,
+        mode: savedSettings.mode === 'advanced' ? 'advanced' : 'simple',
+    },
+    render: null,           // { buffer, samples, peak, duration }
+};
+{
+    const stored = readStore(KEY.library);
+    if (stored) { try { state.library = parseLibrary(stored); } catch { state.library = []; } }
+    const cur = readStore(KEY.current);
+    if (cur && cur.params) {
+        state.current = { name: String(cur.name || 'Sound').slice(0, 80), kind: KINDS[cur.kind] ? cur.kind : 'surprise', seed: normalizeSeed(cur.seed), params: normalizeParams(cur.params), savedId: null };
+        const linked = Number.isInteger(cur.savedIndex) ? state.library[cur.savedIndex] : null;
+        if (linked && linked.name === cur.savedName) { state.current.savedId = linked.id; state.selectedId = linked.id; }
+    }
+}
+
+// Every library change is built as a new list and only becomes the library once it is stored.
+function commitLibrary(next) {
+    if (!writeStore(KEY.library, libraryJson(next, state.settings.sampleRate))) {
+        status('The library could not be kept here. If it is large, export it, then delete a few sounds.', { tone: 'error', ms: 7000 });
+        return false;
+    }
+    state.library = next;
+    return true;
+}
+let currentTimer;
+function persistCurrent() {
+    clearTimeout(currentTimer);
+    currentTimer = setTimeout(() => {
+        const c = state.current, index = state.library.findIndex(s => s.id === c.savedId);
+        writeStore(KEY.current, { name: c.name, kind: c.kind, seed: c.seed, params: c.params, savedIndex: index >= 0 ? index : null, savedName: index >= 0 ? state.library[index].name : null });
+    }, 250);
+}
+const persistSettings = () => writeStore(KEY.settings, state.settings);
+
+/* ---------------------------------------------------------- playback */
+
+let audio = null, source = null, startedAt = 0, playingDuration = 0, frame = 0;
+function ensureAudio() {
+    if (!audio) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        const ctx = new Ctx();
+        const gain = ctx.createGain();
+        gain.connect(ctx.destination);
+        audio = { ctx, gain };
+    }
+    audio.gain.gain.value = state.settings.master;
+    if (audio.ctx.state === 'suspended') audio.ctx.resume();
+    return audio;
+}
+function stop() {
+    if (source) { source.onended = null; try { source.stop(); } catch { /* already stopped */ } source.disconnect(); source = null; }
+    cancelAnimationFrame(frame);
+    $('[data-play-label]').textContent = 'Play';
+    $('[data-progress]').textContent = '';
+    drawWave(null);
+}
+function play() {
+    if (renderDirty) renderNow(); // an edit made in this same event must be heard, not the previous render
+    if (!state.render) return;
+    const { ctx, gain } = ensureAudio();
+    stop();
+    source = ctx.createBufferSource();
+    source.buffer = state.render.buffer;
+    source.connect(gain);
+    source.onended = () => { source = null; stop(); };
+    startedAt = ctx.currentTime;
+    playingDuration = state.render.buffer.duration;
+    source.start();
+    $('[data-play-label]').textContent = 'Replay';
+    const tick = () => {
+        if (!source) return;
+        const elapsed = clamp(audio.ctx.currentTime - startedAt, 0, playingDuration);
+        drawWave(elapsed / playingDuration);
+        $('[data-progress]').textContent = `${elapsed.toFixed(2)} / ${playingDuration.toFixed(2)} s`;
+        frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+}
+
+/* ----------------------------------------------------------- drawing */
+
+const canvas = $('[data-canvas]');
+let columns = null;
+function measure() {
+    const rect = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.round(rect.width * dpr));
+    canvas.height = Math.max(1, Math.round(rect.height * dpr));
+    columns = null;
+}
+function computeColumns() {
+    const samples = state.render.samples, width = canvas.width, mins = new Float32Array(width), maxs = new Float32Array(width);
+    const per = samples.length / width;
+    for (let x = 0; x < width; x++) {
+        let lo = 1, hi = -1;
+        const a = Math.floor(x * per), b = Math.max(a + 1, Math.floor((x + 1) * per));
+        for (let i = a; i < b && i < samples.length; i++) { const v = samples[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
+        if (lo > hi) { lo = 0; hi = 0; }
+        mins[x] = lo; maxs[x] = hi;
+    }
+    columns = { mins, maxs };
+}
+function drawWave(progress) {
+    const g = canvas.getContext('2d'), w = canvas.width, h = canvas.height, mid = h / 2;
+    const css = getComputedStyle(root);
+    g.clearRect(0, 0, w, h);
+    g.fillStyle = css.getPropertyValue('--line').trim();
+    g.fillRect(0, Math.round(mid), w, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+    if (!state.render) return;
+    if (!columns || columns.mins.length !== w) computeColumns();
+    const ink = css.getPropertyValue('--ink').trim(), accent = css.getPropertyValue('--accent').trim();
+    const playedTo = progress == null ? -1 : Math.round(progress * w);
+    const scale = mid * 0.92;
+    for (let x = 0; x < w; x++) {
+        g.fillStyle = x <= playedTo ? accent : ink;
+        g.globalAlpha = x <= playedTo ? 1 : 0.78;
+        const top = mid - columns.maxs[x] * scale, bottom = mid - columns.mins[x] * scale;
+        g.fillRect(x, top, 1, Math.max(1, bottom - top));
+    }
+    g.globalAlpha = 1;
+    if (playedTo >= 0) { g.fillStyle = accent; g.fillRect(Math.min(w - 2, playedTo), 0, Math.max(2, Math.round(window.devicePixelRatio || 1) * 2), h); }
+}
+
+/* ---------------------------------------------------------- controls */
+
+const fmt = {
+    hz: f => (f < 1000 ? `${Math.round(f)} Hz` : `${(f / 1000).toFixed(1)} kHz`),
+    secs: s => (s < 1 ? `${Math.round(s * 1000)} ms` : `${s.toFixed(2)} s`),
+    pct: v => `${Math.round(v * 100)}%`,
+    offPct: v => (v < 0.005 ? 'Off' : `${Math.round(v * 100)}%`),
+};
+const pitchHz = p => 40 * Math.pow(2, p * 8);
+const ADVANCED = {
+    pitch:         { label: 'Pitch', hint: 'Starting frequency', show: v => fmt.hz(pitchHz(v)) },
+    slide:         { label: 'Slide', hint: 'Bends the pitch up or down over time', show: v => (Math.abs(v) < 0.005 ? 'None' : `${v > 0 ? '+' : '−'}${Math.abs(signedSq(v) * 8).toFixed(2)} oct/s`) },
+    deltaSlide:    { label: 'Delta slide', hint: 'Speeds the slide up or slows it down', show: v => (Math.abs(v) < 0.005 ? 'None' : `${v > 0 ? '+' : '−'}${Math.abs(signedSq(v) * 16).toFixed(2)} oct/s²`) },
+    jump:          { label: 'Pitch jump', hint: 'A sudden step in pitch partway through', show: v => (Math.abs(v) < 0.005 ? 'None' : `${v > 0 ? '+' : '−'}${Math.abs(v * 24).toFixed(1)} semitones`) },
+    jumpTime:      { label: 'Pitch jump time', hint: 'When the jump happens', show: v => fmt.secs(0.01 + sq(v)) },
+    repeat:        { label: 'Repeat time', hint: 'Restarts the pitch movement on a loop', show: v => (v < 0.01 ? 'Off' : `every ${fmt.secs(0.03 + 0.6 * sq(1 - v))}`) },
+    attack:        { label: 'Attack', hint: 'Time to fade in', show: v => fmt.secs(sq(v) * 1.0) },
+    decay:         { label: 'Decay', hint: 'Time to fall from the peak to the sustain volume', show: v => fmt.secs(sq(v) * 1.5) },
+    sustain:       { label: 'Sustain', hint: 'How long the body of the sound holds', show: v => fmt.secs(sq(v) * 2.0) },
+    release:       { label: 'Release', hint: 'Time to fade out at the end', show: v => fmt.secs(sq(v) * 2.5) },
+    sustainVolume: { label: 'Sustain volume', hint: 'Loudness of the body after the first hit', show: fmt.pct },
+    tremolo:       { label: 'Tremolo', hint: 'Pulses the volume; more is deeper and faster', show: fmt.offPct },
+    noise:         { label: 'Noise', hint: 'Mixes hiss into the tone', show: fmt.offPct },
+    crush:         { label: 'Bit crush', hint: 'Fewer bits and samples, for a lo-fi sound', show: v => (v < 0.001 ? 'Off' : `${Math.round(16 - v * 13)}-bit`) },
+    delay:         { label: 'Delay', hint: 'Echo amount; more also spaces the echoes further apart', show: fmt.offPct },
+    cutoff:        { label: 'Low-pass cutoff', hint: 'Removes the highs above this frequency', show: v => { const hz = 120 * Math.pow(2, v * 7.5); return hz >= state.settings.sampleRate * 0.45 ? 'Open' : fmt.hz(hz); } },
+    volume:        { label: 'Volume', hint: 'Level of the sound in the file', show: fmt.pct },
+};
+const GROUPS = [
+    ['Pitch and movement', ['pitch', 'slide', 'deltaSlide', 'jump', 'jumpTime', 'repeat']],
+    ['Volume shape', ['attack', 'decay', 'sustain', 'release', 'sustainVolume']],
+    ['Texture and effects', ['tremolo', 'noise', 'crush', 'delay', 'cutoff', 'volume']],
+];
+
+// Length scales the four envelope stages together; Punch is how far the body drops below the first hit.
+const MACROS = {
+    length: {
+        get: p => Math.sqrt(clamp((timing(p).total - 0.03) / 4, 0, 1)),
+        set: (p, v) => {
+            const target = 0.03 + sq(v) * 4, now = timing(p);
+            if (now.total < 0.012) return { ...p, sustain: clamp(Math.sqrt(target / 2), 0, 1) };
+            const k = Math.sqrt(target / now.total);
+            return { ...p, attack: clamp(p.attack * k, 0, 1), decay: clamp(p.decay * k, 0, 1), sustain: clamp(p.sustain * k, 0, 1), release: clamp(p.release * k, 0, 1) };
+        },
+        show: () => fmt.secs(durationOf(state.current.params)),
+    },
+    punch: {
+        get: p => 1 - p.sustainVolume,
+        set: (p, v) => ({ ...p, sustainVolume: 1 - v }),
+        show: v => fmt.pct(v),
+    },
+};
+const SIMPLE = [
+    { key: 'pitch', label: 'Pitch', hint: 'How high or low it sounds' },
+    { key: 'length', label: 'Length', hint: 'How long the sound lasts' },
+    { key: 'cutoff', label: 'Brightness', hint: 'Muffled and dull, or sharp and bright' },
+    { key: 'punch', label: 'Punch', hint: 'How hard it hits at the start' },
+    { key: 'tremolo', label: 'Wobble', hint: 'A shaky, pulsing volume' },
+    { key: 'crush', label: 'Crunch', hint: 'Gritty, old-game-console grain' },
+    { key: 'delay', label: 'Echo', hint: 'Repeats that trail off after the sound' },
+    { key: 'volume', label: 'Volume', hint: 'How loud the sound is in the file' },
+];
+
+const sliders = [];
+let sliderId = 0;
+function makeSlider({ label, hint, min, max, get, set, show }) {
+    const id = `sfx-c${++sliderId}`;
+    const wrap = document.createElement('div');
+    wrap.className = 'sfx-slider';
+    wrap.innerHTML = `<div class="sfx-slider-top"><label for="${id}"></label><output for="${id}"></output></div><input id="${id}" type="range" min="0" max="1000" step="1" aria-describedby="${id}-h"><span class="sfx-hint" id="${id}-h"></span>`;
+    wrap.querySelector('label').textContent = label;
+    wrap.querySelector('.sfx-hint').textContent = hint;
+    const input = wrap.querySelector('input'), output = wrap.querySelector('output');
+    const toValue = pos => min + (pos / 1000) * (max - min);
+    const entry = {
+        sync(skipInput) {
+            const v = get(state.current.params);
+            if (!skipInput) input.value = String(Math.round(((v - min) / (max - min)) * 1000));
+            const text = show(v);
+            output.textContent = text;
+            input.setAttribute('aria-valuetext', text);
+        },
+    };
+    input.addEventListener('input', () => { edit(p => set(p, toValue(Number(input.value))), entry); });
+    input.addEventListener('change', () => { if (state.settings.autoplay) play(); });
+    sliders.push(entry);
+    return wrap;
+}
+
+const simpleBox = $('[data-simple]');
+for (const item of SIMPLE) {
+    const macro = MACROS[item.key];
+    simpleBox.append(makeSlider({
+        label: item.label, hint: item.hint, min: 0, max: 1,
+        get: macro ? macro.get : p => p[item.key],
+        set: macro ? macro.set : (p, v) => ({ ...p, [item.key]: v }),
+        show: macro ? macro.show : ADVANCED[item.key].show,
+    }));
+}
+const groupsBox = $('[data-groups]');
+for (const [title, keys] of GROUPS) {
+    const group = document.createElement('div');
+    group.className = 'sfx-group';
+    const heading = document.createElement('h3');
+    heading.textContent = title;
+    const grid = document.createElement('div');
+    grid.className = 'sfx-sliders';
+    for (const key of keys) {
+        const spec = ADVANCED[key], range = PARAMS[key];
+        grid.append(makeSlider({ label: spec.label, hint: spec.hint, min: range.min, max: range.max, get: p => p[key], set: (p, v) => ({ ...p, [key]: v }), show: spec.show }));
+    }
+    group.append(heading, grid);
+    groupsBox.append(group);
+}
+
+// Waveform shapes, each shown as a small picture of its outcome.
+const SHAPE_ICONS = {
+    square: 'M2 15V5h9v10h9V5h9v10h9',
+    sawtooth: 'M2 15L11 5v10l9-10v10l9-10v10l9-10',
+    triangle: 'M2 10l4.5-5 9 10 9-10 9 10 4.5-5',
+    sine: 'M2 10c3-7 6-7 9 0s6 7 9 0 6-7 9 0 6 7 9 0',
+    noise: 'M2 10l2-4 2 7 2-9 2 11 2-6 2 3 2-8 2 10 2-5 2 2 2-7 2 9 2-4 2 5 2-8 2 6 2-3 2 1',
+};
+const SHAPE_NAMES = { square: 'Square', sawtooth: 'Saw', triangle: 'Triangle', sine: 'Sine', noise: 'Noise' };
+const shapesBox = $('[data-shapes]');
+for (const wave of WAVES) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'sfx-shape'; b.dataset.shape = wave; b.setAttribute('role', 'radio');
+    b.innerHTML = `<svg viewBox="0 0 40 20" aria-hidden="true"><path d="${SHAPE_ICONS[wave]}"/></svg><span>${SHAPE_NAMES[wave]}</span>`;
+    b.addEventListener('click', () => { edit(p => ({ ...p, wave })); if (state.settings.autoplay) play(); });
+    shapesBox.append(b);
+}
+radioKeys(shapesBox, '[role="radio"]');
+
+function syncShapes() {
+    for (const b of shapesBox.querySelectorAll('[data-shape]')) {
+        const on = b.dataset.shape === state.current.params.wave;
+        b.setAttribute('aria-checked', String(on));
+        b.tabIndex = on ? 0 : -1;
+    }
+}
+
+// Arrow keys move between options of a radio group, as native radios do.
+function radioKeys(group, selector) {
+    group.addEventListener('keydown', event => {
+        if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+        const items = [...group.querySelectorAll(selector)];
+        const i = items.indexOf(document.activeElement);
+        if (i < 0) return;
+        event.preventDefault();
+        const next = items[(i + (['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : items.length - 1)) % items.length];
+        next.focus(); next.click();
+    });
+}
+
+/* ------------------------------------------------------------- state */
+
+let renderQueued = false, renderDirty = false;
+function rerender() {
+    renderDirty = true;
+    if (renderQueued) return;
+    renderQueued = true;
+    requestAnimationFrame(() => {
+        renderQueued = false;
+        if (renderDirty) renderNow();
+    });
+}
+function renderNow() {
+    renderDirty = false;
+    const c = state.current;
+    const { buffer, samples } = renderBuffer(c.params, c.seed, state.settings.sampleRate);
+    const peak = peakOf(samples);
+    state.render = { buffer, samples, peak, duration: buffer.duration };
+    columns = null;
+    $('[data-duration]').textContent = buffer.duration.toFixed(2);
+    $('[data-peak]').textContent = peak > 0 ? (20 * Math.log10(peak)).toFixed(1).replace('-', '−') : '−∞';
+    $('[data-peak-wrap]').dataset.clip = String(peak >= 0.999);
+    if (!source) drawWave(null);
+}
+
+function sameSound(a, b) { return a && b && a.seed === b.seed && JSON.stringify(normalizeParams(a.params)) === JSON.stringify(normalizeParams(b.params)); }
+function syncHeader() {
+    const c = state.current, saved = state.library.find(s => s.id === c.savedId);
+    if (saved) c.name = saved.name;
+    $('[data-name]').textContent = c.name;
+    const el = $('[data-sound-state]');
+    const st = !saved ? 'new' : sameSound(saved, c) ? 'saved' : 'changed';
+    el.dataset.state = st;
+    el.textContent = st === 'new' ? 'Not saved' : st === 'saved' ? 'Saved' : 'Changed since you saved it';
+    $('[data-save-label]').textContent = st === 'changed' ? 'Save changes' : 'Save';
+    $('[data-save]').disabled = st === 'saved';
+    for (const b of root.querySelectorAll('[data-gen]')) b.setAttribute('aria-pressed', String(b.dataset.gen === c.kind));
+}
+function syncControls(active) {
+    for (const s of sliders) s.sync(s === active);
+    syncShapes();
+}
+function edit(change, active) {
+    state.current.params = normalizeParams(change(state.current.params));
+    syncControls(active);
+    syncHeader();
+    rerender();
+    persistCurrent();
+}
+function setCurrent(sound, { autoplay = state.settings.autoplay } = {}) {
+    state.current = { name: sound.name, kind: sound.kind, seed: sound.seed, params: normalizeParams(sound.params), savedId: sound.savedId ?? null };
+    syncControls(null);
+    syncHeader();
+    renderNow();
+    persistCurrent();
+    if (autoplay) play();
+}
+function generate(kind) {
+    const params = normalizeParams({ ...Object.fromEntries(Object.entries(PARAMS).map(([k, s]) => [k, s.def])), ...GENERATORS[kind]() });
+    state.selectedId = null;
+    setCurrent({ name: KINDS[kind], kind, seed: newSeed(), params, savedId: null }, { autoplay: true });
+    renderList();
+}
+
+/* ----------------------------------------------------------- library */
+
+const list = $('[data-list]');
+function uniqueName(base, within = state.library) {
+    const names = new Set(within.map(s => s.name));
+    if (!names.has(base)) return base;
+    let n = 2;
+    while (names.has(`${base} ${n}`)) n++;
+    return `${base} ${n}`;
+}
+function renderList() {
+    list.textContent = '';
+    for (const sound of state.library) {
+        const li = document.createElement('li');
+        li.className = 'sfx-item';
+        li.id = `sfx-item-${sound.id}`;
+        li.dataset.id = sound.id;
+        li.setAttribute('role', 'option');
+        li.setAttribute('aria-selected', String(sound.id === state.selectedId));
+        const name = document.createElement('span');
+        name.className = 'sfx-item-name';
+        name.textContent = sound.name;
+        const dur = document.createElement('span');
+        dur.className = 'sfx-item-dur';
+        dur.textContent = `${durationOf(sound.params).toFixed(2)} s`;
+        li.append(name, dur);
+        list.append(li);
+    }
+    const count = state.library.length;
+    $('[data-count]').textContent = count ? ` · ${count}` : '';
+    $('[data-empty]').hidden = count > 0;
+    list.hidden = count === 0;
+    if (state.selectedId) list.setAttribute('aria-activedescendant', `sfx-item-${state.selectedId}`);
+    else list.removeAttribute('aria-activedescendant');
+    const index = state.library.findIndex(s => s.id === state.selectedId);
+    $('[data-tools]').hidden = count === 0;
+    for (const b of root.querySelectorAll('[data-rename],[data-duplicate],[data-delete]')) b.disabled = index < 0;
+    $('[data-up]').disabled = index <= 0;
+    $('[data-down]').disabled = index < 0 || index >= count - 1;
+    $('[data-zip]').disabled = count === 0;
+    $('[data-export]').disabled = count === 0;
+    const selected = index >= 0 ? list.children[index] : null;
+    if (selected) selected.scrollIntoView({ block: 'nearest' });
+}
+function select(id, { autoplay = state.settings.autoplay } = {}) {
+    const sound = state.library.find(s => s.id === id);
+    if (!sound) return;
+    state.selectedId = id;
+    setCurrent({ ...sound, savedId: sound.id }, { autoplay });
+    renderList();
+}
+function step(delta) {
+    if (!state.library.length) return;
+    const i = state.library.findIndex(s => s.id === state.selectedId);
+    const next = i < 0 ? (delta > 0 ? 0 : state.library.length - 1) : clamp(i + delta, 0, state.library.length - 1);
+    if (next !== i) select(state.library[next].id);
+}
+function save() {
+    const c = state.current;
+    const existing = state.library.find(s => s.id === c.savedId);
+    if (existing) {
+        const updated = { ...existing, kind: c.kind, seed: c.seed, params: normalizeParams(c.params) };
+        if (!commitLibrary(state.library.map(s => (s.id === existing.id ? updated : s)))) return;
+        status(`Saved changes to ${existing.name}`);
+    } else {
+        const sound = { id: uid(), name: uniqueName(c.name), kind: c.kind, seed: c.seed, params: normalizeParams(c.params) };
+        if (!commitLibrary([...state.library, sound])) return;
+        c.savedId = sound.id;
+        state.selectedId = sound.id;
+        status(`Saved ${sound.name}`);
+    }
+    renderList();
+    syncHeader();
+    persistCurrent();
+}
+function rename() {
+    const index = state.library.findIndex(s => s.id === state.selectedId);
+    if (index < 0) return;
+    const sound = state.library[index], li = list.children[index], nameEl = li.querySelector('.sfx-item-name');
+    const input = document.createElement('input');
+    input.value = sound.name; input.maxLength = 80; input.setAttribute('aria-label', 'Sound name');
+    nameEl.replaceWith(input);
+    input.focus(); input.select();
+    let done = false;
+    const finish = commit => {
+        if (done) return;
+        done = true;
+        const value = input.value.trim().slice(0, 80);
+        if (commit && value && value !== sound.name && commitLibrary(state.library.map(s => (s.id === sound.id ? { ...s, name: value } : s)))) status(`Renamed to ${value}`);
+        renderList();
+        syncHeader();
+        persistCurrent();
+        list.focus();
+    };
+    input.addEventListener('keydown', event => {
+        if (event.key === 'Enter') { event.preventDefault(); finish(true); }
+        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); finish(false); }
+    });
+    input.addEventListener('blur', () => finish(true));
+    input.addEventListener('click', event => event.stopPropagation());
+}
+function duplicate() {
+    const index = state.library.findIndex(s => s.id === state.selectedId);
+    if (index < 0) return;
+    const src = state.library[index];
+    const copy = { id: uid(), name: uniqueName(`${src.name} copy`), kind: src.kind, seed: src.seed, params: { ...src.params } };
+    const next = [...state.library];
+    next.splice(index + 1, 0, copy);
+    if (!commitLibrary(next)) return;
+    select(copy.id, { autoplay: false });
+    status(`Made ${copy.name}`);
+}
+function move(delta) {
+    const i = state.library.findIndex(s => s.id === state.selectedId), j = i + delta;
+    if (i < 0 || j < 0 || j >= state.library.length) return;
+    const next = [...state.library];
+    [next[i], next[j]] = [next[j], next[i]];
+    if (!commitLibrary(next)) return;
+    renderList();
+    persistCurrent();
+}
+// The deleted sound stays in the editor as an unsaved draft and nothing is selected, so what you hear, what
+// the list highlights and what the toolbar acts on never disagree. Undo puts it back where it was.
+function remove() {
+    const index = state.library.findIndex(s => s.id === state.selectedId);
+    if (index < 0) return;
+    const gone = state.library[index];
+    if (!commitLibrary(state.library.filter(s => s.id !== gone.id))) return;
+    if (state.current.savedId === gone.id) state.current.savedId = null;
+    state.selectedId = null;
+    renderList();
+    syncHeader();
+    persistCurrent();
+    status(`Deleted ${gone.name}`, { action: { label: 'Undo', run: () => {
+        const next = [...state.library];
+        next.splice(Math.min(index, next.length), 0, { ...gone, name: uniqueName(gone.name) });
+        if (!commitLibrary(next)) return;
+        select(gone.id, { autoplay: false });
+        status(`Restored ${gone.name}`);
+    } } });
+}
+
+/* ---------------------------------------------------------- exports */
+
+function download(bytes, name, type) {
+    const url = URL.createObjectURL(new Blob([bytes], { type }));
+    const link = document.createElement('a');
+    link.href = url; link.download = name;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+function downloadWav() {
+    const rate = state.settings.sampleRate, name = fileName(state.current.name, 'wav');
+    download(encodeWav(renderSamples(state.current.params, state.current.seed, rate), rate), name, 'audio/wav');
+    status(`Downloaded ${name}`);
+}
+function zipFiles(sounds, rate) {
+    const used = new Set(), width = String(sounds.length).length < 2 ? 2 : String(sounds.length).length;
+    return sounds.map((s, i) => {
+        let name = fileName(`${String(i + 1).padStart(width, '0')} ${s.name}`, 'wav');
+        let n = 2;
+        while (used.has(name.toLowerCase())) name = fileName(`${String(i + 1).padStart(width, '0')} ${s.name} (${n++})`, 'wav');
+        used.add(name.toLowerCase());
+        return { name, data: encodeWav(renderSamples(s.params, s.seed, rate), rate) };
+    });
+}
+function downloadZip() {
+    if (!state.library.length) return;
+    const rate = state.settings.sampleRate;
+    download(makeZip(zipFiles(state.library, rate)), 'sound-library.zip', 'application/zip');
+    status(`Downloaded ${state.library.length} sound${state.library.length === 1 ? '' : 's'} as sound-library.zip`);
+}
+function exportJson() {
+    const text = JSON.stringify(libraryJson(state.library, state.settings.sampleRate), null, 2);
+    download(new TextEncoder().encode(text), 'sound-library.json', 'application/json');
+    status('Exported sound-library.json');
+}
+async function importJson(file) {
+    try {
+        const sounds = parseLibrary(JSON.parse(await file.text()));
+        if (!sounds.length) throw new Error('That library has no sounds in it.');
+        const next = [...state.library];
+        for (const sound of sounds) { sound.name = uniqueName(sound.name, next); next.push(sound); }
+        if (!commitLibrary(next)) return;
+        select(sounds[0].id, { autoplay: false });
+        status(`Imported ${sounds.length} sound${sounds.length === 1 ? '' : 's'}`);
+    } catch (error) {
+        status(error instanceof SyntaxError ? 'That file is not valid JSON.' : error.message, { tone: 'error', ms: 6000 });
+    }
+}
+
+/* ------------------------------------------------------------ wiring */
+
+root.addEventListener('click', event => {
+    const t = event.target.closest('button, li[data-id]');
+    if (!t || !root.contains(t)) return;
+    if (t.dataset.gen) generate(t.dataset.gen);
+    else if ('surprise' in t.dataset) generate('surprise');
+    else if ('nudge' in t.dataset) { const c = state.current; setCurrent({ ...c, params: nudgeParams(c.params) }, { autoplay: true }); }
+    else if ('play' in t.dataset || 'wave' in t.dataset) play();
+    else if ('save' in t.dataset) save();
+    else if ('wav' in t.dataset) downloadWav();
+    else if ('rename' in t.dataset) rename();
+    else if ('duplicate' in t.dataset) duplicate();
+    else if ('up' in t.dataset) move(-1);
+    else if ('down' in t.dataset) move(1);
+    else if ('delete' in t.dataset) remove();
+    else if ('zip' in t.dataset) downloadZip();
+    else if ('export' in t.dataset) exportJson();
+    else if ('import' in t.dataset) $('[data-import-file]').click();
+    else if (t.dataset.mode) setMode(t.dataset.mode);
+    else if (t.matches('li[data-id]')) { if (t.dataset.id !== state.selectedId) select(t.dataset.id); else play(); }
+});
+$('[data-import-file]').addEventListener('change', event => {
+    const file = event.target.files[0];
+    event.target.value = '';
+    if (file) importJson(file);
+});
+
+function setMode(mode) {
+    state.settings.mode = mode;
+    for (const b of root.querySelectorAll('[data-mode]')) { const on = b.dataset.mode === mode; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; }
+    $('[data-simple]').hidden = mode !== 'simple';
+    $('[data-advanced]').hidden = mode !== 'advanced';
+    $('[data-mode-note]').textContent = mode === 'simple' ? 'Eight broad controls. Advanced shows every setting.' : 'Every setting. Simple edits these same settings.';
+    persistSettings();
+}
+radioKeys(root.querySelector('.sfx-seg'), '[data-mode]');
+
+const rateSelect = $('[data-rate]'), master = $('[data-master]'), autoplay = $('[data-autoplay]');
+rateSelect.value = String(state.settings.sampleRate);
+rateSelect.addEventListener('change', () => {
+    state.settings.sampleRate = Number(rateSelect.value);
+    persistSettings();
+    stop();
+    renderNow();
+    syncControls(null);
+    if (state.settings.autoplay) play();
+});
+const showMaster = () => { master.value = String(Math.round(state.settings.master * 100)); $('[data-master-out]').textContent = fmt.pct(state.settings.master); };
+master.addEventListener('input', () => {
+    state.settings.master = Number(master.value) / 100;
+    $('[data-master-out]').textContent = fmt.pct(state.settings.master);
+    if (audio) audio.gain.gain.setTargetAtTime(state.settings.master, audio.ctx.currentTime, 0.01);
+    persistSettings();
+});
+autoplay.checked = state.settings.autoplay;
+autoplay.addEventListener('change', () => { state.settings.autoplay = autoplay.checked; persistSettings(); });
+
+// Keyboard: only while focus is inside this widget, and never in place of what a field or control does itself.
+const EDITABLE = 'input, select, textarea, [contenteditable=""], [contenteditable="true"], [role="radio"], [role="slider"]';
+const onKey = event => {
+    const t = event.target;
+    if (!(t === document.body || root.contains(t))) return;
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (t.closest && t.closest(EDITABLE)) return;
+    const onButton = t.closest && t.closest('button, a[href]');
+    if (event.key === ' ' && !onButton) { event.preventDefault(); play(); }
+    else if ((event.key === 's' || event.key === 'S') && !event.repeat) { event.preventDefault(); if (!$('[data-save]').disabled) save(); else status(`${state.current.name} is already saved`); }
+    else if (event.key === 'ArrowDown' || event.key === 'ArrowRight') { event.preventDefault(); step(1); }
+    else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') { event.preventDefault(); step(-1); }
+    else if (event.key === 'Home' && t === list) { event.preventDefault(); if (state.library.length) select(state.library[0].id); }
+    else if (event.key === 'End' && t === list) { event.preventDefault(); if (state.library.length) select(state.library[state.library.length - 1].id); }
+    else if (event.key === 'F2' && state.selectedId) { event.preventDefault(); rename(); }
+    else if (event.key === 'Delete' && t === list && state.selectedId) { event.preventDefault(); remove(); }
+};
+document.addEventListener('keydown', onKey);
+// Clicking empty space keeps keyboard focus in the widget, so the shortcuts keep working.
+root.addEventListener('pointerdown', event => {
+    if (!event.target.closest('button, input, select, textarea, label, a, [role="listbox"], [tabindex]:not([data-sfx])')) requestAnimationFrame(() => root.focus({ preventScroll: true }));
+});
+
+new ResizeObserver(() => { measure(); drawWave(null); }).observe(canvas);
+// Redraw in the new colours when the host or the system switches themes.
+new MutationObserver(() => drawWave(null)).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => drawWave(null));
+
+/* ------------------------------------------------------------- start */
+
+setMode(state.settings.mode);
+showMaster();
+if (!state.current) {
+    const params = normalizeParams({ ...Object.fromEntries(Object.entries(PARAMS).map(([k, s]) => [k, s.def])), ...GENERATORS.coin() });
+    state.current = { name: KINDS.coin, kind: 'coin', seed: newSeed(), params, savedId: null };
+}
+measure();
+syncControls(null);
+syncHeader();
+renderNow();
+renderList();
+root.focus({ preventScroll: true });
+})();
+</script>
+</body>
+</html>

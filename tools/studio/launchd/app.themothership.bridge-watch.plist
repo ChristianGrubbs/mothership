@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Installed to ~/Library/LaunchAgents on the Studio with __HOME__ replaced by $HOME; see docs/ops/studio-runtime.md, "Bridge watch". -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>app.themothership.bridge-watch</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>__HOME__/Studio Workspaces/Mothership/source/tools/studio/bridge_watch.py</string>
+    </array>
+    <key>StartInterval</key>
+    <integer>300</integer>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>StandardOutPath</key>
+    <string>__HOME__/Library/Logs/mothership-bridge-watch.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/Library/Logs/mothership-bridge-watch.out.log</string>
+</dict>
+</plist>

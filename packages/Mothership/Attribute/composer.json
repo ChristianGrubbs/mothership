@@ -1,0 +1,21 @@
+{
+    "name": "mothership/laravel-attribute",
+    "license": "MIT",
+    "require": {
+        "mothership/laravel-core": "dev-master"
+    },
+    "autoload": {
+        "psr-4": {
+            "Mothership\\Attribute\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Mothership\\Attribute\\Providers\\AttributeServiceProvider"
+            ],
+            "aliases": { }
+        }
+    },
+    "minimum-stability": "dev"
+}

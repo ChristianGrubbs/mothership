@@ -1,0 +1,19 @@
+{
+    "name": "mothership/laravel-core",
+    "license": "MIT",
+    "require": {},
+    "autoload": {
+        "psr-4": {
+            "Mothership\\Core\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Mothership\\Core\\Providers\\CoreServiceProvider"
+            ],
+            "aliases": { }
+        }
+    },
+    "minimum-stability": "dev"
+}

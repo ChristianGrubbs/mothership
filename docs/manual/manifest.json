@@ -1,0 +1,549 @@
+[
+  {
+    "slug": "getting-started",
+    "title": "Getting started",
+    "summary": "Sign in, find your library and manage your account.",
+    "category": "User guide",
+    "audience": "user",
+    "file": "user/getting-started.md",
+    "sources": [
+      "packages/Mothership/Admin/src/Routes/auth-routes.php",
+      "packages/Mothership/DAM/src/Routes/home-routes.php"
+    ]
+  },
+  {
+    "slug": "library",
+    "title": "Library navigation and search",
+    "summary": "Browse accessible folders, search available assets and narrow the results.",
+    "category": "User guide",
+    "audience": "user",
+    "file": "user/library.md",
+    "sources": [
+      "packages/Mothership/DAM/src/Routes/explorer-routes.php",
+      "packages/Mothership/DAM/src/Http/Controllers/Explorer/ExplorerDataController.php",
+      "packages/Mothership/DAM/src/Config/menu.php",
+      "packages/Mothership/DAM/src/Resources/views/components/explorer/tab.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/components/explorer/toolbar.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/components/explorer/list.blade.php"
+    ]
+  },
+  {
+    "slug": "uploads",
+    "title": "Resumable uploads",
+    "summary": "Upload files, resume interrupted transfers and distinguish transfer progress from a finished asset.",
+    "category": "User guide",
+    "audience": "user",
+    "file": "user/uploads.md",
+    "sources": [
+      "packages/Mothership/DAM/src/Config/dam.php",
+      "packages/Mothership/DAM/src/Http/Controllers/Asset/ChunkUploadController.php",
+      "packages/Mothership/DAM/src/Routes/dam-routes.php",
+      "packages/Mothership/DAM/src/Resources/assets/js/upload/chunked-upload.mjs",
+      "packages/Mothership/DAM/src/Resources/views/components/asset/drop-upload.blade.php",
+      "packages/Mothership/DAM/tests/Feature/ChunkUploadCompletionTest.php",
+      "packages/Mothership/DAM/tests/Feature/ChunkUploadCleanupTest.php",
+      "tests/e2e-pw/tests/dam-chunked-upload.spec.js",
+      "docs/ops/chunked-upload-acceptance.md"
+    ]
+  },
+  {
+    "slug": "upload-links",
+    "title": "Upload links",
+    "summary": "Send a link that lets someone without an account upload files into a folder, then accept or reject what arrives.",
+    "category": "User guide",
+    "audience": "user",
+    "file": "user/upload-links.md",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/UploadRequestController.php",
+      "packages/Mothership/DAM/src/Http/Controllers/PublicUpload/UploadPortalController.php",
+      "packages/Mothership/DAM/src/Routes/dam-routes.php",
+      "packages/Mothership/DAM/src/Routes/upload-portal.php",
+      "packages/Mothership/DAM/src/Services/UploadRequests/UploadRequestService.php",
+      "packages/Mothership/DAM/src/Resources/views/upload-requests/modal.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/upload-requests/show.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/upload-portal/show.blade.php",
+      "packages/Mothership/DAM/tests/Feature/GuestUploadPortalTest.php",
+      "packages/Mothership/DAM/tests/Feature/GuestUploadReviewTest.php"
+    ]
+  },
+  {
+    "slug": "metadata-tags",
+    "title": "Metadata, tags and comments",
+    "summary": "Inspect file facts and manage custom properties, tags and comments without changing the source file.",
+    "category": "User guide",
+    "audience": "user",
+    "file": "user/metadata-tags.md",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/Asset/PropertyController.php",
+      "packages/Mothership/DAM/src/Http/Controllers/Asset/TagController.php",
+      "packages/Mothership/DAM/src/Http/Controllers/Asset/CommentController.php",
+      "packages/Mothership/DAM/src/Http/Controllers/Asset/AssetController.php",
+      "packages/Mothership/DAM/src/Routes/dam-routes.php",
+      "packages/Mothership/DAM/src/Resources/views/asset/edit.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/asset/meta-data/index.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/asset/properties/index.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/asset/comments/index.blade.php",
+      "packages/Mothership/DAM/src/Resources/lang/en_US/app.php",
+      "packages/Mothership/DAM/tests/Feature/AssetInfoTest.php",
+      "packages/Mothership/DAM/tests/Feature/PropertyTest.php",
+      "packages/Mothership/DAM/tests/Feature/TagTest.php",
+      "packages/Mothership/DAM/tests/Feature/CommentTest.php"
+    ]
+  },
+  {
+    "slug": "relationships-files",
+    "title": "Relationships and compound files",
+    "summary": "Connect accessible assets with directed relationship types and work with capture members and attached files.",
+    "category": "User guide",
+    "audience": "user",
+    "file": "user/relationships-files.md",
+    "sources": [
+      "packages/Mothership/DAM/src/Services/AssetRelationshipService.php",
+      "packages/Mothership/DAM/src/Http/Controllers/Asset/AssetRelationshipController.php",
+      "packages/Mothership/DAM/src/Http/Controllers/CaptureConfigurationController.php",
+      "packages/Mothership/DAM/src/Http/Controllers/FileController.php",
+      "packages/Mothership/DAM/src/Models/Asset.php",
+      "packages/Mothership/DAM/src/Models/AssetRelationship.php",
+      "packages/Mothership/DAM/src/Models/AssetFile.php",
+      "packages/Mothership/DAM/src/Routes/dam-routes.php",
+      "packages/Mothership/DAM/src/Resources/views/asset/edit.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/asset/relationships/index.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/asset/files/index.blade.php",
+      "packages/Mothership/DAM/src/Resources/lang/en_US/app.php",
+      "packages/Mothership/DAM/tests/Feature/AssetRelationshipTest.php",
+      "packages/Mothership/DAM/tests/Feature/CompoundAssetTest.php",
+      "packages/Mothership/DAM/tests/Feature/CaptureProfilesTest.php"
+    ]
+  },
+  {
+    "slug": "access-favorites",
+    "title": "Folder access and favorites",
+    "summary": "Understand folder grants and inherited access, then keep personal favorites on Home.",
+    "category": "User guide",
+    "audience": "user",
+    "file": "user/access-favorites.md",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/FolderAccessController.php",
+      "packages/Mothership/DAM/src/Http/Controllers/HomeFavoriteController.php",
+      "packages/Mothership/DAM/src/Http/Middleware/ManageFolderAccess.php",
+      "packages/Mothership/DAM/src/Services/FolderAccessService.php",
+      "packages/Mothership/DAM/src/Services/DirectoryPermissionService.php",
+      "packages/Mothership/DAM/src/Services/AssetFavoriteService.php",
+      "packages/Mothership/DAM/src/Routes/folder-access-routes.php",
+      "packages/Mothership/DAM/src/Routes/home-routes.php",
+      "packages/Mothership/DAM/src/Resources/views/components/folder-access.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/components/shared/asset-card.blade.php",
+      "packages/Mothership/DAM/src/Resources/assets/js/home.js",
+      "packages/Mothership/DAM/src/Resources/lang/en_US/app.php",
+      "packages/Mothership/DAM/tests/Feature/FolderAccessTest.php",
+      "packages/Mothership/DAM/tests/Feature/HomeFavoritesTest.php"
+    ]
+  },
+  {
+    "slug": "previews",
+    "title": "Images, media, PDFs, 3D and panoramas",
+    "summary": "Preview supported media, understand rendition readiness and recover when a viewer or conversion fails.",
+    "category": "User guide",
+    "audience": "user",
+    "file": "user/previews.md",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/FileController.php",
+      "packages/Mothership/DAM/src/Http/Controllers/Asset/PanoramaPreviewController.php",
+      "packages/Mothership/DAM/src/Http/Controllers/ModelPrimaryViewController.php",
+      "packages/Mothership/DAM/src/Resources/views/asset/preview-modal/viewer-modal.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/asset/preview-modal/fallback.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/asset/preview-modal/image/image-viewer.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/asset/preview-modal/audio/audio-player.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/asset/preview-modal/audio/audio-player-script.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/asset/preview-modal/video/video-player.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/asset/preview-modal/video/video-player-script.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/asset/preview-modal/files/pdf-viewer.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/asset/preview-modal/files/pdf-viewer-script.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/asset/preview-modal/model/viewer-script.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/asset/preview-modal/pano360/viewer.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/asset/preview-modal/pano360/status.blade.php",
+      "packages/Mothership/DAM/src/Resources/assets/js/model/viewer.mjs",
+      "tools/browser/tests/media-preview-lifecycle.test.cjs",
+      "tools/browser/tests/pdf-viewer-dom.test.cjs",
+      "packages/Mothership/DAM/tests/Feature/PlaybackPreviewTest.php",
+      "packages/Mothership/DAM/tests/Feature/ModelPrimaryViewTest.php",
+      "packages/Mothership/DAM/tests/Feature/PanoramaPreviewApiTest.php",
+      "docs/ops/3d-preview-acceptance.md"
+    ]
+  },
+  {
+    "slug": "image-editing",
+    "title": "Edit and export images",
+    "summary": "Edit, annotate and present images, and choose between a retained version and a separate edited asset.",
+    "category": "User guide",
+    "audience": "user",
+    "file": "user/image-editing.md",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/ImageEditorController.php",
+      "packages/Mothership/DAM/src/Http/Controllers/ImageEditController.php",
+      "packages/Mothership/DAM/src/Resources/assets/js/image/Editor.vue",
+      "packages/Mothership/DAM/src/Resources/views/asset/preview-modal/card.blade.php",
+      "packages/Mothership/DAM/src/Observers/CompoundAssetObserver.php",
+      "packages/Mothership/DAM/tests/Feature/ImageEditorDocumentTest.php",
+      "tests/e2e-pw/tests/dam-image-editor.spec.js",
+      "docs/ops/image-editor-performance.md"
+    ]
+  },
+  {
+    "slug": "sharing",
+    "title": "Sharing and revocation",
+    "summary": "Create asset or folder share links, manage their expiry, and revoke or delete recipient access.",
+    "category": "User guide",
+    "audience": "user",
+    "file": "user/sharing.md",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/Asset/ShareController.php",
+      "packages/Mothership/DAM/src/Http/Controllers/PublicShare/SharedViewerController.php",
+      "packages/Mothership/DAM/src/Http/Controllers/API/Asset/AssetController.php",
+      "packages/Mothership/DAM/src/Http/Requests/StoreShareRequest.php",
+      "packages/Mothership/DAM/src/Models/Share.php",
+      "packages/Mothership/DAM/src/Repositories/ShareRepository.php",
+      "packages/Mothership/DAM/src/Routes/api.php",
+      "packages/Mothership/DAM/src/Routes/share-public.php",
+      "packages/Mothership/DAM/src/Resources/views/share/components/share-link-modal.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/share/admin/index.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/share/public/asset.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/share/public/directory.blade.php",
+      "packages/Mothership/DAM/tests/Feature/ShareControllerTest.php",
+      "packages/Mothership/DAM/tests/Feature/SharedViewerTest.php"
+    ]
+  },
+  {
+    "slug": "collections",
+    "title": "Collections",
+    "summary": "Share a hand-picked, ordered set of files with people and groups or through one public link, with an expiry and a short address.",
+    "category": "User guide",
+    "audience": "user",
+    "file": "user/collections.md",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/CollectionController.php",
+      "packages/Mothership/DAM/src/Http/Controllers/PublicShare/CollectionSlugController.php",
+      "packages/Mothership/DAM/src/Services/Collections/CollectionService.php",
+      "packages/Mothership/DAM/src/Services/Access/CollectionGrant.php",
+      "packages/Mothership/DAM/src/Resources/views/collections/show.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/components/collection/add-modal.blade.php"
+    ]
+  },
+  {
+    "slug": "web-pages",
+    "title": "Web Pages",
+    "summary": "Upload HTML pages and static-site bundles, preview and share them, and organize them in folders.",
+    "category": "User guide",
+    "audience": "user",
+    "file": "user/web-pages.md",
+    "sources": [
+      "docs/adr/0007-web-pages-sandboxed-html-bundles.md",
+      "docs/adr/0008-web-page-collections-are-an-organizer.md",
+      "packages/Mothership/DAM/src/Config/acl.php",
+      "packages/Mothership/DAM/src/Config/dam.php",
+      "packages/Mothership/DAM/src/Config/menu.php",
+      "packages/Mothership/DAM/src/Routes/dam-routes.php",
+      "packages/Mothership/DAM/src/Routes/web-pages.php",
+      "packages/Mothership/DAM/src/Http/Controllers/WebPageController.php",
+      "packages/Mothership/DAM/src/Http/Controllers/WebCollectionController.php",
+      "packages/Mothership/DAM/src/Services/WebCollectionService.php",
+      "packages/Mothership/DAM/src/Services/WebPageInspector.php",
+      "packages/Mothership/DAM/src/Services/WebPagePolicy.php",
+      "packages/Mothership/DAM/src/Resources/views/pages/browser-script.blade.php",
+      "packages/Mothership/DAM/src/Resources/lang/en_US/app.php"
+    ]
+  },
+  {
+    "slug": "home",
+    "title": "Use Home",
+    "summary": "See your day, open apps and tools, send files to a colleague, find recent uploads, and put The Mothership on your phone.",
+    "category": "User guide",
+    "audience": "user",
+    "file": "user/home.md",
+    "sources": [
+      "packages/Mothership/DAM/src/Services/HomeWidgetRegistry.php",
+      "packages/Mothership/DAM/src/Services/HomeLayoutService.php",
+      "packages/Mothership/DAM/src/Http/Controllers/HomeController.php",
+      "packages/Mothership/DAM/src/Resources/assets/js/home.js",
+      "packages/Mothership/DAM/src/Resources/views/home/index.blade.php",
+      "packages/Mothership/DAM/tests/Feature/HomeTest.php"
+    ]
+  },
+  {
+    "slug": "signal",
+    "title": "Signal news and offline states",
+    "summary": "Read the Signal news list on Home, tell fresh, stale and offline states apart, and recover after an outage.",
+    "category": "User guide",
+    "audience": "user",
+    "file": "user/signal.md",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeServiceController.php",
+      "packages/Mothership/DAM/src/Services/HomeWidgetRegistry.php",
+      "packages/Mothership/DAM/src/Resources/assets/js/home.js",
+      "packages/Mothership/DAM/src/Resources/assets/js/home-state.js",
+      "packages/Mothership/DAM/src/Resources/widgets/rss/ticker.js",
+      "docs/rss-ticker.md"
+    ]
+  },
+  {
+    "slug": "stylepress",
+    "title": "StylePress creation and history",
+    "summary": "Browse styles, estimate and submit a generation, follow its account-owned job, and reuse saved generation details.",
+    "category": "User guide",
+    "audience": "user",
+    "file": "user/stylepress.md",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeStylePressController.php",
+      "packages/Mothership/DAM/src/Resources/views/home/stylepress.blade.php",
+      "packages/Mothership/DAM/src/Jobs/CompleteStylePressGeneration.php",
+      "packages/Mothership/DAM/src/Http/Controllers/Asset/GenerationDetailsController.php",
+      "packages/Mothership/DAM/src/Resources/views/asset/generation.blade.php",
+      "docs/stylepress/integration-contract.md"
+    ]
+  },
+  {
+    "slug": "video-loop-refiner",
+    "title": "Video Loop Refiner",
+    "summary": "Upload a video, match and preview a seam, trim the selected range, and download the account-owned loop.",
+    "category": "User guide",
+    "audience": "user",
+    "file": "user/video-loop-refiner.md",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeServiceController.php",
+      "docs/features/customizable-home.md",
+      "tools/widgets/looper/frontend/src/App.jsx",
+      "tools/widgets/looper/frontend/src/components/UploadZone.jsx",
+      "tools/widgets/looper/frontend/src/components/LoopEditor.jsx",
+      "tools/widgets/looper/frontend/src/components/PreviewModal.jsx",
+      "tools/widgets/looper/frontend/src/mothershipBridge.js",
+      "tools/widgets/looper/backend/main.py"
+    ]
+  },
+  {
+    "slug": "loop-maker",
+    "title": "Loop Maker",
+    "summary": "Load local audio, shape and audition a seamless loop, then export one pass or a repeated MP3 or WAV.",
+    "category": "User guide",
+    "audience": "user",
+    "file": "user/loop-maker.md",
+    "sources": [
+      "packages/Mothership/DAM/src/Config/home.php",
+      "packages/Mothership/DAM/src/Resources/widgets/loop-maker/index.html",
+      "packages/Mothership/DAM/src/Resources/widgets/loop-maker/app.js"
+    ]
+  },
+  {
+    "slug": "palette-studio",
+    "title": "Palette Studio",
+    "summary": "Build a palette of up to eight swatches, check WCAG contrast and colour-vision simulations, and export it as code or a PNG.",
+    "category": "User guide",
+    "audience": "user",
+    "file": "user/palette-studio.md",
+    "sources": [
+      "packages/Mothership/DAM/src/Config/home.php",
+      "packages/Mothership/DAM/src/Resources/widgets/palette-studio/index.html",
+      "packages/Mothership/DAM/src/Resources/widgets/palette-studio/app.js",
+      "packages/Mothership/DAM/src/Resources/widgets/palette-studio/palette-core.js"
+    ]
+  },
+  {
+    "slug": "image-vectorization",
+    "title": "Image Vectorization",
+    "summary": "Convert eligible raster images to private SVG and PDF outputs, understand allowance use, and recover from failed or ambiguous requests.",
+    "category": "User guide",
+    "audience": "user",
+    "file": "user/image-vectorization.md",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeVectorizationController.php",
+      "packages/Mothership/DAM/src/Http/Controllers/VectorizationAllowanceController.php",
+      "packages/Mothership/DAM/src/Vectorization/Allowance.php",
+      "packages/Mothership/DAM/src/Vectorization/Requests.php",
+      "packages/Mothership/DAM/src/Jobs/VectorizeImage.php",
+      "packages/Mothership/DAM/src/Resources/views/home/vectorization.blade.php",
+      "packages/Mothership/DAM/src/Resources/widgets/vectorization/app.js",
+      "packages/Mothership/DAM/src/Resources/views/asset/preview-modal/card.blade.php",
+      "packages/Mothership/DAM/src/Config/vectorization.php",
+      "docs/ops/image-vectorization.md"
+    ]
+  },
+  {
+    "slug": "usage-analytics",
+    "title": "Usage analytics and your privacy",
+    "summary": "What The Mothership records about how it is used, how to opt out, and how to read the usage dashboards.",
+    "category": "User guide",
+    "audience": "user",
+    "file": "user/usage-analytics.md",
+    "sources": [
+      "packages/Mothership/DAM/src/Config/dam_events.php",
+      "packages/Mothership/DAM/src/Http/Controllers/AnalyticsPrivacyController.php",
+      "packages/Mothership/DAM/src/Http/Controllers/AnalyticsReportController.php",
+      "packages/Mothership/DAM/src/Analytics/AnalyticsReports.php",
+      "packages/Mothership/DAM/src/Analytics/Retention.php",
+      "packages/Mothership/DAM/src/Config/acl.php"
+    ]
+  },
+  {
+    "slug": "creative-hub-fonts-brushes",
+    "title": "Fonts and brushes",
+    "summary": "Upload fonts and PhotoCraft brushes for the Craft apps, see each font drawn in its own face, and share them with everyone or with groups under a license note.",
+    "category": "User guide",
+    "audience": "user",
+    "file": "user/creative-hub-fonts-brushes.md",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HubResourceController.php",
+      "packages/Mothership/DAM/src/Resources/views/creative-hub/resources.blade.php"
+    ]
+  },
+  {
+    "slug": "accounts-roles",
+    "title": "Accounts, roles and folder access",
+    "summary": "Create an active least-scope account, combine role permissions with directory and Home-widget limits, verify denials, and revoke grants at their source.",
+    "category": "Administration",
+    "audience": "administrator",
+    "file": "administrator/accounts-roles.md",
+    "sources": [
+      "packages/Mothership/User/src/Http/Middleware/Bouncer.php",
+      "packages/Mothership/Admin/src/Http/Controllers/Settings/UserController.php",
+      "packages/Mothership/Admin/src/Resources/views/settings/users/index.blade.php",
+      "packages/Mothership/Admin/src/Resources/views/settings/users/edit.blade.php",
+      "packages/Mothership/Admin/src/Resources/views/settings/roles/create.blade.php",
+      "packages/Mothership/Admin/src/Resources/views/settings/roles/edit.blade.php",
+      "packages/Mothership/Admin/src/Config/acl.php",
+      "packages/Mothership/Admin/src/Routes/rest-routes.php",
+      "packages/Mothership/DAM/src/Services/RoleBuilder.php",
+      "packages/Mothership/DAM/src/Providers/EventServiceProvider.php",
+      "packages/Mothership/DAM/src/Services/HomeWidgetRegistry.php",
+      "packages/Mothership/DAM/src/Services/HomeLayoutService.php",
+      "packages/Mothership/DAM/src/Http/Controllers/FolderAccessController.php",
+      "packages/Mothership/DAM/src/Http/Middleware/ManageFolderAccess.php",
+      "packages/Mothership/DAM/src/Services/FolderAccessService.php",
+      "packages/Mothership/DAM/src/Resources/views/admin/roles/dam-permissions-tab.blade.php",
+      "packages/Mothership/DAM/src/Resources/views/components/folder-access.blade.php"
+    ]
+  },
+  {
+    "slug": "integrations",
+    "title": "Integrations and provider allowances",
+    "summary": "Create a dedicated API integration, constrain and verify its permissions, rotate or revoke its credentials, and keep provider accounts server-side.",
+    "category": "Administration",
+    "audience": "administrator",
+    "file": "administrator/integrations.md",
+    "sources": [
+      "packages/Mothership/AdminApi/src/Http/Controllers/Integrations/ApiKeysController.php",
+      "packages/Mothership/AdminApi/src/Http/Middleware/ScopeMiddleware.php",
+      "packages/Mothership/AdminApi/src/Repositories/ApiKeyRepository.php",
+      "packages/Mothership/AdminApi/src/Providers/AdminApiServiceProvider.php",
+      "packages/Mothership/AdminApi/src/Routes/integrations-routes.php",
+      "packages/Mothership/AdminApi/src/Routes/admin-api.php",
+      "packages/Mothership/AdminApi/src/Resources/views/integrations/api-keys/index.blade.php",
+      "packages/Mothership/AdminApi/src/Resources/views/integrations/api-keys/create.blade.php",
+      "packages/Mothership/AdminApi/src/Resources/views/integrations/api-keys/edit.blade.php",
+      "packages/Mothership/DAM/src/Config/stylepress.php",
+      "packages/Mothership/DAM/src/Config/vectorization.php",
+      "packages/Mothership/DAM/src/Http/Controllers/VectorizationAllowanceController.php",
+      "packages/Mothership/DAM/src/Vectorization/Allowance.php",
+      "packages/Mothership/DAM/src/Vectorization/Requests.php",
+      "docs/stylepress/integration-contract.md"
+    ]
+  },
+  {
+    "slug": "operations",
+    "title": "Release and recovery operations",
+    "summary": "Verify and deploy an exact release, rebuild native caches, diagnose queue failures, check health, and restore the preceding application without deleting persistent data.",
+    "category": "Administration",
+    "audience": "administrator",
+    "file": "administrator/operations.md",
+    "sources": [
+      "docs/ops/studio-runtime.md",
+      "tools/studio/runtime.py",
+      "compose.dev.yaml",
+      "dockerfiles/q-entrypoint.sh"
+    ]
+  },
+  {
+    "slug": "api-usage",
+    "title": "Integration API usage",
+    "summary": "Authentication, permissions, pagination and transfer protocols",
+    "category": "Development",
+    "audience": "developer",
+    "file": "developer/api-usage.md",
+    "sources": [
+      "packages/Mothership/AdminApi/src/Providers/AdminApiServiceProvider.php"
+    ]
+  },
+  {
+    "slug": "api-dam",
+    "title": "DAM API details",
+    "summary": "Assets, files, relationships, folders, comments, tags and shares, plus the Web Pages browser routes",
+    "category": "Development",
+    "audience": "developer",
+    "file": "developer/api-dam.md",
+    "sources": [
+      "packages/Mothership/DAM/src/Routes/V1/asset-routes.php",
+      "packages/Mothership/DAM/src/Routes/dam-routes.php",
+      "packages/Mothership/DAM/src/Routes/web-pages.php",
+      "packages/Mothership/DAM/src/Http/Controllers/WebPageController.php",
+      "packages/Mothership/DAM/src/Http/Controllers/WebCollectionController.php",
+      "packages/Mothership/DAM/src/Services/PageGrant.php",
+      "packages/Mothership/DAM/src/Services/WebPagePolicy.php"
+    ]
+  },
+  {
+    "slug": "api-catalog",
+    "title": "Catalog, settings and measurement APIs",
+    "summary": "Inherited integration requests, responses and feature gates",
+    "category": "Development",
+    "audience": "developer",
+    "file": "developer/api-catalog.md",
+    "sources": [
+      "packages/Mothership/AdminApi/src/Routes/V1/catalog-routes.php"
+    ]
+  },
+  {
+    "slug": "extensions",
+    "title": "Extension development",
+    "summary": "Installable provider, ACL, routes, lifecycle and tests",
+    "category": "Development",
+    "audience": "developer",
+    "file": "developer/extensions.md",
+    "sources": [
+      "examples/documentation-extension/src/DocumentationExampleServiceProvider.php"
+    ]
+  },
+  {
+    "slug": "native-widgets",
+    "title": "Native Home widgets",
+    "summary": "Registry, authorized data and client rendering",
+    "category": "Development",
+    "audience": "developer",
+    "file": "developer/native-widgets.md",
+    "sources": [
+      "packages/Mothership/DAM/src/Services/HomeWidgetRegistry.php"
+    ]
+  },
+  {
+    "slug": "iframe-tools",
+    "title": "Iframe Home tools",
+    "summary": "Account-backed state, messages, files and lifecycle",
+    "category": "Development",
+    "audience": "developer",
+    "file": "developer/iframe-tools.md",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/HomeToolController.php",
+      "packages/Mothership/DAM/src/Resources/assets/js/device-save.js"
+    ]
+  },
+  {
+    "slug": "compatibility",
+    "title": "Compatibility and release",
+    "summary": "Supported surfaces, drift checks and release acceptance",
+    "category": "Development",
+    "audience": "developer",
+    "file": "developer/compatibility.md",
+    "sources": [
+      "tools/docs/build_api.py",
+      "tools/docs/check_manual.py",
+      "docs/api/routes.json"
+    ]
+  }
+]

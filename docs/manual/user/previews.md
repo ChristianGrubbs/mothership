@@ -1,0 +1,31 @@
+# Preview images, media, PDFs, 3D and panoramas
+
+## Before you begin
+
+You need access to the asset and permission to view it. Open the asset from Library, then open its preview. A preview may use a resized image or a browser-playable rendition instead of loading the full source file. That preview rendition does not replace the downloadable original.
+
+Your browser decides which audio and video formats it can play. If autoplay is blocked, press **Play**. Building, rebuilding, retrying or changing the mode of a panorama, and saving a GLB primary view, also require permission to edit the asset.
+
+## Steps
+
+1. Open one asset from each media family you need to check. Use **Back to…**, the close button or **Esc** to leave a preview.
+2. For an image, use rotate left or right, zoom in or out, fit to screen, actual size or reset. When the image is enlarged, drag it to inspect another area.
+3. For audio, use play or pause, the timeline, 10-second skip controls, speed, loop, mute and volume. For video, use play or pause, seek and skip, speed, captions when supplied, loop, mute, volume, picture-in-picture when the browser offers it, and full screen. A video larger than 1080p streams a 1080p preview proxy once it has been prepared; the quality menu offers **Auto (1080p)** and **Original** and keeps your position when switching. **Copy frame** and **Download frame** always cut from the full-resolution original, whichever quality is playing. Right-click the video (or open the player's **More Actions** menu) and choose **Set this frame as thumbnail** to store the current frame as the asset's custom thumbnail; the Library card updates in place, and the entry appears only for editors. Closing either preview stops playback. Closing an audio preview from the Library grid also unloads its source and stops loading; on the asset-details page, the source is reloaded for the paused inline player after the modal closes.
+4. For a PDF, choose **Fit width** or **Fit page**, zoom, use the previous and next buttons, or enter a page number. **Open original PDF** opens the source when the embedded renderer cannot display it.
+5. For a 3MF, GLB or STL model, drag to orbit, right-drag to pan, scroll to zoom, and use **Reset view**. An STL carries only geometry, so it is shown in one neutral grey material with a single entry in **Objects**. A 3MF with plate data offers a **Plate** choice, including **All plates**, plus an **Objects** list for showing or hiding model parts. An editor viewing a GLB can choose **Set primary view**, frame the model, apply the offered 90-degree tip, turn or roll controls, then **Save primary view**. This saves corrected model orientation and framing as the normal GLB download; the prior original remains in **Files** history. **Restore original** returns to the preserved source and automatic framing. A 3MF, GLB or STL grid card gets its thumbnail from your own browser: uploading it, or simply opening its preview once, captures a picture straight off the model you are already looking at (a multi-plate 3MF frames its first plate, not the whole spread-out layout) and saves it, so nothing renders on the server and models opened only through automation stay a placeholder until an editor runs **Generate missing 3D thumbnails** from the folder or Library context menu.
+6. For a panorama, wait for readiness before opening it. **Queued** and **Processing** mean its rendition is still being prepared; **Open** means a spherical image or video source is ready. In the spherical viewer, drag to look around, scroll to change the field of view, switch between sphere and flat view, and use full screen. A 360 video also has play or pause, seek, mute and captions when supplied. Editors may see **Build**, **Rebuild**, **Retry**, **Cancel**, and an automatic, force-360 or force-flat mode according to the current state.
+7. Use the preview for inspection, then use **Download original**, **Download file**, **Open original PDF**, or **Files** when you need source bytes rather than a resized image, rendered PDF page or playback proxy. The one exception is a saved GLB primary view: its corrected GLB becomes the normal download, while its earlier original remains recoverable from **Files**.
+
+## Expected result
+
+Each supported family opens in its matching viewer: images have inspection controls; audio and video have playback controls; PDFs have paging and zoom; 3MF, GLB and STL files have interactive model controls; and ready panoramas open in the spherical viewer. Closing an audio or video preview stops playback. Downloading the original is independent of the preview rendition, subject to the saved-GLB behavior described above.
+
+## Troubleshooting
+
+- **The format is unsupported.** The preview shows a placeholder instead of inventing a viewer. Use **Download original** or **Files** and open the source in a suitable application.
+- **A preview or rendition is missing.** Reopen the preview after processing finishes. For a panorama, an editor can use **Build** or **Rebuild** when those actions appear. If processing is disabled or you cannot see an edit action, ask an asset editor or administrator to prepare it.
+- **Processing failed or was cancelled.** Use **Retry** when it appears. While a panorama is queued or running, wait for the live status or use **Cancel** only if you intend to stop that attempt.
+- **The browser cannot play a panorama source.** Use **Retry playback** if it appears. If the source was rejected and conversion is available, an editor can build a browser-playable rendition.
+- **Audio, video or PDF will not load.** Retry the preview, then use its original-download link. A PDF error keeps **Open original PDF** available; audio errors keep **Download original** available.
+- **A 3D preview fails.** Use **Retry 3D preview**. Files above the interactive limit still remain available to download. An STL that contains no complete triangles, or more than 3 million, is refused with a message rather than shown as an empty stage. If graphics context is lost, close and reopen the preview.
+- **The source itself is missing.** Open **Files** or the asset details to check for another retained file. If no source is present, ask an editor to re-upload it.

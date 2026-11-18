@@ -1,0 +1,20 @@
+{
+    "name": "mothership/ai-agent",
+    "description": "AI Agent integration module for Mothership",
+    "type": "library",
+    "require": {
+        "php": "^8.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "Mothership\\AiAgent\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Mothership\\AiAgent\\Providers\\AiAgentServiceProvider"
+            ]
+        }
+    }
+}

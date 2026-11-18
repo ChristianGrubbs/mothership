@@ -1,0 +1,108 @@
+.env
+.env.testing
+.env.hostbak.*
+tests/e2e-pw/dbg.mjs
+.idea
+.php_cs.cache
+.phpunit.result.cache
+.vscode
+.vagrant
+*.hot
+/stubs
+/data
+/docker-compose-collection
+/ignorables/*
+/node_modules
+# Packages build their own assets (packages/Mothership/DAM), so node_modules is
+# not only a root-level directory any more.
+node_modules/
+npm-debug.log
+package-lock.json
+# The DAM package pins its own front-end dependencies (three), so its
+# lockfile is a shipped deliverable rather than local noise.
+!packages/Mothership/DAM/package-lock.json
+# The committed admin bundle is rebuilt in CI and must come out byte-identical,
+# which needs the exact dependency versions it was built with.
+!packages/Mothership/Admin/package-lock.json
+/public/css
+/public/fonts
+/public/js
+/public/hot
+/public/storage
+/public/vendor
+/lang/vendor
+/storage/*.key
+/storage/mothership.lock
+/storage/dcc-data/
+/storage/parallel/
+# Pre-repair snapshots from dam:directories:repair --force (data, never source).
+/storage/backups/
+/vendor
+yarn.lock
+yarn-error.log
+.phpunit.cache/
+.playwright-mcp/
+/.state/
+tests/e2e-pw/.state/
+tests/e2e-pw/playwright-report/
+tests/e2e-pw/test-results/
+test-results
+/*.png
+.agents
+.claude/
+.codex
+.superpowers
+
+.cursor
+.github/skills
+docs
+graphify-out
+.mcp.json
+boost.json
+opencode.json
+skills-lock.json
+# Passport OAuth signing keys — generated per environment, never commit
+packages/Mothership/AdminApi/src/Secrets/Oauth/*.key
+.playwright-cli
+
+# OWASP ZAP scan artifacts (generated, do not commit)
+/storage/zap-report/
+
+# local-only E2E secrets (never commit)
+tests/e2e-pw/.secrets.local
+
+.env.e2e
+
+.env.live-backup
+.factory
+
+# graphify knowledge-graph output (generated, do not commit)
+/graphify-out/
+
+# Pest Test Impact Analysis cache (fallback when HOME is unavailable)
+.pest/
+
+# staging area for the separate mothership/agent-skills project — never commit here
+/agent-skills/
+.agents
+
+# Mothership fork: design records live in the repo (ADR, specs, plans)
+!/docs/
+
+# worker verification handshake files (legacy; kept ignored so a stray copy is never committed)
+.verify-request
+.verify-result.txt
+.verify-result.txt.tmp
+__pycache__/
+
+# Local CodeGraph index (regenerable)
+/.codegraph/
+
+# Test-runtime-generated fake ffmpeg/ffprobe binaries (tools/media/tests)
+tools/media/tests/fake_bin/
+
+# Playwright screenshots written by tools/browser/tests (home-editor-dom.test.cjs)
+/output/playwright/
+
+# macOS Finder metadata
+.DS_Store

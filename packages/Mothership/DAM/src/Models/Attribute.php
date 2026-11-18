@@ -1,0 +1,23 @@
+<?php
+
+namespace Mothership\DAM\Models;
+
+use Mothership\Attribute\Models\Attribute as BaseAttribute;
+use Mothership\DAM\Rules\AssetRule;
+
+class Attribute extends BaseAttribute
+{
+    public function fieldTypeValidations(?int $id = null, array $allowedPathPrefixes = []): array
+    {
+        $rules = parent::fieldTypeValidations($id, $allowedPathPrefixes);
+
+        switch ($this->type) {
+            case 'asset':
+                $rules[] = new AssetRule($this);
+
+                break;
+        }
+
+        return $rules;
+    }
+}

@@ -1,0 +1,33 @@
+includes:
+    - ./vendor/larastan/larastan/extension.neon
+    # Known errors at the current level. CI fails on anything NOT listed here, and (because
+    # reportUnmatchedIgnoredErrors is on) on listed entries that no longer occur, so the
+    # baseline can only shrink. See docs/reference/guardrails.md for how to shrink it.
+    - ./phpstan-baseline.neon
+
+parameters:
+    paths:
+        - app
+        - packages/Mothership
+    level: 5
+
+    # Analyse as the CI runtime (PHP 8.4) whatever PHP runs phpstan locally, so the baseline
+    # does not drift between a developer machine and the runner.
+    phpVersion: 80400
+
+    treatPhpDocTypesAsCertain: false
+
+    excludePaths:
+        - packages/*/vendor/*
+        - packages/*/tests/*
+        - packages/*/src/Database/Migration/*
+        - packages/*/src/Config/*
+        - packages/*/Config/*
+        - packages/*/src/Resources/*
+        - packages/Mothership/DebugBar/*
+
+    ignoreErrors:
+        # Eloquent magic attributes. Deliberately NOT baselined: ~1,800 occurrences across ~460
+        # files, so a baseline would be a ~15k-line file. Remove this pattern (and let the
+        # baseline absorb the rest) once models carry @property docblocks.
+        - "#Access to an undefined property#"

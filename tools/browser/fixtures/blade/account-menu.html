@@ -1,0 +1,95 @@
+<v-dropdown position="bottom-right" :teleport="false" class="relative">
+            <button class="flex justify-center items-center w-9 h-9 bg-mothership-avatar rounded-full text-sm text-white font-semibold cursor-pointer leading-6 transition-all hover:bg-mothership-primary-hover" data-account-avatar="" aria-label="Account">
+                        F
+                    </button>
+
+        <template v-slot:toggle="">
+            <button class="flex justify-center items-center w-9 h-9 bg-mothership-avatar rounded-full text-sm text-white font-semibold cursor-pointer leading-6 transition-all hover:bg-mothership-primary-hover" data-account-avatar="" aria-label="Account">
+                        F
+                    </button>
+        </template>
+    
+            <template v-slot:content="">
+            <div class="p-5 !p-0 max-h-[calc(100vh-130px)] max-w-[calc(100vw-2rem)] overflow-auto journal-scroll min-w-[220px]" data-account-menu="true">
+                <div class="flex flex-col gap-0.5 px-5 py-2.5 border border-b-gray-300 dark:border-gray-800">
+                    <p class="text-sm font-semibold text-gray-800 dark:text-white truncate">
+                        Fixture Admin
+                    </p>
+
+                    <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        Administrator
+                    </p>
+                </div>
+
+                <div class="grid gap-1 py-2.5 border border-b-gray-300 dark:border-gray-800">
+                    <a class="px-5 py-2 text-base  text-gray-800 dark:text-white hover:bg-mothership-primary-soft hover:bg-primary-50 dark:hover:bg-cherry-800 cursor-pointer" href="http://mothership.test/admin/account">
+                        My Account                    </a>
+                </div>
+
+                
+                                    
+                    <div class="grid gap-1 py-2.5 border border-b-gray-300 dark:border-gray-800">
+                        <p class="px-5 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                            Settings                        </p>
+
+                                                    <a class="px-5 py-2 text-base  text-gray-800 dark:text-white hover:bg-mothership-primary-soft hover:bg-primary-50 dark:hover:bg-cherry-800 cursor-pointer" href="http://mothership.test/admin/settings/users">
+                                Users                            </a>
+                                                    <a class="px-5 py-2 text-base  text-gray-800 dark:text-white hover:bg-mothership-primary-soft hover:bg-primary-50 dark:hover:bg-cherry-800 cursor-pointer" href="http://mothership.test/admin/settings/roles">
+                                Roles                            </a>
+                                                    <a class="px-5 py-2 text-base  text-gray-800 dark:text-white hover:bg-mothership-primary-soft hover:bg-primary-50 dark:hover:bg-cherry-800 cursor-pointer" href="http://mothership.test/admin/settings/groups">
+                                Groups                            </a>
+                                                    <a class="px-5 py-2 text-base  text-gray-800 dark:text-white hover:bg-mothership-primary-soft hover:bg-primary-50 dark:hover:bg-cherry-800 cursor-pointer" href="http://mothership.test/admin/settings/channels">
+                                Channels                            </a>
+                                            </div>
+                                    
+                    <div class="grid gap-1 py-2.5 border border-b-gray-300 dark:border-gray-800">
+                        <p class="px-5 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                            Configuration                        </p>
+
+                                                    <a class="px-5 py-2 text-base  text-gray-800 dark:text-white hover:bg-mothership-primary-soft hover:bg-primary-50 dark:hover:bg-cherry-800 cursor-pointer" href="http://mothership.test/admin/dam/configuration">
+                                Library                            </a>
+                                                    <a class="px-5 py-2 text-base  text-gray-800 dark:text-white hover:bg-mothership-primary-soft hover:bg-primary-50 dark:hover:bg-cherry-800 cursor-pointer" href="http://mothership.test/admin/configuration/integrations">
+                                Integrations                            </a>
+                                                    <a class="px-5 py-2 text-base  text-gray-800 dark:text-white hover:bg-mothership-primary-soft hover:bg-primary-50 dark:hover:bg-cherry-800 cursor-pointer" href="http://mothership.test/admin/dam/reports/login-access">
+                                Security reports                            </a>
+                                                    <a class="px-5 py-2 text-base  text-gray-800 dark:text-white hover:bg-mothership-primary-soft hover:bg-primary-50 dark:hover:bg-cherry-800 cursor-pointer" href="http://mothership.test/admin/configuration/webhook">
+                                Webhooks                            </a>
+                                                    <a class="px-5 py-2 text-base  text-gray-800 dark:text-white hover:bg-mothership-primary-soft hover:bg-primary-50 dark:hover:bg-cherry-800 cursor-pointer" href="http://mothership.test/admin/configuration/system-information">
+                                System Information                            </a>
+                                                    <a class="px-5 py-2 text-base  text-gray-800 dark:text-white hover:bg-mothership-primary-soft hover:bg-primary-50 dark:hover:bg-cherry-800 cursor-pointer" href="http://mothership.test/admin/dam/reports/engagement">
+                                Usage analytics                            </a>
+                                                    <a class="px-5 py-2 text-base  text-gray-800 dark:text-white hover:bg-mothership-primary-soft hover:bg-primary-50 dark:hover:bg-cherry-800 cursor-pointer" href="http://mothership.test/admin/configuration/system-settings">
+                                System Settings                            </a>
+                                            </div>
+                
+                <button type="button" data-pwa-install="" class="px-5 py-2 text-left text-base text-gray-800 dark:text-white hover:bg-mothership-primary-soft cursor-pointer">
+                    Install The Mothership                </button>
+
+                
+                <button type="button" data-pwa-ios-install="" aria-expanded="false" aria-controls="pwa-ios-install-help" class="px-5 py-2 text-left text-base text-gray-800 dark:text-white hover:bg-mothership-primary-soft cursor-pointer">
+                    Install The Mothership                </button>
+                <p id="pwa-ios-install-help" data-pwa-ios-install-help="" hidden="" class="px-5 pb-2 text-sm text-gray-600 dark:text-gray-300">
+                    In Safari, tap Share, then Add to Home Screen.                </p>
+
+                <!--
+    If a component has the `as` attribute, it indicates that it uses
+    the ajaxified form or some customized slot form.
+-->
+    
+    
+    
+    <v-form method="POST" :initial-errors="[]" v-slot="{ meta, errors, setValues }" @invalid-submit="$root.onInvalidSubmit" @submit="$root.onAjaxSubmit" data-ajax-form="true" data-ajax-error-message="Something went wrong while saving. Please try again." action="http://mothership.test/admin/logout" id="adminLogout">
+                    <input type="hidden" name="_token" value="blade-fixture-csrf-token" autocomplete="off">        
+                    <input type="hidden" name="_method" value="DELETE">        
+        
+    </v-form>
+
+    
+                <div class="grid gap-1 py-2.5">
+                    <a class="px-5 py-2 text-base  text-gray-800 dark:text-white hover:bg-mothership-primary-soft hover:bg-primary-50 dark:hover:bg-cherry-800 cursor-pointer" href="http://mothership.test/admin/logout" data-no-ajax-nav="" onclick="event.preventDefault(); document.getElementById('adminLogout').requestSubmit();">
+                        Logout                    </a>
+                </div>
+            </div>
+        </template>
+    
+    </v-dropdown>

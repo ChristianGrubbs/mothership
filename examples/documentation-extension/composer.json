@@ -1,0 +1,22 @@
+{
+  "name": "mothership/documentation-example",
+  "description": "Explicitly installed fork extension example",
+  "type": "library",
+  "license": "MIT",
+  "require": {
+    "php": "^8.4.1",
+    "illuminate/support": "^13.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Mothership\\DocumentationExample\\": "src/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "Mothership\\DocumentationExample\\DocumentationExampleServiceProvider"
+      ]
+    }
+  }
+}

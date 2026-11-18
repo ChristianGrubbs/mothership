@@ -1,0 +1,91 @@
+
+
+    <div ref="space" class="relative pr-4 min-h-72" @dragover.prevent @drop.prevent="onSpaceDrop($event)" @pointerdown="onSpacePointerDown">
+        <div v-if="isLoading" class="grid grid-cols-1 min-[380px]:grid-cols-2 md:!grid-cols-3 xl:!grid-cols-4 2xl:!grid-cols-5 gap-4 animate-pulse">
+            <div v-for="n in 10" :key="n" class="aspect-square bg-gray-100 dark:bg-cherry-800 rounded-lg"></div>
+        </div>
+
+        <template v-else>
+            <template v-if="directories.length">
+                <div class="grid grid-cols-[repeat(auto-fill,minmax(80px,1fr))] md:grid-cols-[repeat(auto-fill,minmax(96px,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-2 mb-6">
+                    <v-dam-explorer-folder-card
+                        v-for="dir in directories"
+                        :key="dir.id"
+                        :dir="dir"
+                        :is-drop-target="dropTargetId === dir.id"
+                        :data-dir-id="dir.id"
+                        :data-marquee-key="'directory:' + dir.id"
+                        :is-selected="isSelectedById(dir.id, 'directory')"
+                        :any-selected="selection.ids.length > 0"
+                        @click.capture="onCardClick($event, dir.id, 'directory')"
+                        @toggle-select="$emit('toggle-select', dir.id, 'directory')"
+                        @navigate="$emit('navigate', $event)"
+                        @ctx="showCtx($event.event, $event.dir, 'directory')"
+                        @drag-start="onDragStart($event, dir)"
+                        @drag-end="onDragEnd"
+                        @drag-over="onFolderDragOver($event, dir)"
+                        @drag-leave="onFolderDragLeave($event, dir)"
+                        @drop="onInternalDrop($event, dir)"
+                    ></v-dam-explorer-folder-card>
+                </div>
+            </template>
+
+            <template v-if="assets.length">
+                <p class="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">
+                    Files                </p>
+                <div class="grid grid-cols-1 min-[380px]:grid-cols-2 md:!grid-cols-3 xl:!grid-cols-4 2xl:!grid-cols-5 gap-4">
+                    <v-dam-explorer-asset-card
+                        v-for="asset in assets"
+                        :key="asset.id"
+                        :asset="asset"
+                        :tab-id="tabId"
+                        :data-marquee-key="'asset:' + asset.id"
+                        :is-selected="isSelectedById(asset.id, 'asset')"
+                        :any-selected="selection.ids.length > 0"
+                        :selection="selection.ids"
+                        @click.capture="onCardClick($event, asset.id, 'asset')"
+                        @toggle-select="$emit('toggle-select', asset.id, 'asset')"
+                        @preview="preview"
+                        @edit="edit"
+                        @open-stack="openStack"
+                        v-on:stack-drop="$emit('stack-drop', $event)"
+                        @delete="del"
+                        @refresh="$emit('refresh')"
+                        @ctx="showCtx($event.event, $event.asset, 'asset')"
+                    ></v-dam-explorer-asset-card>
+                </div>
+            </template>
+
+            <div v-if="!directories.length && !assets.length" class="flex flex-col items-center justify-center py-16 gap-4" data-explorer-empty>
+                <img src="http://mothership.test/themes/dam/build/assets/no-records-found-Dw1Lp69h.svg" class="w-32 h-32 opacity-60" alt="" />
+                <p class="text-lg font-bold text-gray-700 dark:text-slate-50 text-center">{{ emptyState?.message ?? 'No Records Available.' }}</p>
+                <button v-if="emptyState?.action" type="button" class="secondary-button" @click="$emit('empty-action')">{{ emptyState.action }}</button>
+            </div>
+        </template>
+
+        
+        <div
+            v-if="marquee"
+            class="absolute pointer-events-none z-20 rounded-sm"
+            :style="{ left: marquee.left + 'px', top: marquee.top + 'px', width: marquee.width + 'px', height: marquee.height + 'px', border: '1px solid #2d5be3', background: 'rgba(45, 91, 227, 0.12)' }"
+            aria-hidden="true"
+            data-explorer-marquee
+        ></div>
+
+        <v-dam-explorer-ctx
+            v-if="ctx.on"
+            :key="ctxKey"
+            :x="ctx.x"
+            :y="ctx.y"
+            :item="ctx.item"
+            :item-type="ctx.type"
+            :tab-id="tabId"
+            :clipboard="clipboard"
+            :selection="selection"
+            @close="closeCtx"
+            @navigate="$emit('navigate', $event)"
+            @open-new-tab="$emit('open-new-tab', $event)"
+            @bookmark="$emit('bookmark', $event)"
+            @refresh="$emit('refresh')"
+        ></v-dam-explorer-ctx>
+    </div>

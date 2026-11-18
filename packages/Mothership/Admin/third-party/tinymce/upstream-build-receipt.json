@@ -1,0 +1,99 @@
+{
+  "status": "pass",
+  "checked_at": "2026-10-18T14:38:24.014818+00:00",
+  "upstream_commit": "9dac5bb3c875b9c5de43a3f6ea33f55437e77325",
+  "versions": {
+    "tinymce": "7.9.3",
+    "dompurify": "3.4.17",
+    "node": "v26.12.0",
+    "yarn": "1.22.22",
+    "npm": "11.20.0",
+    "typescript": "5.7.3",
+    "browser": "155.0.8059.40",
+    "platform": "macOS-27.2-arm64-arm-64bit-Mach-O",
+    "architecture": "arm64"
+  },
+  "hashes_sha256": {
+    "upstream_commit_payload": "0f70c465d7c3269a2a4d59673fa7124d896ed3c3b044560e9ec1cc218fc99552",
+    "upstream_source_tar": "78f0cf5d332f9549ad8c5a539e149b863ee98d119eddd29bc9b06e0aaa7f09e6",
+    "source_patch": "42b97a5c970ae35d16d2672fa9e8bec0b7ba3b19e68ba1e5eca1d858fb72517e",
+    "tarball": "6626cdf2fcac48cd374e282f27aaf142d8e88605f98ed7c595253010423b2427",
+    "built_tinymce_min_js": "6064fb079123cbbb2ff91253d9a75f3594d4fcd69587a2d7911323023314512e",
+    "built_tinymce_js": "1d09418dae5f2ebbb6c93345e7df3bbfa60bd1dfbb65d4292703b7db974ec4fb",
+    "license_md": "2fcd38ecec1bedcf12c8fc7b6d874537028ae36a03ce9d4e9a243ea8371fe7ea",
+    "notices_txt": "201267d6e4dba6262e273934872fbb43eda816e2d1b54f4055d20c142d3251d3"
+  },
+  "upstream_commit_hash_definition": "SHA-256 of raw commit payload emitted by git cat-file commit HEAD; upstream identity itself uses Git SHA-1",
+  "embedded_version_proof": {
+    "status": "pass",
+    "full_js_assignment": "DOMPurify.version = \"3.4.17\";",
+    "min_js_assignment": "n.version=\"3.4.17\",n.removed=[]",
+    "full_js_line": 19829,
+    "min_js_line": 14,
+    "method": "Executable version assignments inside both built core files; not inferred from notices"
+  },
+  "tests": {
+    "upstream_sanitizer_browser": {
+      "status": "pass",
+      "passed": 19,
+      "failed": 0
+    },
+    "harmless_probes": {
+      "dompurifyVersion": "3.4.17",
+      "sameRoot": true,
+      "removalHookCalls": 1,
+      "sanitized": "<b title=\"keep\">keep</b>",
+      "tinyMceVersion": "7.9.3",
+      "builtParserOutput": "<p>keep<strong>bold</strong></p>"
+    },
+    "probe_scope": "IN_PLACE and removal hooks exercised against installed DOMPurify 3.4.17 dependency; built minified TinyMCE public DomParser/Serializer exercised separately",
+    "exploit_reproduction": "not attempted; version proof and harmless compatibility checks do not establish exploit reproduction",
+    "ci": "not run; these are local checks"
+  },
+  "reproduction": "From exact upstream commit, apply source_patch, export environment paths inside clone, run frozen-lock Yarn install and yarn build, then package-build.py, npm pack, install verification. Keep the same recorded tool versions; no claim of cross-platform bit-identical builds.",
+  "original_receipt_sha256": "12c620797d81491a107454a707146b37eb38dea51915c42bb3fe9e3219e7883b",
+  "package": {
+    "files": 238,
+    "built_files_preserved_byte_for_byte": 202,
+    "component_additions": [
+      "CHANGELOG.md",
+      "bower.json",
+      "package.json",
+      "composer.json",
+      "plugins/accordion/index.js",
+      "plugins/advlist/index.js",
+      "plugins/anchor/index.js",
+      "plugins/autolink/index.js",
+      "plugins/autoresize/index.js",
+      "plugins/autosave/index.js",
+      "plugins/charmap/index.js",
+      "plugins/code/index.js",
+      "plugins/codesample/index.js",
+      "plugins/directionality/index.js",
+      "plugins/emoticons/index.js",
+      "plugins/fullscreen/index.js",
+      "plugins/help/index.js",
+      "plugins/image/index.js",
+      "plugins/importcss/index.js",
+      "plugins/insertdatetime/index.js",
+      "plugins/link/index.js",
+      "plugins/lists/index.js",
+      "plugins/media/index.js",
+      "plugins/nonbreaking/index.js",
+      "plugins/pagebreak/index.js",
+      "plugins/preview/index.js",
+      "plugins/quickbars/index.js",
+      "plugins/save/index.js",
+      "plugins/searchreplace/index.js",
+      "plugins/table/index.js",
+      "plugins/visualblocks/index.js",
+      "plugins/visualchars/index.js",
+      "plugins/wordcount/index.js",
+      "themes/silver/index.js",
+      "models/dom/index.js",
+      "icons/default/index.js"
+    ],
+    "install_verification": "pass; every tarball file matches installed bytes",
+    "css_policy": "Preserve original js/tinymce CSS and source maps; official component ZIP strips CSS source-map comments. Only absent files are added from component ZIP."
+  }
+}

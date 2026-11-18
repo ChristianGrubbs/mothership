@@ -1,0 +1,253 @@
+{
+  "_limits-CxWueoT_.js": {
+    "file": "assets/limits-CxWueoT_.js",
+    "name": "limits"
+  },
+  "node_modules/pdfjs-dist/build/pdf.worker.min.mjs": {
+    "file": "assets/pdf.worker.min-Dswkl-cV.mjs",
+    "src": "node_modules/pdfjs-dist/build/pdf.worker.min.mjs"
+  },
+  "node_modules/three/build/three.module.js": {
+    "file": "assets/three.module-BtCAaDxU.js",
+    "name": "three.module",
+    "src": "node_modules/three/build/three.module.js",
+    "isDynamicEntry": true
+  },
+  "node_modules/three/examples/jsm/libs/basis/basis_transcoder.js": {
+    "file": "assets/basis_transcoder-o4Hde_L7.js",
+    "src": "node_modules/three/examples/jsm/libs/basis/basis_transcoder.js"
+  },
+  "node_modules/three/examples/jsm/libs/basis/basis_transcoder.wasm": {
+    "file": "assets/basis_transcoder-VXdx5NbI.wasm",
+    "src": "node_modules/three/examples/jsm/libs/basis/basis_transcoder.wasm"
+  },
+  "node_modules/three/examples/jsm/libs/draco/gltf/draco_decoder.wasm": {
+    "file": "assets/draco_decoder-Z1_iN-Ht.wasm",
+    "src": "node_modules/three/examples/jsm/libs/draco/gltf/draco_decoder.wasm"
+  },
+  "node_modules/three/examples/jsm/libs/draco/gltf/draco_wasm_wrapper.js": {
+    "file": "assets/draco_wasm_wrapper-fZCQGLGb.js",
+    "src": "node_modules/three/examples/jsm/libs/draco/gltf/draco_wasm_wrapper.js"
+  },
+  "src/Resources/assets/css/app.css": {
+    "file": "assets/app-BQF5edCQ.css",
+    "src": "src/Resources/assets/css/app.css",
+    "isEntry": true
+  },
+  "src/Resources/assets/fonts/Mothership-DAM.woff": {
+    "file": "assets/Mothership-DAM-DTEtCpP5.woff",
+    "src": "src/Resources/assets/fonts/Mothership-DAM.woff"
+  },
+  "src/Resources/assets/images/adobe/after-effects.svg": {
+    "file": "assets/after-effects-CiERcfnd.svg",
+    "src": "src/Resources/assets/images/adobe/after-effects.svg"
+  },
+  "src/Resources/assets/images/adobe/audition.svg": {
+    "file": "assets/audition-BF2Sg8Lb.svg",
+    "src": "src/Resources/assets/images/adobe/audition.svg"
+  },
+  "src/Resources/assets/images/adobe/illustrator.svg": {
+    "file": "assets/illustrator-CvqYq_iE.svg",
+    "src": "src/Resources/assets/images/adobe/illustrator.svg"
+  },
+  "src/Resources/assets/images/adobe/indesign.svg": {
+    "file": "assets/indesign-CGuqAGFg.svg",
+    "src": "src/Resources/assets/images/adobe/indesign.svg"
+  },
+  "src/Resources/assets/images/adobe/photoshop.svg": {
+    "file": "assets/photoshop-Qv1z0YOC.svg",
+    "src": "src/Resources/assets/images/adobe/photoshop.svg"
+  },
+  "src/Resources/assets/images/adobe/premiere-pro.svg": {
+    "file": "assets/premiere-pro-BOL49fpa.svg",
+    "src": "src/Resources/assets/images/adobe/premiere-pro.svg"
+  },
+  "src/Resources/assets/images/adobe/xd.svg": {
+    "file": "assets/xd-B_4WNB2S.svg",
+    "src": "src/Resources/assets/images/adobe/xd.svg"
+  },
+  "src/Resources/assets/images/grid/audio.svg": {
+    "file": "assets/audio-BbmUgpvq.svg",
+    "src": "src/Resources/assets/images/grid/audio.svg"
+  },
+  "src/Resources/assets/images/grid/blender.svg": {
+    "file": "assets/blender-WqpEc_vt.svg",
+    "src": "src/Resources/assets/images/grid/blender.svg"
+  },
+  "src/Resources/assets/images/grid/csv.svg": {
+    "file": "assets/csv-G_xsPvx_.svg",
+    "src": "src/Resources/assets/images/grid/csv.svg"
+  },
+  "src/Resources/assets/images/grid/file.svg": {
+    "file": "assets/file-DGthS4_I.svg",
+    "src": "src/Resources/assets/images/grid/file.svg"
+  },
+  "src/Resources/assets/images/grid/image.svg": {
+    "file": "assets/image-CtibLiMw.svg",
+    "src": "src/Resources/assets/images/grid/image.svg"
+  },
+  "src/Resources/assets/images/grid/model.svg": {
+    "file": "assets/model-DuuSDnRs.svg",
+    "src": "src/Resources/assets/images/grid/model.svg"
+  },
+  "src/Resources/assets/images/grid/sheet.svg": {
+    "file": "assets/sheet-CT3hCK4c.svg",
+    "src": "src/Resources/assets/images/grid/sheet.svg"
+  },
+  "src/Resources/assets/images/grid/unity.svg": {
+    "file": "assets/unity-Dh_Ao-WR.svg",
+    "src": "src/Resources/assets/images/grid/unity.svg"
+  },
+  "src/Resources/assets/images/grid/unspecified.svg": {
+    "file": "assets/unspecified-j104ePes.svg",
+    "src": "src/Resources/assets/images/grid/unspecified.svg"
+  },
+  "src/Resources/assets/images/grid/video.svg": {
+    "file": "assets/video-Bceqy86P.svg",
+    "src": "src/Resources/assets/images/grid/video.svg"
+  },
+  "src/Resources/assets/images/no-records-found.svg": {
+    "file": "assets/no-records-found-Dw1Lp69h.svg",
+    "src": "src/Resources/assets/images/no-records-found.svg"
+  },
+  "src/Resources/assets/images/preview/audio.svg": {
+    "file": "assets/audio-1fgSyPvq.svg",
+    "src": "src/Resources/assets/images/preview/audio.svg"
+  },
+  "src/Resources/assets/images/preview/blender.svg": {
+    "file": "assets/blender--vjFDWMs.svg",
+    "src": "src/Resources/assets/images/preview/blender.svg"
+  },
+  "src/Resources/assets/images/preview/csv.svg": {
+    "file": "assets/csv-Jsje1D7K.svg",
+    "src": "src/Resources/assets/images/preview/csv.svg"
+  },
+  "src/Resources/assets/images/preview/file.svg": {
+    "file": "assets/file-CQm7eSOd.svg",
+    "src": "src/Resources/assets/images/preview/file.svg"
+  },
+  "src/Resources/assets/images/preview/image.svg": {
+    "file": "assets/image-C4_Bob3O.svg",
+    "src": "src/Resources/assets/images/preview/image.svg"
+  },
+  "src/Resources/assets/images/preview/model.svg": {
+    "file": "assets/model-BHSae2Fv.svg",
+    "src": "src/Resources/assets/images/preview/model.svg"
+  },
+  "src/Resources/assets/images/preview/sheet.svg": {
+    "file": "assets/sheet-DDoe34vl.svg",
+    "src": "src/Resources/assets/images/preview/sheet.svg"
+  },
+  "src/Resources/assets/images/preview/unity.svg": {
+    "file": "assets/unity-DMR8pQVk.svg",
+    "src": "src/Resources/assets/images/preview/unity.svg"
+  },
+  "src/Resources/assets/images/preview/unspecified.svg": {
+    "file": "assets/unspecified-JQ-FB04g.svg",
+    "src": "src/Resources/assets/images/preview/unspecified.svg"
+  },
+  "src/Resources/assets/images/preview/video.svg": {
+    "file": "assets/video-BhFHaXpv.svg",
+    "src": "src/Resources/assets/images/preview/video.svg"
+  },
+  "src/Resources/assets/js/analytics/collector.js": {
+    "file": "assets/collector-DFbcV5g0.js",
+    "name": "collector",
+    "src": "src/Resources/assets/js/analytics/collector.js",
+    "isEntry": true
+  },
+  "src/Resources/assets/js/analytics/replay.js": {
+    "file": "assets/replay-BV5jh0uS.js",
+    "name": "replay",
+    "src": "src/Resources/assets/js/analytics/replay.js",
+    "isEntry": true
+  },
+  "src/Resources/assets/js/app.js": {
+    "file": "assets/app-DraFE69j.js",
+    "name": "app",
+    "src": "src/Resources/assets/js/app.js",
+    "isEntry": true,
+    "dynamicImports": [
+      "node_modules/three/build/three.module.js",
+      "src/Resources/assets/js/model/viewer.mjs",
+      "src/Resources/assets/js/model/load-policy.mjs",
+      "src/Resources/assets/js/model/thumbnail-capture.mjs",
+      "src/Resources/assets/js/pano/pinch.mjs",
+      "src/Resources/assets/js/image/mount.mjs",
+      "src/Resources/assets/js/upload/chunked-upload.mjs",
+      "src/Resources/assets/js/pdf/viewer.mjs"
+    ]
+  },
+  "src/Resources/assets/js/image/mount.mjs": {
+    "file": "assets/mount-CDbgnZ5Y.js",
+    "name": "mount",
+    "src": "src/Resources/assets/js/image/mount.mjs",
+    "isDynamicEntry": true,
+    "css": [
+      "assets/mount-C-aXtspp.css"
+    ]
+  },
+  "src/Resources/assets/js/model/load-policy.mjs": {
+    "file": "assets/load-policy-DmRTq7Nu.js",
+    "name": "load-policy",
+    "src": "src/Resources/assets/js/model/load-policy.mjs",
+    "isDynamicEntry": true,
+    "imports": [
+      "_limits-CxWueoT_.js"
+    ]
+  },
+  "src/Resources/assets/js/model/thumbnail-capture.mjs": {
+    "file": "assets/thumbnail-capture-M4CyIpCA.js",
+    "name": "thumbnail-capture",
+    "src": "src/Resources/assets/js/model/thumbnail-capture.mjs",
+    "isDynamicEntry": true,
+    "imports": [
+      "src/Resources/assets/js/app.js",
+      "_limits-CxWueoT_.js"
+    ],
+    "dynamicImports": [
+      "src/Resources/assets/js/model/viewer.mjs"
+    ]
+  },
+  "src/Resources/assets/js/model/viewer.mjs": {
+    "file": "assets/viewer-CUTOcqYV.js",
+    "name": "viewer",
+    "src": "src/Resources/assets/js/model/viewer.mjs",
+    "isDynamicEntry": true,
+    "imports": [
+      "node_modules/three/build/three.module.js",
+      "_limits-CxWueoT_.js",
+      "src/Resources/assets/js/model/load-policy.mjs"
+    ],
+    "css": [
+      "assets/viewer-0L7OMzSM.css"
+    ],
+    "assets": [
+      "assets/draco_decoder-Z1_iN-Ht.wasm",
+      "assets/draco_wasm_wrapper-fZCQGLGb.js",
+      "assets/basis_transcoder-VXdx5NbI.wasm",
+      "assets/basis_transcoder-o4Hde_L7.js"
+    ]
+  },
+  "src/Resources/assets/js/pano/pinch.mjs": {
+    "file": "assets/pinch-B_JTvYPG.js",
+    "name": "pinch",
+    "src": "src/Resources/assets/js/pano/pinch.mjs",
+    "isDynamicEntry": true
+  },
+  "src/Resources/assets/js/pdf/viewer.mjs": {
+    "file": "assets/viewer-ddDZjdaE.js",
+    "name": "viewer",
+    "src": "src/Resources/assets/js/pdf/viewer.mjs",
+    "isDynamicEntry": true,
+    "assets": [
+      "assets/pdf.worker.min-Dswkl-cV.mjs"
+    ]
+  },
+  "src/Resources/assets/js/upload/chunked-upload.mjs": {
+    "file": "assets/chunked-upload-BndyjC0_.js",
+    "name": "chunked-upload",
+    "src": "src/Resources/assets/js/upload/chunked-upload.mjs",
+    "isDynamicEntry": true
+  }
+}

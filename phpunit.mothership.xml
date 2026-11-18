@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+    bootstrap="tests/bootstrap.php"
+    colors="true"
+    cacheDirectory=".phpunit.cache"
+    executionOrder="depends,defects"
+    failOnEmptyTestSuite="true"
+    failOnRisky="true"
+    failOnWarning="true"
+>
+    <testsuites>
+        <testsuite name="Mothership complete suite">
+            <directory suffix="Test.php">tests/Feature</directory>
+            <directory suffix="Test.php">packages/Mothership/Admin/tests</directory>
+            <directory suffix="Test.php">packages/Mothership/AdminApi/tests</directory>
+            <directory suffix="Test.php">packages/Mothership/AiAgent/tests</directory>
+            <directory suffix="Test.php">packages/Mothership/AppUrlGuard/tests</directory>
+            <directory suffix="Test.php">packages/Mothership/Attribute/tests</directory>
+            <directory suffix="Test.php">packages/Mothership/Category/tests</directory>
+            <directory suffix="Test.php">packages/Mothership/Completeness/tests</directory>
+            <directory suffix="Test.php">packages/Mothership/Core/tests</directory>
+            <directory suffix="Test.php">packages/Mothership/DAM/tests</directory>
+            <directory suffix="Test.php">packages/Mothership/DataGrid/tests</directory>
+            <directory suffix="Test.php">packages/Mothership/DataTransfer/tests</directory>
+            <directory suffix="Test.php">packages/Mothership/ElasticSearch/tests</directory>
+            <directory suffix="Test.php">packages/Mothership/Installer/tests</directory>
+            <directory suffix="Test.php">packages/Mothership/Measurement/tests</directory>
+            <directory suffix="Test.php">packages/Mothership/Product/tests</directory>
+            <directory suffix="Test.php">packages/Mothership/SphereSeam/tests</directory>
+            <directory suffix="Test.php">packages/Mothership/User/tests</directory>
+            <directory suffix="Test.php">packages/Mothership/Webhook/tests</directory>
+        </testsuite>
+    </testsuites>
+
+    <source>
+        <include>
+            <directory suffix=".php">app</directory>
+            <directory suffix=".php">packages</directory>
+        </include>
+        <exclude>
+            <directory suffix=".php">packages/Mothership/*/tests</directory>
+        </exclude>
+    </source>
+
+    <php>
+        <ini name="max_execution_time" value="0"/>
+        <env name="APP_ENV" value="testing" force="true"/>
+        <env name="APP_DEBUG" value="true" force="true"/>
+        <env name="MOTHERSHIP_PIM_ENABLED" value="true" force="true"/>
+
+        <env name="MOTHERSHIP_REQUIRE_TARGET_GUARD" value="1" force="true"/>
+        <env name="DB_CONNECTION" value="pgsql" force="true"/>
+        <env name="DB_HOST" value="127.0.0.1" force="true"/>
+        <env name="DB_PORT" value="5433" force="true"/>
+        <env name="DB_DATABASE" value="mothership_test" force="true"/>
+        <env name="DB_USERNAME" value="mothership" force="true"/>
+        <env name="DB_PASSWORD" value="mothership" force="true"/>
+
+        <env name="BCRYPT_ROUNDS" value="4"/>
+        <env name="CACHE_DRIVER" value="array" force="true"/>
+        <env name="CACHE_STORE" value="array" force="true"/>
+        <env name="MAIL_MAILER" value="array" force="true"/>
+        <env name="QUEUE_CONNECTION" value="sync" force="true"/>
+        <env name="SESSION_DRIVER" value="array" force="true"/>
+        <env name="BROADCAST_CONNECTION" value="null" force="true"/>
+
+        <env name="TELESCOPE_ENABLED" value="false" force="true"/>
+        <env name="ELASTICSEARCH_ENABLED" value="false" force="true"/>
+    </php>
+</phpunit>

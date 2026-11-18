@@ -1,0 +1,174 @@
+/* Device fit for The Mothership: viewport units, touch targets and the fold layer driven by device.js.
+ * Static and identical for every visitor. Rules under html[data-fold] apply only while the browser reports two
+ * viewport segments (iPhone Duo with Safari's flags on, or a Chromium foldable); see public/pwa/device.js.
+ */
+
+/* Safari on iPhone Duo's outer display fills the column beside its controls with the page background colour
+   (WebKit "Features for Safari 27.1"), so the document always names one. */
+html { background-color: #f9fafb; }
+html.dark { background-color: #17181c; }
+
+/* iOS Safari sizes 100vh to the largest viewport, so a 100vh shell that never scrolls keeps its bottom edge under
+   the toolbar. The dynamic viewport is the visible one. */
+@supports (height: 100dvh) {
+    body.h-screen, #app.h-screen { height: 100dvh; }
+    [class~="max-h-[calc(100vh-130px)]"] { max-height: calc(100dvh - 130px); }
+    [class~="h-[calc(100vh-100px)]"] { height: calc(100dvh - 100px); }
+}
+
+/* The Library preview dialog keeps its inline 100vh height (pages without this layer still size it); the dynamic
+   viewport overrides it here. The fold rules below are more specific and win over this one. */
+@supports (height: 100dvh) {
+    [data-dam-preview-dialog] { height: calc(100dvh - 2rem) !important; }
+}
+
+/* A phone, upright or on its side: the preview dialog goes edge to edge. The 1rem gutter only showed the page (and its
+   analytics footer) through the backdrop, and the picture needs that height. */
+@media (max-width: 767px), (max-height: 760px) {
+    [data-dam-preview-backdrop] { padding: 0; }
+    [data-dam-preview-dialog] { width: 100vw !important; height: 100vh !important; border-radius: 0; }
+    @supports (height: 100dvh) {
+        [data-dam-preview-dialog] { height: 100dvh !important; }
+    }
+}
+
+/* Touch screens: the folder tree's rows, the subfolder toggle and small inline links were 12-20px tall. */
+@media (pointer: coarse) {
+    .dam-directory-label,
+    [data-explorer-sidebar] button.text-sm { min-height: 44px; }
+    input[type="checkbox"]:not(.sr-only) { min-width: 20px; min-height: 20px; }
+    [data-dam-preview-dialog] a.text-xs { display: inline-flex; align-items: center; min-height: 40px; }
+    /* The drawer's and the dialog's close buttons draw a 30px glyph; the finger gets 44px around it, the glyph stays put. */
+    [data-drawer-close],
+    [data-admin-modal-panel] button.icon-cancel { margin: -7px; padding: 7px; }
+}
+
+/* iPhone: Safari zooms the page in when a text field under 16px takes focus and leaves it zoomed afterwards, which
+   pushes a dialog's right side (its close button, the end of its main button) off the visible page. The shared form
+   controls are 14px (text-sm), and a dialog that focuses its first field zooms as it opens. 16px stops the zoom and
+   keeps pinch zoom. -webkit-touch-callout exists only in iOS and iPadOS WebKit; the selector outranks a size class
+   and yields to a component's own rule, so a field designed larger keeps its size. */
+@supports (-webkit-touch-callout: none) {
+    :is(input, textarea, select):not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="button"], [type="submit"], [type="reset"], [type="image"]) {
+        font-size: 16px;
+    }
+}
+
+/* ---- Fold layer ------------------------------------------------------------------------------------------------ */
+
+/* Generic dialogs (x-admin::modal). Book: centre on the trailing segment, where they stay when the device closes.
+   Laptop: centre on the lower segment, the one in reach. Never across the fold. */
+html[data-fold="columns"] [data-admin-modal-panel] {
+    left: calc(var(--seg-trailing-left) + var(--seg-trailing-width) / 2) !important;
+    right: auto !important;
+    transform: translate(-50%, -50%) !important;
+    width: calc(var(--seg-trailing-width) - 2rem) !important;
+    max-width: calc(var(--seg-trailing-width) - 2rem) !important;
+}
+html[data-fold="rows"] [data-admin-modal-panel] {
+    top: calc(var(--seg-b-top) + var(--seg-b-height) / 2) !important;
+    max-height: calc(var(--seg-b-height) - 1rem) !important;
+}
+
+/* Admin header. Book: brand on the leading segment; search and account controls on the trailing one, so no field
+   or button sits on the fold. The bar's background still spans both. */
+html[data-fold="columns"] .mothership-header[data-fold-split] {
+    display: grid;
+    grid-template-columns: var(--fold-start, 1fr) var(--fold-gap, 0px) minmax(0, 1fr) auto;
+    align-items: center;
+}
+html[data-fold="columns"] .mothership-header[data-fold-split] > :first-child { grid-column: 1; }
+html[data-fold="columns"] .mothership-header[data-fold-split] > .dam-header-search {
+    grid-column: 3;
+    min-width: 0;
+    max-width: none;
+    margin: 0 12px 0 16px;
+}
+html[data-fold="columns"] .mothership-header[data-fold-split] > :last-child { grid-column: 4; }
+
+/* Library. Book: the Directory column fills the leading segment and the asset panel the trailing one. The column
+   stops being a drawer while the fold is there; it is the same column, in place. */
+html[data-fold="columns"] [data-explorer-split][data-fold-split] {
+    display: grid;
+    grid-template-columns: var(--fold-start, 1fr) var(--fold-gap, 0px) minmax(0, 1fr);
+    column-gap: 0;
+    align-items: start;
+}
+html[data-fold="columns"] [data-explorer-split] > [data-explorer-sidebar] {
+    grid-column: 1;
+    position: static;
+    transform: none;
+    width: auto !important;
+    /* The leading segment can be narrower than the column's 220px desktop minimum (expanded nav, small segment). */
+    min-width: 0;
+    max-width: none;
+    padding: 0;
+    overflow-x: hidden;
+    background: transparent;
+    box-shadow: none;
+    z-index: auto;
+}
+html[data-fold="columns"] [data-explorer-split] > [data-explorer-panel] { grid-column: 3; min-width: 0; }
+html[data-fold="columns"] [data-explorer-split] > [data-explorer-drawer-scrim],
+html[data-fold="columns"] [data-explorer-split] > .dam-sidebar-resize { display: none !important; }
+/* Laptop: the Directory drawer opens in the lower segment only. */
+html[data-fold="rows"] [data-explorer-split] > [data-explorer-sidebar] { top: var(--seg-b-top); }
+
+/* Library preview. Book: the dialog docks in the trailing segment beside the results it came from, which stay
+   visible (dimmed less) on the leading segment; tapping them returns to the results. */
+html[data-fold="columns"] [data-dam-preview-backdrop] {
+    padding: 0;
+    background: rgba(3, 7, 18, 0.45) !important;
+}
+html[data-fold="columns"] [data-dam-preview-dialog] {
+    position: fixed;
+    top: 0.5rem;
+    bottom: 0.5rem;
+    left: calc(var(--seg-trailing-left) + 0.5rem);
+    width: calc(var(--seg-trailing-width) - 1rem) !important;
+    height: auto !important;
+}
+/* Laptop: the picture fills the upper segment; the header, navigation and file strip sit in the lower one. */
+html[data-fold="rows"] [data-dam-preview-backdrop] { padding: 0; }
+html[data-fold="rows"] [data-dam-preview-dialog] {
+    display: grid;
+    grid-template-rows: var(--seg-a-height) var(--fold-gap, 0px) auto auto auto minmax(0, 1fr);
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 0;
+}
+html[data-fold="rows"] [data-dam-preview-dialog] > [data-dam-preview-stage] { grid-row: 1; min-height: 0; }
+html[data-fold="rows"] [data-dam-preview-dialog] > [data-dam-preview-header] { grid-row: 3; }
+html[data-fold="rows"] [data-dam-preview-dialog] > [data-dam-preview-nav] { grid-row: 4; }
+html[data-fold="rows"] [data-dam-preview-dialog] > :not([data-dam-preview-stage]):not([data-dam-preview-header]):not([data-dam-preview-nav]) { grid-row: 5; }
+
+/* Public share page. Book: the picture on the leading segment, the file list or details on the trailing one.
+   Laptop: the picture above the fold, its details below. */
+html[data-fold="columns"] [data-dam-share-split][data-fold-split] {
+    display: grid;
+    grid-template-columns: var(--fold-start, 1fr) var(--fold-gap, 0px) minmax(0, 1fr);
+    gap: 0;
+}
+html[data-fold="columns"] [data-dam-share-split][data-fold-split] > :first-child { grid-column: 1; min-width: 0; }
+html[data-fold="columns"] [data-dam-share-split][data-fold-split] > :not(:first-child) { grid-column: 3; width: auto; }
+html[data-fold="rows"] [data-dam-share-card][data-fold-split] {
+    display: grid;
+    grid-template-rows: var(--fold-top, 1fr) var(--fold-gap, 0px) auto minmax(0, 1fr);
+}
+html[data-fold="rows"] [data-dam-share-card][data-fold-split] > :first-child { grid-row: 1; min-height: 0; }
+html[data-fold="rows"] [data-dam-share-card][data-fold-split] > :nth-child(2) { grid-row: 3; }
+html[data-fold="rows"] [data-dam-share-card][data-fold-split] > :nth-child(3) { grid-row: 4; }
+
+/* Home. Book: one card column per segment (home.js packs to two columns while the fold is there), the fold between. */
+html[data-fold="columns"] .agh-grid[data-fold-split] {
+    grid-template-columns: var(--fold-start, 1fr) minmax(0, 1fr);
+    column-gap: var(--fold-gap, 0px);
+}
+
+/* Flowing rows of controls (the analytics notice, the Library tabs, the Web Pages toolbar). Book: they wrap before the
+   fold, staying in the leading segment, instead of putting a link or control on it. */
+html[data-fold="columns"] [data-fold-wrap] {
+    box-sizing: border-box;
+    flex-wrap: wrap;
+    padding-inline-end: var(--fold-rest, 0px) !important;
+}

@@ -1,0 +1,81 @@
+name: Static Analysis
+
+# Pull requests run automatically (GitHub tests the PR's merge ref); pushes
+# never do. A branch push would repeat its PR's work, and post-merge minutes on
+# main are billed, so Pest alone re-runs there (see pest_tests.yml).
+# workflow_dispatch runs it by hand, e.g. to check main on demand.
+on:
+  pull_request:
+  workflow_dispatch:
+
+# A PR groups by its head branch and any other event by its ref type and name,
+# so a branch's runs share one branch-<name> group whichever event opened them
+# and a tag dispatch gets its own tag-<name> group.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref && format('branch-{0}', github.head_ref) || format('{0}-{1}', github.ref_type, github.ref_name) }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  phpstan:
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","linux","x64","windows-gpu"]') }}
+    timeout-minutes: 30
+    name: PHPStan (Larastan)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@2.37.2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - name: Install Composer dependencies
+        uses: ramsey/composer-install@v3
+        with:
+          composer-options: "--prefer-dist --no-scripts"
+
+      - name: Generate ephemeral app key
+        run: php -r 'if (file_put_contents(getenv("GITHUB_ENV"), "APP_KEY=base64:".base64_encode(random_bytes(32)).PHP_EOL, FILE_APPEND) === false) exit(1);'
+
+      # Level 5 with phpstan-baseline.neon: fails on any error the baseline does not list, and on
+      # baseline entries that no longer occur (so it only shrinks). docs/reference/guardrails.md
+      # explains how to regenerate and shrink it.
+      - name: Run PHPStan
+        run: vendor/bin/phpstan analyse --memory-limit=2G --no-progress
+
+  rector:
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","linux","x64","windows-gpu"]') }}
+    timeout-minutes: 30
+    name: Rector (dry-run, advisory)
+    # 2026-09-16: advisory, so not on pull_request. Every PR push queued it onto the two
+    # windows-gpu runners ahead of the gates. This workflow has no push trigger (see the
+    # header), so Rector now runs by hand only: `gh workflow run static_analysis.yml`.
+    if: github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@2.37.2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - name: Install Composer dependencies
+        uses: ramsey/composer-install@v3
+        with:
+          composer-options: "--prefer-dist --no-scripts"
+
+      - name: Generate ephemeral app key
+        run: php -r 'if (file_put_contents(getenv("GITHUB_ENV"), "APP_KEY=base64:".base64_encode(random_bytes(32)).PHP_EOL, FILE_APPEND) === false) exit(1);'
+
+      # Advisory only: reports refactors Rector would apply without failing the build.
+      - name: Run Rector (dry-run)
+        continue-on-error: true
+        run: vendor/bin/rector process --dry-run --no-progress-bar

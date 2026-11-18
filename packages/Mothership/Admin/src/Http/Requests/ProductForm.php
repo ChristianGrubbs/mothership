@@ -1,0 +1,88 @@
+<?php
+
+namespace Mothership\Admin\Http\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+use Mothership\Core\Rules\Sku;
+use Mothership\Product\Repositories\ProductRepository;
+
+class ProductForm extends FormRequest
+{
+    /**
+     * Rules.
+     *
+     * @var array
+     */
+    protected $rules;
+
+    /**
+     * Create a new form request instance.
+     *
+     * @return void
+     */
+    public function __construct(
+        protected ProductRepository $productRepository
+    ) {}
+
+    /**
+     * Determine if the product is authorized to make this request.
+     *
+     * @return bool
+     */
+    public function authorize()
+    {
+        return true;
+    }
+
+    /**
+     * Get the validation rules that apply to the request.
+     *
+     * @return array
+     */
+    public function rules()
+    {
+        /**
+         * A product deleted while its edit page was still open would otherwise
+         * fatal here on a null instance rather than reporting it as gone.
+         */
+        $product = $this->productRepository->findOrFail($this->id);
+
+        $this->rules = $product->getTypeInstance()->getTypeValidationRules();
+
+        $this->rules['sku'] = ['required', 'unique:products,sku,'.$this->id, new Sku];
+        $this->rules['status'] = ['boolean'];
+
+        return $this->rules;
+    }
+
+    /**
+     * Get custom attribute names for validator errors.
+     *
+     * @return array<string, string>
+     */
+    public function attributes(): array
+    {
+        $attributes = [];
+
+        $position = 0;
+
+        foreach (array_keys((array) $this->input('variants', [])) as $variantKey) {
+            $attributes["variants.{$variantKey}.sku"] = trans('admin::app.catalog.products.index.variant-sku-label', ['position' => ++$position]);
+        }
+
+        return $attributes;
+    }
+
+    public function prepareForValidation()
+    {
+        if (isset($this->uniqueFields['values.common.sku']) || isset($this->values['common']['sku'])) {
+            $this->merge([
+                'sku' => $this->values['common']['sku'],
+            ]);
+        }
+
+        $this->merge([
+            'status' => (int) $this->status,
+        ]);
+    }
+}

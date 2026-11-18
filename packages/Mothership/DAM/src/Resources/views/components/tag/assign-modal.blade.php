@@ -1,0 +1,189 @@
+
+@pushOnce('scripts')
+    <script type="text/x-template" id="v-dam-tag-assign-modal-template">
+        <x-admin::modal ref="assignTagModal">
+            <x-slot:header>
+                <p class="text-lg text-gray-800 dark:text-white font-bold">
+                    @lang('dam::app.admin.dam.tag.mass-action.modal-title')
+                </p>
+            </x-slot>
+
+            <x-slot:content>
+                <div class="flex flex-col gap-3">
+                    <p class="text-sm text-gray-600 dark:text-slate-300">
+                        @{{ subtitle }}
+                    </p>
+
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 dark:text-slate-300 mb-1">
+                            @lang('dam::app.admin.dam.tag.mass-action.tags-label')
+                        </label>
+
+                        <v-multiselect
+                            v-model="selectedTags"
+                            :options="options"
+                            :multiple="true"
+                            :taggable="true"
+                            :close-on-select="false"
+                            :clear-on-select="false"
+                            :hide-selected="true"
+                            :show-labels="false"
+                            :loading="tagsLoading"
+                            :internal-search="false"
+                            :tag-placeholder="@js(trans('dam::app.admin.dam.tag.mass-action.add-tag'))"
+                            :placeholder="@js(trans('dam::app.admin.dam.tag.mass-action.tags-placeholder'))"
+                            @tag="addTag"
+                            @select="assignSelectedTag"
+                            @search-change="onTagSearch"
+                        ></v-multiselect>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2 mt-2">
+                        <span class="mr-auto text-xs text-gray-500 dark:text-slate-400">Tags save as you add them.</span>
+                        <button type="button" class="secondary-button" @click="close">
+                            Done
+                        </button>
+                    </div>
+                </div>
+            </x-slot>
+        </x-admin::modal>
+    </script>
+
+    <script type="module">
+        app.component('v-dam-tag-assign-modal', {
+            template: '#v-dam-tag-assign-modal-template',
+
+            data() {
+                return {
+                    assetIds: [],
+                    context: null,
+                    directoryIds: [],
+                    options: [],
+                    selectedTags: [],
+                    isAssigning: false,
+                    tagsLoading: false,
+                    searchDebounce: null,
+                };
+            },
+
+            computed: {
+                subtitle() {
+
+                    if (this.directoryIds.length) {
+                        return "@lang('dam::app.admin.dam.tag.mass-action.modal-subtitle-recursive')";
+                    }
+
+                    return "@lang('dam::app.admin.dam.tag.mass-action.modal-subtitle')".split('|').at(this.assetIds.length === 1 ? 0 : -1)
+                        .replace(':count', this.assetIds.length);
+                },
+            },
+
+            mounted() {
+                this.$emitter.on('dam:open-tag-assign-modal', ({ assetIds, directoryIds, context }) => {
+                    this.assetIds     = Array.isArray(assetIds) ? assetIds.map(Number).filter(Boolean) : [];
+                    this.directoryIds = Array.isArray(directoryIds) ? directoryIds.map(Number).filter(Boolean) : [];
+                    this.context      = context ?? null;
+                    this.selectedTags = [];
+
+                    if (! this.assetIds.length && ! this.directoryIds.length) {
+                        this.$emitter.emit('add-flash', {
+                            type: 'warning',
+                            message: @js(trans('dam::app.admin.dam.tag.mass-action.no-items')),
+                        });
+                        return;
+                    }
+
+                    this.loadTags();
+                    this.$refs.assignTagModal.toggle();
+                });
+            },
+
+            methods: {
+
+                loadTags(query = '') {
+                    this.tagsLoading = true;
+
+                    this.$axios.get('{{ route('admin.dam.tags.list') }}', {
+                            params: { query, per_page: 25 },
+                        })
+                        .then(({ data }) => {
+                            const fetched = (data?.data ?? []).map(t => t.name);
+
+                            this.options = [...new Set([...this.selectedTags, ...fetched])];
+                        })
+                        .catch(() => {
+                            this.options = [...this.selectedTags];
+                        })
+                        .finally(() => {
+                            this.tagsLoading = false;
+                        });
+                },
+
+                onTagSearch(query) {
+                    clearTimeout(this.searchDebounce);
+                    this.searchDebounce = setTimeout(() => {
+                        this.loadTags((query || '').trim());
+                    }, 300);
+                },
+
+                addTag(newTag) {
+                    const value = (newTag || '').trim();
+                    if (! value) return;
+
+                    const lower = value.toLowerCase();
+                    if (! this.options.some(o => o.toLowerCase() === lower)) {
+                        this.options.push(value);
+                    }
+                    if (! this.selectedTags.some(t => t.toLowerCase() === lower)) {
+                        this.selectedTags.push(value);
+                        this.assign([value]);
+                    }
+                },
+
+                assignSelectedTag(value) {
+                    this.assign([value]);
+                },
+
+                close() {
+                    this.$refs.assignTagModal.toggle();
+                },
+
+                assign(selectedTags) {
+                    const tags = selectedTags.map(t => (t || '').trim()).filter(Boolean);
+
+                    if (! tags.length) {
+                        this.$emitter.emit('add-flash', {
+                            type: 'warning',
+                            message: @js(trans('dam::app.admin.dam.tag.mass-action.no-tags')),
+                        });
+                        return;
+                    }
+
+                    this.isAssigning = true;
+
+                    this.$axios.post('{{ route('admin.dam.assets.mass_assign_tags') }}', {
+                            indices: this.assetIds,
+                            directory_ids: this.directoryIds,
+                            tags,
+                        })
+                        .then(({ data }) => {
+                            this.$emitter.emit('add-flash', { type: 'success', message: data.message });
+                            this.$emitter.emit('dam:tag-assign:done', { context: this.context });
+                        })
+                        .catch(error => {
+                            this.$emitter.emit('add-flash', {
+                                type: 'error',
+                                message: error?.response?.data?.message
+                                    ?? @js(trans('dam::app.admin.dam.tag.mass-action.assign-failed')),
+                            });
+                        })
+                        .finally(() => {
+                            this.isAssigning = false;
+                        });
+                },
+            },
+        });
+    </script>
+@endPushOnce
+
+<v-dam-tag-assign-modal></v-dam-tag-assign-modal>

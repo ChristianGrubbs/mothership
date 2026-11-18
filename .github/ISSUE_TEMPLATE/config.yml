@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Security Vulnerability
+    url: https://github.com/ChristianGrubbs/mothership/blob/main/SECURITY.md
+    about: Do not open an issue for a vulnerability. Report it privately, as this policy describes.
+  - name: 📖 Documentation
+    url: https://github.com/ChristianGrubbs/mothership/tree/main/docs/manual
+    about: Read the Mothership user, administrator and developer guides, which are also the in-app Help center.

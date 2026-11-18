@@ -1,0 +1,1098 @@
+
+    <div class="relative flex flex-col flex-1 min-h-0 overflow-hidden p-4 gap-3">
+
+        <div class="flex items-center gap-2 flex-wrap">
+                        <button
+                type="button"
+                data-sidebar-toggle
+                class="w-8 h-8 flex items-center justify-center rounded-md transition-colors shrink-0"
+                :class="sidebarVisible ? 'text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30' : 'text-zinc-600 dark:text-white hover:bg-gray-100 dark:hover:bg-cherry-800'"
+                title="Toggle sidebar"
+                @click="toggleSidebar"
+            >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                    class="transition-transform duration-200"
+                    :style="sidebarVisible ? '' : 'transform:scaleX(-1)'"
+                >
+                    <polyline points="11 17 6 12 11 7"></polyline>
+                    <polyline points="18 17 13 12 18 7"></polyline>
+                </svg>
+            </button>
+            
+            <button type="button" class="text-sm text-primary-600 dark:text-primary-300 whitespace-nowrap" @click="showAllAssets" :aria-current="scope === 'all' ? 'page' : undefined">All assets</button>
+
+            <v-dam-explorer-breadcrumb
+                class="min-[640px]:basis-[16rem] max-[639px]:order-last max-[639px]:basis-full"
+                :breadcrumbs="breadcrumb"
+                :can-go-back="canGoBack"
+                :can-go-forward="canGoForward"
+                :current-dir-id="currentDirId"
+                :loading="loading && ! firstLoadSettled"
+                @back="goBack"
+                @forward="goForward"
+                @navigate="goTo"
+                @open-new-tab="openNewTab"
+                @drop="onInternalDrop"
+            ></v-dam-explorer-breadcrumb>
+
+                        <button
+                v-if="currentDirId"
+                type="button"
+                class="w-8 h-8 flex items-center justify-center rounded-md transition-colors text-zinc-600 dark:text-white hover:bg-gray-100 dark:hover:bg-cherry-800 cursor-pointer shrink-0"
+                title="Download Zip"
+                @click="downloadCurrentDir"
+            >
+                <i class="icon-dam-zip text-xl"></i>
+            </button>
+                                    <button
+                v-if="currentDirId"
+                type="button"
+                class="w-8 h-8 flex items-center justify-center rounded-md transition-colors text-zinc-600 dark:text-white hover:bg-gray-100 dark:hover:bg-cherry-800 cursor-pointer shrink-0"
+                title="Share Directory"
+                @click="shareCurrentDir"
+            >
+                <i class="icon-dam-link text-xl"></i>
+            </button>
+                        
+
+                        <input
+                type="file" multiple name="files[]"
+                :id="`explorer-upload-${tabId}`" class="hidden"
+                @change="onFileChange"
+            />
+                        
+            <input
+                type="file" multiple name="stack_files[]"
+                :id="`explorer-stack-upload-${tabId}`" class="hidden"
+                data-dam-stack-upload-input
+                @change="onStackFileChange"
+            />
+                        <input
+                type="file" webkitdirectory multiple name="folder_files[]"
+                :id="`explorer-folder-upload-${tabId}`" class="hidden"
+                @change="onFolderChange"
+            />
+            
+            <button
+                type="button"
+                class="shrink-0 h-8 rounded-md border px-2.5 text-xs font-semibold whitespace-nowrap transition-colors"
+                :class="[groupBy === 'stack' ? 'border-primary-600 bg-primary-50 text-primary-700 dark:bg-primary-900/40 dark:text-primary-200' : 'border-gray-200 text-gray-600 hover:bg-gray-100 dark:border-cherry-800 dark:text-gray-300 dark:hover:bg-cherry-800', phoneFiltersOpen ? '' : 'max-[639px]:hidden']"
+                :aria-pressed="groupBy === 'stack' ? 'true' : 'false'"
+                title="Show stacks under their product, campaign or use case, then by name"
+                data-explorer-group-stack
+                @click="toggleGroupBy"
+            >Group by stack</button>
+
+            <v-dam-explorer-view-toggle :model-value="viewMode" @update:model-value="setView($event)"></v-dam-explorer-view-toggle>
+
+                        <div v-if="canUploadHere" class="shrink-0">
+                <v-dropdown
+    position="bottom-right"
+    :teleport="true"
+    class="relative"
+>
+            <button
+                            type="button"
+                            class="primary-button h-8 !py-0 flex items-center gap-x-1.5 whitespace-nowrap"
+                        >
+                            <span class="text-xl leading-none">+</span>
+                            New                        </button>
+
+        <template v-slot:toggle>
+            <button
+                            type="button"
+                            class="primary-button h-8 !py-0 flex items-center gap-x-1.5 whitespace-nowrap"
+                        >
+                            <span class="text-xl leading-none">+</span>
+                            New                        </button>
+        </template>
+    
+    
+            <template v-slot:menu>
+            <ul
+                data-dropdown-menu
+                class="py-4 shadow-md !p-0 z-10"
+            >
+                <li
+                            class="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 dark:hover:bg-cherry-800 cursor-pointer text-sm text-gray-700 dark:text-gray-300"
+                            @click="triggerNewUpload"
+                        >
+                            <i class="icon-dam-upload text-base"></i>
+                            Upload Files                        </li>
+                        <li
+                            class="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 dark:hover:bg-cherry-800 cursor-pointer text-sm text-gray-700 dark:text-gray-300"
+                            @click="triggerNewFolderUpload"
+                        >
+                            <i class="icon-dam-add-folder text-base"></i>
+                            Upload Folder                        </li>
+                                                <li
+                            class="flex items-start gap-2 px-4 py-2 border-t border-gray-100 dark:border-cherry-800 hover:bg-gray-100 dark:hover:bg-cherry-800 cursor-pointer text-sm text-gray-700 dark:text-gray-300"
+                            data-dam-upload-as-stack
+                            @click="triggerStackUpload"
+                        >
+                            <span class="text-base leading-5" aria-hidden="true">⧉</span>
+                            <span class="flex flex-col">
+                                <span>Upload as a Stack…</span>
+                                <span class="text-xs text-gray-500 dark:text-gray-400">Pick 2 or more files; you review the stack before it is made</span>
+                            </span>
+                        </li>
+                                                                                                <li
+                            class="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 dark:hover:bg-cherry-800 cursor-pointer text-sm text-gray-700 dark:text-gray-300"
+                            @click="createDirHere"
+                        >
+                            <i class="icon-dam-add-folder text-base"></i>
+                            Add Directory                        </li>
+                                                <li
+                            v-if="clipboard"
+                            class="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 dark:hover:bg-cherry-800 cursor-pointer text-sm text-gray-700 dark:text-gray-300 border-t border-gray-100 dark:border-cherry-700"
+                            @click="pasteHere"
+                        >
+                            <i class="icon-copy text-base"></i>
+                            Paste                        </li>
+            </ul>
+        </template>
+    </v-dropdown>
+
+            </div>
+            <div v-else class="shrink-0 flex items-center gap-2" data-new-unavailable title="Open a folder to upload">
+                <button
+                    type="button"
+                    disabled
+                    aria-disabled="true"
+                    aria-describedby="new-unavailable-hint"
+                    class="primary-button h-8 !py-0 flex items-center gap-x-1.5 whitespace-nowrap cursor-not-allowed opacity-50 pointer-events-none"
+                >
+                    <span class="text-xl leading-none">+</span>
+                    New                </button>
+                <span id="new-unavailable-hint" class="text-[10px] leading-tight md:text-xs text-gray-500 dark:text-gray-400 max-w-[8rem] md:max-w-none md:whitespace-nowrap">Open a folder to upload</span>
+            </div>
+                    </div>
+
+        <div class="flex items-center gap-2 flex-wrap max-[639px]:flex-nowrap max-[639px]:overflow-x-auto max-[639px]:-mx-1 max-[639px]:px-1" :class="{ 'max-[639px]:hidden': ! phoneFiltersOpen }" id="explorer-phone-media-types" role="group" aria-label="Media type">
+            <button v-for="(label, id) in mediaTypeLabels" :key="id" type="button" :aria-pressed="mediaType === id" @click="setMediaType(id)" class="rounded-full border px-3 py-1 text-sm whitespace-nowrap shrink-0" :class="mediaType === id ? 'bg-primary-600 text-white border-primary-600' : 'text-zinc-600 dark:text-white border-gray-300 dark:border-cherry-700'">{{ label }}</button>
+        </div>
+
+        <div class="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+
+            
+            <div
+                class="flex flex-1 min-w-[120px] min-[640px]:min-w-[300px] items-center gap-x-1"
+                :class="{ 'max-[639px]:fixed max-[639px]:inset-x-0 max-[639px]:bottom-0 max-[639px]:z-[60] max-[639px]:flex-wrap max-[639px]:gap-y-2 max-[639px]:border-t max-[639px]:border-gray-200 dark:max-[639px]:border-cherry-700 max-[639px]:bg-white dark:max-[639px]:bg-cherry-900 max-[639px]:px-4 max-[639px]:pt-3 max-[639px]:pb-[calc(0.75rem+env(safe-area-inset-bottom))] max-[639px]:shadow-[0_-4px_12px_rgba(0,0,0,0.12)]': selection.ids.length > 0 }"
+                data-explorer-selection-bar
+                ref="selectionBar"
+            >
+                <label v-if="dirs.length || assets.length" class="flex items-center cursor-pointer shrink-0 mr-2" data-select-all>
+                    <input
+                        type="checkbox"
+                        class="peer sr-only"
+                        aria-label="Select all"
+                        :checked="selection.mode === 'all'"
+                        :indeterminate="selection.mode === 'partial'"
+                        @change="toggleSelectAll(); $event.target.checked = selection.mode === 'all'"
+                    >
+                    <span
+                        class="icon-checkbox-normal peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary-600 dark:peer-focus-visible:outline-primary-400 cursor-pointer rounded-md text-2xl"
+                        :class="{
+                            'peer-checked:icon-checkbox-check peer-checked:text-primary-700': selection.mode === 'all',
+                            'peer-indeterminate:icon-checkbox-partial peer-indeterminate:text-primary-700': selection.mode === 'partial',
+                        }"
+                    ></span>
+                </label>
+
+                <template v-if="selection.ids.length > 0">
+                                        
+                    <button
+                        v-if="selection.ids.filter(i => i.type === 'asset').length > 1"
+                        type="button"
+                        class="mr-2 inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+                        data-dam-create-stack
+                        @click="openMergeDialog"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="3" width="13" height="13" rx="2"></rect><path d="M16 21H5a2 2 0 0 1-2-2V8"></path></svg>
+                        {{ createStackLabel }}
+                    </button>
+                    
+                                        
+                    <v-dropdown
+    position="bottom-left"
+    :teleport="true"
+    class="relative"
+>
+            <button
+                                type="button"
+                                class="flex items-center gap-x-1.5 rounded-md border border-primary-300 bg-primary-50 dark:bg-primary-900/30 dark:border-primary-700 px-3 py-1.5 text-sm font-medium text-primary-700 dark:text-primary-300 hover:bg-primary-100 dark:hover:bg-primary-900/50 transition"
+                            >
+                                Select Action                                <span class="icon-chevron-down text-2xl"></span>
+                            </button>
+
+        <template v-slot:toggle>
+            <button
+                                type="button"
+                                class="flex items-center gap-x-1.5 rounded-md border border-primary-300 bg-primary-50 dark:bg-primary-900/30 dark:border-primary-700 px-3 py-1.5 text-sm font-medium text-primary-700 dark:text-primary-300 hover:bg-primary-100 dark:hover:bg-primary-900/50 transition"
+                            >
+                                Select Action                                <span class="icon-chevron-down text-2xl"></span>
+                            </button>
+        </template>
+    
+    
+            <template v-slot:menu>
+            <ul
+                data-dropdown-menu
+                class="py-4 shadow-md !p-0 z-10"
+            >
+                <li
+                                class="px-4 py-2 hover:bg-gray-100 dark:hover:bg-cherry-800 cursor-pointer text-sm text-gray-700 dark:text-gray-300"
+                                @click="openFolderPicker('move')"
+                            >
+                                Move to…                            </li>
+
+                            <li
+                                class="px-4 py-2 hover:bg-gray-100 dark:hover:bg-cherry-800 cursor-pointer text-sm text-gray-700 dark:text-gray-300"
+                                @click="openFolderPicker('copy')"
+                            >
+                                Copy to…                            </li>
+                            
+                                                        <li
+                                class="px-4 py-2 hover:bg-gray-100 dark:hover:bg-cherry-800 cursor-pointer text-sm text-gray-700 dark:text-gray-300"
+                                @click="openAssignTagsModal"
+                            >
+                                Assign Tags                            </li>
+                            
+                                                        
+                            <li
+                                v-if="selection.ids.filter(i => i.type === 'asset').length > 1"
+                                class="px-4 py-2 hover:bg-gray-100 dark:hover:bg-cherry-800 cursor-pointer text-sm text-gray-700 dark:text-gray-300"
+                                data-dam-merge-action
+                                @click="openMergeDialog"
+                            >
+                                {{ addToStackLabel }}
+                            </li>
+                            
+                            
+                            
+                            
+                                                        <li
+                                v-if="fieldDefinitions.length"
+                                class="px-4 py-2 hover:bg-gray-100 dark:hover:bg-cherry-800 cursor-pointer text-sm text-gray-700 dark:text-gray-300"
+                                data-dam-field-bulk-open
+                                @click="openFieldBulkModal"
+                            >
+                                Edit fields                            </li>
+                            
+                                                        <li
+                                class="px-4 py-2 hover:bg-gray-100 dark:hover:bg-cherry-800 cursor-pointer text-sm text-gray-700 dark:text-gray-300"
+                                data-dam-process
+                                @click="openProcessModal"
+                            >
+                                Process…                            </li>
+                            
+                                                        <li
+                                class="px-4 py-2 hover:bg-gray-100 dark:hover:bg-cherry-800 cursor-pointer text-sm text-gray-700 dark:text-gray-300"
+                                data-explorer-add-to-collection
+                                @click="openAddToCollection"
+                            >
+                                Add to collection                            </li>
+                            
+                                                        <li
+                                class="px-4 py-2 hover:bg-gray-100 dark:hover:bg-cherry-800 cursor-pointer text-sm text-gray-700 dark:text-gray-300"
+                                @click="performMassDelete"
+                            >
+                                Delete                            </li>
+            </ul>
+        </template>
+    </v-dropdown>
+
+                    
+                    
+                    <button
+                        v-if="selection.ids.some((item) => item.type === 'asset')"
+                        type="button"
+                        class="flex items-center gap-x-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-cherry-700 dark:bg-cherry-900 dark:text-gray-200 dark:hover:bg-cherry-800 transition ml-1"
+                        data-organize-add-to-board
+                        @click="openOrganizePicker('boards')"
+                    >Add to board</button>
+                    
+
+                    <span class="text-sm text-gray-500 dark:text-gray-400 ml-2">
+                        {{ ":count selected".replace(':count', selection.ids.length) }}
+                    </span>
+                </template>
+
+                <template v-else>
+                    <div class="flex w-full max-w-[445px] min-w-0 items-center max-sm:max-w-full">
+                        <div class="relative w-full min-w-0">
+                            <input
+                                type="text"
+                                class="block w-full rounded-lg border dark:border-gray-500 bg-white dark:bg-cherry-900 py-1.5 ltr:pl-3 rtl:pr-3 ltr:pr-10 rtl:pl-10 leading-6 text-gray-600 dark:text-gray-300 transition-all hover:border-gray-400 dark:hover:border-gray-400 focus:border-gray-400 dark:focus:border-gray-400"
+                                :placeholder="'Search assets…'"
+                                aria-label="Search assets in this scope"
+                                maxlength="255"
+                                v-model="searchInput"
+                                @input="onSearch"
+                                @keydown.enter.prevent="submitSearch"
+                                @keydown.esc.prevent="clearSearch"
+                                autocomplete="off"
+                            />
+                            <button
+                                v-if="searchInput"
+                                type="button" aria-label="Clear asset search"
+                                @click="clearSearch"
+                                class="absolute ltr:right-2.5 rtl:left-2.5 top-2 text-gray-400 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-200 text-base leading-none"
+                            >×</button>
+                            <div v-else class="icon-search pointer-events-none absolute ltr:right-2.5 rtl:left-2.5 top-2 flex items-center text-2xl"></div>
+                            <p v-if="searchInput.length >= 255" class="absolute top-full mt-0.5 text-xs text-amber-700 dark:text-amber-300" role="status">Searches are limited to 255 characters.</p>
+                        </div>
+                    </div>
+
+                    <div class="ltr:pl-2.5 rtl:pr-2.5 shrink-0" v-if="meta">
+                        <p class="whitespace-nowrap text-sm font-light text-gray-800 dark:text-white">
+                            {{ (meta.total_assets === 1 ? ':total Result' : ':total Results').replace(':total', meta.total_assets) }}
+                        </p>
+                    </div>
+                </template>
+            </div>
+
+            
+            <button
+                type="button"
+                class="min-[640px]:hidden flex w-full min-h-11 items-center justify-between gap-2 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 dark:border-cherry-700 dark:bg-cherry-900 dark:text-gray-200"
+                :aria-expanded="phoneFiltersOpen ? 'true' : 'false'"
+                aria-controls="explorer-phone-media-types"
+                data-explorer-phone-filters
+                @click="phoneFiltersOpen = ! phoneFiltersOpen"
+            >
+                <span class="flex items-center gap-1.5">
+                    <span class="icon-filter text-2xl" aria-hidden="true"></span>
+                    Filter & sort                    <span
+                        v-if="hasAppliedFilters() || mediaType !== 'all'"
+                        class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-100 px-1.5 text-xs font-medium text-primary-700 dark:bg-cherry-800 dark:text-primary-400"
+                        v-text="appliedFilterCount() + (mediaType !== 'all' ? 1 : 0)"
+                    ></span>
+                </span>
+                <span class="text-xl" :class="phoneFiltersOpen ? 'icon-chevron-up' : 'icon-chevron-down'" aria-hidden="true"></span>
+            </button>
+
+            <div class="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 min-w-0 max-[639px]:w-full max-[639px]:flex-nowrap max-[639px]:justify-between max-[639px]:gap-x-2" :class="{ 'max-[639px]:hidden': ! phoneFiltersOpen }">
+                <!-- "Similar to" results are ordered by similarity; the backend ignores the sort there. -->
+                <label v-show="! similarTo" class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 max-[639px]:min-w-0 max-[639px]:flex-1">
+                    <span class="whitespace-nowrap max-[639px]:sr-only">Sort by</span>
+                    <select
+                        data-explorer-sort
+                        class="max-[639px]:w-full max-[639px]:min-w-0 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-700 dark:border-gray-500 dark:bg-cherry-900 dark:text-gray-200"
+                        :title="sortBy === 'popularity' ? organizeT.sort?.['popularity-hint'] : undefined"
+                        :value="`${sortBy}:${sortOrder}`"
+                        @change="onSortSelection($event.target.value)"
+                    >
+                        <option v-for="option in sortOptions" :key="option.value" :value="option.value" v-text="option.label"></option>
+                    </select>
+                </label>
+
+                
+                <button
+                    v-show="! similarTo"
+                    type="button"
+                    class="flex shrink-0 items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-cherry-700 dark:bg-cherry-900 dark:text-gray-200 dark:hover:bg-cherry-800 max-[639px]:px-2"
+                    title="Save search"
+                    data-organize-save-search
+                    @click="openSaveSearch"
+                >
+                    <svg class="shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"/></svg>
+                    <span class="max-[639px]:sr-only">Save search</span>
+                </button>
+
+                <v-drawer
+    ref="explorerFilterDrawer"
+    is-active=""
+    position="right"
+    width="350px"
+    :full-width-on-phone="true"
+>
+            <template v-slot:toggle>
+            <div class="shrink-0">
+                            <div
+                                class="relative inline-flex w-full max-w-max ltr:pl-3 rtl:pr-3 ltr:pr-5 rtl:pl-5 cursor-pointer select-none appearance-none items-center justify-between gap-x-1 rounded-md border dark:border-gray-500 bg-white dark:bg-cherry-900 px-1 py-1.5 text-center text-gray-600 dark:text-gray-300 transition-all marker:shadow hover:border-gray-400 dark:hover:border-gray-400 focus:outline-none focus:ring-2"
+                                :class="{'[&>*]:text-primary-700 [&>*]:dark:text-white': hasAppliedFilters()}"
+                            >
+                                <span class="icon-filter text-2xl"></span>
+
+                                <span>
+                                    Filter                                </span>
+
+                                <span
+                                    class="ltr:ml-0.5 rtl:mr-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-100 px-1.5 text-xs font-medium text-primary-700 dark:bg-cherry-800 dark:text-primary-400"
+                                    data-applied-filter-count
+                                    v-if="hasAppliedFilters()"
+                                    v-text="appliedFilterCount()"
+                                ></span>
+                            </div>
+                        </div>
+        </template>
+    
+            <template v-slot:header="{ close }">
+            <div class="grid gap-y-2.5 p-3 border-b dark:border-cherry-800 max-sm:px-4">
+                <div class="flex justify-between items-center p-3">
+                            <p class="text-base font-semibold dark:text-white text-gray-800">
+                                Apply Filters                            </p>
+                        </div>
+
+                <div class="absolute top-4 ltr:right-3 rtl:left-3">
+                    <button
+                        type="button"
+                        class="icon-cancel text-3xl cursor-pointer hover:bg-primary-50 dark:hover:bg-cherry-800 hover:rounded-md"
+                        aria-label="Close"
+                        data-drawer-close
+                        v-on:click="close"
+                    >
+                    </button>
+                </div>
+            </div>
+        </template>
+    
+            <template v-slot:content>
+            <div class="p-3 overflow-auto flex-1 max-sm:px-4 !p-5">
+                <div
+    class="group border-b border-gray-100 last:border-b-0 dark:border-cherry-800"
+    v-for="column in getActiveFilterColumns()"
+    :key="column.index"
+    :data-datagrid-filter="column.index"
+>
+    <div class="flex items-center">
+        <button
+            type="button"
+            class="flex min-w-0 flex-1 flex-col gap-y-0.5 py-3 text-left ltr:pr-1 rtl:pl-1"
+            data-filter-toggle
+            :aria-expanded="isFilterExpanded(column.index) ? 'true' : 'false'"
+            @click="toggleFilterEditor(column.index)"
+        >
+            <span
+                class="truncate text-xs font-semibold uppercase tracking-wide"
+                :class="isFilterExpanded(column.index) || filterHasValue(column) ? 'text-gray-800 dark:text-white' : 'text-gray-400 dark:text-gray-500'"
+                data-filter-name
+                v-text="filterLabel(column)"
+            >
+            </span>
+
+            <span
+                v-show="!isFilterExpanded(column.index)"
+                class="truncate text-sm"
+                :class="filterHasValue(column) ? 'text-primary-700 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'"
+                data-filter-summary
+                :title="collapsedSummary(column)"
+                v-text="collapsedSummary(column)"
+            >
+            </span>
+        </button>
+    </div>
+
+    <div class="pb-3" v-show="isFilterExpanded(column.index)">
+        <div v-if="column.type === 'boolean'">
+            <v-dropdown
+    position="bottom-left"
+    :teleport="false"
+    class="relative"
+>
+            <div
+                        class="flex min-h-[39px] w-full cursor-pointer flex-wrap items-center gap-1.5 rounded-md border bg-white px-2.5 py-1.5 leading-6 text-gray-600 transition-all hover:border-gray-400 focus:border-gray-400 dark:border-gray-600 dark:bg-cherry-800 dark:text-gray-300 dark:hover:border-gray-400"
+                    >
+                        <template v-if="hasAnyAppliedColumnValues(column.index)">
+                            <span
+                                class="flex items-center rounded bg-primary-100 px-2 py-0.5 text-sm font-semibold text-primary-700 dark:bg-cherry-800 dark:text-primary-400"
+                                v-for="appliedColumnValue in getAppliedColumnValues(column.index)"
+                            >
+                                <span v-text="column.options.find((option => option.value == appliedColumnValue))?.label"></span>
+
+                                <span
+                                    class="icon-cancel cursor-pointer text-lg text-primary-700 ltr:ml-1 rtl:mr-1 dark:!text-primary-400"
+                                    @click.stop="removeAppliedColumnValue(column.index, appliedColumnValue)"
+                                ></span>
+                            </span>
+                        </template>
+
+                        <span
+                            v-else
+                            class="text-sm text-gray-400 dark:text-gray-400"
+                            v-text="'Select'"
+                        >
+                        </span>
+
+                        <span class="icon-chevron-down text-2xl ltr:ml-auto rtl:mr-auto"></span>
+                    </div>
+
+        <template v-slot:toggle>
+            <div
+                        class="flex min-h-[39px] w-full cursor-pointer flex-wrap items-center gap-1.5 rounded-md border bg-white px-2.5 py-1.5 leading-6 text-gray-600 transition-all hover:border-gray-400 focus:border-gray-400 dark:border-gray-600 dark:bg-cherry-800 dark:text-gray-300 dark:hover:border-gray-400"
+                    >
+                        <template v-if="hasAnyAppliedColumnValues(column.index)">
+                            <span
+                                class="flex items-center rounded bg-primary-100 px-2 py-0.5 text-sm font-semibold text-primary-700 dark:bg-cherry-800 dark:text-primary-400"
+                                v-for="appliedColumnValue in getAppliedColumnValues(column.index)"
+                            >
+                                <span v-text="column.options.find((option => option.value == appliedColumnValue))?.label"></span>
+
+                                <span
+                                    class="icon-cancel cursor-pointer text-lg text-primary-700 ltr:ml-1 rtl:mr-1 dark:!text-primary-400"
+                                    @click.stop="removeAppliedColumnValue(column.index, appliedColumnValue)"
+                                ></span>
+                            </span>
+                        </template>
+
+                        <span
+                            v-else
+                            class="text-sm text-gray-400 dark:text-gray-400"
+                            v-text="'Select'"
+                        >
+                        </span>
+
+                        <span class="icon-chevron-down text-2xl ltr:ml-auto rtl:mr-auto"></span>
+                    </div>
+        </template>
+    
+    
+            <template v-slot:menu>
+            <ul
+                data-dropdown-menu
+                class="py-4"
+            >
+                <li class="text-sm text-gray-600 dark:text-gray-300 px-5 py-2 cursor-pointer hover:bg-primary-50 dark:hover:bg-cherry-800" v-for="option in column.options" v-text="option.label" @click="filterPage(option.value, column)">
+    
+</li>
+            </ul>
+        </template>
+    </v-dropdown>
+
+        </div>
+
+        <div v-else-if="column.type === 'dropdown'">
+            <div v-if="column.options.type === 'basic'">
+                <v-dropdown
+    position="bottom-left"
+    :teleport="false"
+    class="relative"
+>
+            <div
+                            class="flex min-h-[39px] w-full cursor-pointer flex-wrap items-center gap-1.5 rounded-md border bg-white px-2.5 py-1.5 leading-6 text-gray-600 transition-all hover:border-gray-400 focus:border-gray-400 dark:border-gray-600 dark:bg-cherry-800 dark:text-gray-300 dark:hover:border-gray-400"
+                        >
+                            <template v-if="hasAnyAppliedColumnValues(column.index)">
+                                <span
+                                    class="flex items-center rounded bg-primary-100 px-2 py-0.5 text-sm font-semibold text-primary-700 dark:bg-cherry-800 dark:text-primary-400"
+                                    v-for="appliedColumnValue in getAppliedColumnValues(column.index)"
+                                >
+                                    <span v-text="column.options.params.options.find((option => option.value == appliedColumnValue))?.label"></span>
+
+                                    <span
+                                        class="icon-cancel cursor-pointer text-lg text-primary-700 ltr:ml-1 rtl:mr-1 dark:!text-primary-400"
+                                        @click.stop="removeAppliedColumnValue(column.index, appliedColumnValue)"
+                                    ></span>
+                                </span>
+                            </template>
+
+                            <span
+                                v-else
+                                class="text-sm text-gray-400 dark:text-gray-400"
+                                v-text="'Select'"
+                            >
+                            </span>
+
+                            <span class="icon-chevron-down text-2xl ltr:ml-auto rtl:mr-auto"></span>
+                        </div>
+
+        <template v-slot:toggle>
+            <div
+                            class="flex min-h-[39px] w-full cursor-pointer flex-wrap items-center gap-1.5 rounded-md border bg-white px-2.5 py-1.5 leading-6 text-gray-600 transition-all hover:border-gray-400 focus:border-gray-400 dark:border-gray-600 dark:bg-cherry-800 dark:text-gray-300 dark:hover:border-gray-400"
+                        >
+                            <template v-if="hasAnyAppliedColumnValues(column.index)">
+                                <span
+                                    class="flex items-center rounded bg-primary-100 px-2 py-0.5 text-sm font-semibold text-primary-700 dark:bg-cherry-800 dark:text-primary-400"
+                                    v-for="appliedColumnValue in getAppliedColumnValues(column.index)"
+                                >
+                                    <span v-text="column.options.params.options.find((option => option.value == appliedColumnValue))?.label"></span>
+
+                                    <span
+                                        class="icon-cancel cursor-pointer text-lg text-primary-700 ltr:ml-1 rtl:mr-1 dark:!text-primary-400"
+                                        @click.stop="removeAppliedColumnValue(column.index, appliedColumnValue)"
+                                    ></span>
+                                </span>
+                            </template>
+
+                            <span
+                                v-else
+                                class="text-sm text-gray-400 dark:text-gray-400"
+                                v-text="'Select'"
+                            >
+                            </span>
+
+                            <span class="icon-chevron-down text-2xl ltr:ml-auto rtl:mr-auto"></span>
+                        </div>
+        </template>
+    
+    
+            <template v-slot:menu>
+            <ul
+                data-dropdown-menu
+                class="py-4"
+            >
+                <li class="text-sm text-gray-600 dark:text-gray-300 px-5 py-2 cursor-pointer hover:bg-primary-50 dark:hover:bg-cherry-800" v-for="option in column.options.params.options" v-text="option.label" @click="filterPage(option.value, column)">
+    
+</li>
+            </ul>
+        </template>
+    </v-dropdown>
+
+            </div>
+
+            <div v-else-if="column.options.type === 'searchable'">
+                <v-dam-datagrid-searchable-dropdown
+                    :datagrid-id="available.id"
+                    :column="column"
+                    @select-option="filterPage($event, column)"
+                >
+                </v-dam-datagrid-searchable-dropdown>
+
+                <div v-if="hasAnyAppliedColumnValues(column.index)" class="mt-1.5 flex gap-2 flex-wrap">
+                    <p
+                        class="flex items-center rounded bg-primary-100 px-2 py-0.5 text-sm font-semibold text-primary-700 dark:bg-cherry-800 dark:text-primary-400"
+                        v-for="appliedColumnValue in getAppliedColumnValues(column.index)"
+                    >
+                        <span v-text="appliedColumnValue"></span>
+
+                        <span
+                            class="icon-cancel cursor-pointer text-lg text-primary-700 ltr:ml-1 rtl:mr-1 dark:!text-primary-400"
+                            @click="removeAppliedColumnValue(column.index, appliedColumnValue)"
+                        >
+                        </span>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div v-else-if="column.type === 'date_range'">
+            <div class="grid grid-cols-2 gap-1.5">
+                <p
+                    class="cursor-pointer rounded-md border px-3 py-2 text-center text-sm font-medium leading-6 text-gray-600 transition-all hover:border-gray-400 dark:border-gray-600 dark:hover:border-gray-400 dark:border-cherry-800 dark:text-gray-300"
+                    v-for="option in column.options"
+                    v-text="option.label"
+                    @click="filterPage(
+                        $event,
+                        column,
+                        { quickFilter: { isActive: true, selectedFilter: option } }
+                    )"
+                >
+                </p>
+
+                <v-date-picker :allow-input="false">
+    <input
+                        value=""
+                        class="flex min-h-[39px] w-full rounded-md border px-3 py-2 text-sm text-gray-600 transition-all hover:border-gray-400 dark:border-gray-600 dark:hover:border-gray-400 dark:border-cherry-800 dark:bg-cherry-800 dark:text-gray-300"
+                        :type="column.input_type"
+                        :name="`${column.index}[from]`"
+                        :placeholder="filterLabel(column)"
+                        :ref="`${column.index}[from]`"
+                        @change="filterPage(
+                            $event,
+                            column,
+                            { range: { name: 'from' }, quickFilter: { isActive: false } }
+                        )"
+                    />
+</v-date-picker>
+
+
+                <v-date-picker :allow-input="false">
+    <input
+                        type="column.input_type"
+                        value=""
+                        class="flex min-h-[39px] w-full rounded-md border px-3 py-2 text-sm text-gray-600 transition-all hover:border-gray-400 dark:border-gray-600 dark:hover:border-gray-400 dark:border-cherry-800 dark:bg-cherry-800 dark:text-gray-300"
+                        :name="`${column.index}[to]`"
+                        :placeholder="filterLabel(column)"
+                        :ref="`${column.index}[to]`"
+                        @change="filterPage(
+                            $event,
+                            column,
+                            { range: { name: 'to' }, quickFilter: { isActive: false } }
+                        )"
+                    />
+</v-date-picker>
+
+
+                <div v-if="hasAnyAppliedColumnValues(column.index)" class="col-span-2 mt-1.5 flex gap-2 flex-wrap">
+                    <p
+                        class="flex items-center rounded bg-primary-100 px-2 py-0.5 text-sm font-semibold text-primary-700 dark:bg-cherry-800 dark:text-primary-400"
+                        v-for="appliedColumnValue in getAppliedColumnValues(column.index)"
+                    >
+                        <span v-text="appliedColumnValue.join(' – ')"></span>
+
+                        <span
+                            class="icon-cancel cursor-pointer text-lg text-primary-700 ltr:ml-1 rtl:mr-1 dark:!text-primary-400"
+                            @click="removeAppliedColumnValue(column.index, appliedColumnValue)"
+                        >
+                        </span>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div v-else-if="column.type === 'datetime_range'">
+            <div class="grid grid-cols-2 gap-1.5">
+                <p
+                    class="cursor-pointer rounded-md border px-3 py-2 text-center text-sm font-medium leading-6 text-gray-600 transition-all hover:border-gray-400 dark:border-gray-600 dark:hover:border-gray-400 dark:border-cherry-800 dark:text-gray-300"
+                    v-for="option in column.options"
+                    v-text="option.label"
+                    @click="filterPage(
+                        $event,
+                        column,
+                        { quickFilter: { isActive: true, selectedFilter: option } }
+                    )"
+                >
+                </p>
+
+                <v-datetime-picker :allow-input="false">
+    <input
+                        value=""
+                        class="flex min-h-[39px] w-full rounded-md border px-3 py-2 text-sm text-gray-600 transition-all hover:border-gray-400 dark:border-gray-600 dark:hover:border-gray-400 dark:border-cherry-800 dark:bg-cherry-800 dark:text-gray-300"
+                        :type="column.input_type"
+                        :name="`${column.index}[from]`"
+                        :placeholder="filterLabel(column)"
+                        :ref="`${column.index}[from]`"
+                        @change="filterPage(
+                            $event,
+                            column,
+                            { range: { name: 'from' }, quickFilter: { isActive: false } }
+                        )"
+                    />
+</v-datetime-picker>
+
+
+                <v-datetime-picker :allow-input="false">
+    <input
+                        type="column.input_type"
+                        value=""
+                        class="flex min-h-[39px] w-full rounded-md border px-3 py-2 text-sm text-gray-600 transition-all hover:border-gray-400 dark:border-gray-600 dark:hover:border-gray-400 dark:border-cherry-800 dark:bg-cherry-800 dark:text-gray-300"
+                        :name="`${column.index}[to]`"
+                        :placeholder="filterLabel(column)"
+                        :ref="`${column.index}[to]`"
+                        @change="filterPage(
+                            $event,
+                            column,
+                            { range: { name: 'to' }, quickFilter: { isActive: false } }
+                        )"
+                    />
+</v-datetime-picker>
+
+
+                <div v-if="hasAnyAppliedColumnValues(column.index)" class="col-span-2 mt-1.5 flex gap-2 flex-wrap">
+                    <p
+                        class="flex items-center rounded bg-primary-100 px-2 py-0.5 text-sm font-semibold text-primary-700 dark:bg-cherry-800 dark:text-primary-400"
+                        v-for="appliedColumnValue in getAppliedColumnValues(column.index)"
+                    >
+                        <span v-text="appliedColumnValue.join(' – ')"></span>
+
+                        <span
+                            class="icon-cancel cursor-pointer text-lg text-primary-700 ltr:ml-1 rtl:mr-1 dark:!text-primary-400"
+                            @click="removeAppliedColumnValue(column.index, appliedColumnValue)"
+                        >
+                        </span>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- P4a typed field filters: begin. One type-aware control per filterable custom field (tab.blade.php). -->
+        <div v-else-if="column.type === 'field'">
+            <v-dam-field-filter
+                :field="column.field"
+                :value="getAppliedColumnValues(column.index)[0] ?? null"
+                @change="setFieldFilter(column, $event)"
+            ></v-dam-field-filter>
+        </div>
+        <!-- P4a typed field filters: end. -->
+
+        <div v-else>
+            <input
+                type="text"
+                class="flex min-h-[39px] w-full rounded-md border px-3 py-1.5 text-sm leading-6 text-gray-600 transition-all hover:border-gray-400 focus:border-gray-400 dark:border-cherry-800 dark:bg-cherry-800 dark:text-gray-300 dark:hover:border-gray-400"
+                :name="column.index"
+                :placeholder="filterLabel(column)"
+                v-model="filterDrafts[column.index]"
+                @keyup.enter="commitFilterDrafts()"
+            />
+
+            <div v-if="hasAnyAppliedColumnValues(column.index)" class="mt-1.5 flex gap-2 flex-wrap">
+                <p
+                    class="flex items-center rounded bg-primary-100 px-2 py-0.5 text-sm font-semibold text-primary-700 dark:bg-cherry-800 dark:text-primary-400"
+                    v-for="appliedColumnValue in getAppliedColumnValues(column.index)"
+                >
+                    <span v-text="appliedColumnValue"></span>
+
+                    <span
+                        class="icon-cancel cursor-pointer text-lg text-primary-700 ltr:ml-1 rtl:mr-1 dark:!text-primary-400"
+                        @click="removeAppliedColumnValue(column.index, appliedColumnValue)"
+                    >
+                    </span>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+            </div>
+        </template>
+    
+            <template v-slot:footer>
+            <div class="pb-8 mt-auto border-t border-gray-100 bg-white p-5 dark:border-cherry-800 dark:bg-cherry-800">
+                <div class="flex flex-col gap-y-1">
+                            <button
+                                type="button"
+                                class="primary-button w-full justify-center text-center"
+                                @click="runFilters()"
+                            >
+                                Apply                            </button>
+
+                            <button
+                                type="button"
+                                class="transparent-button justify-center self-center text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                                data-clear-all-filters
+                                :disabled="! hasAppliedFilters()"
+                                @click="clearAllFilters()"
+                            >
+                                Clear All                            </button>
+                        </div>
+            </div>
+        </template>
+    </v-drawer>
+
+
+                <v-dam-explorer-pager
+                    class="max-[639px]:hidden"
+                    :class="{ invisible: ! meta }"
+                    :aria-hidden="meta ? undefined : 'true'"
+                    :current-page="meta?.current_page ?? 1"
+                    :last-page="meta?.last_page ?? 1"
+                    :per-page="perPage"
+                    @page-change="onPage"
+                    @per-page-change="onPerPage"
+                ></v-dam-explorer-pager>
+            </div>
+        </div>
+
+        <p v-if="visibleFilterConflict()" class="text-sm text-gray-700 dark:text-gray-200" role="status" data-filter-conflict v-text="visibleFilterConflict().message"></p>
+
+        <div v-if="activeFilterChips().length" class="flex min-w-0 flex-wrap gap-2" data-active-filters aria-label="Active filters">
+            <button
+                v-for="(chip, chipIndex) in activeFilterChips()"
+                :key="chip.index + ':' + chipIndex"
+                type="button"
+                class="flex min-h-11 max-w-full items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:border-cherry-700 dark:bg-cherry-900 dark:text-gray-200 dark:hover:bg-cherry-800"
+                :aria-label="'Remove :filter'.replace(':filter', () => chip.label)"
+                data-remove-active-filter
+                @click="removeActiveFilter(chip)"
+            >
+                <span class="min-w-0 break-words" v-text="chip.label"></span>
+                <span class="icon-cancel shrink-0 text-lg" aria-hidden="true"></span>
+            </button>
+        </div>
+
+
+        <v-dam-input-dialog
+            :is-open="dialog.on"
+            :title="dialogTitle"
+            :placeholder="dialogPlaceholder"
+            :initial-value="dialog.value"
+            :is-loading="dialog.loading"
+            @submit="onDialogSubmit"
+            @close="closeDialog"
+        ></v-dam-input-dialog>
+
+        <div
+            v-if="clipboard"
+            class="flex items-center gap-2 px-3 py-1.5 text-xs bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-700 rounded-lg text-primary-700 dark:text-primary-300"
+        >
+            <span class="shrink-0">📋</span>
+            <span class="flex-1 truncate">"{{ clipboard.name }}" — Ready to paste</span>
+            <button
+                type="button"
+                class="text-primary-400 hover:text-primary-700 dark:hover:text-primary-200 shrink-0"
+                @click="clipboard = null"
+            >Clear ×</button>
+        </div>
+
+        <div
+            v-if="showForeignSelectionOffer"
+            class="flex items-center gap-2 px-3 py-1.5 text-xs bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-700 rounded-lg text-primary-700 dark:text-primary-300"
+        >
+            <span class="flex-1">{{ ":count item selected in another tab.|:count items selected in another tab.".split('|').at(foreignSelectionCount === 1 ? 0 : -1).replace(':count', foreignSelectionCount) }}</span>
+            <button
+                type="button"
+                class="shrink-0 font-semibold underline hover:no-underline"
+                @click="adoptForeignSelection"
+            >Select them here too</button>
+        </div>
+
+        <div v-if="similarTo" class="mb-3 flex items-center gap-2 rounded-lg bg-primary-50 dark:bg-primary-900/30 px-3 py-2 text-sm text-primary-800 dark:text-primary-100" data-similar-banner>
+            <span>{{ similarBannerText }}</span>
+            <button type="button" class="ml-auto text-xs font-medium hover:underline" @click="clearSimilar">Clear</button>
+        </div>
+
+        
+        <div v-if="organization" class="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-primary-50 dark:bg-primary-900/30 px-3 py-2 text-sm text-primary-800 dark:text-primary-100" data-organize-banner>
+            <span class="text-xs font-semibold uppercase tracking-wide opacity-70">{{ organizeKind }}</span>
+            <span class="font-semibold">{{ organization.name }}</span>
+            <span v-if="organizeContainer" class="text-xs opacity-70 max-sm:basis-full">{{ organizeT.container?.['files-only'] }}</span>
+            <button type="button" class="ml-auto text-xs font-medium hover:underline" data-organize-clear @click="clearOrganization">{{ organizeT.container?.clear }}</button>
+        </div>
+        
+
+        <v-dam-drop-upload
+            ref="dropUpload"
+            class="flex-1 overflow-y-auto flex flex-col"
+            :current-directory="currentDirId ? { id: currentDirId } : null"
+            :can-upload="canUploadHere"
+            :stack-context="`explorer:${tabId}`"
+            @refresh-datagrid="fetch()"
+        >
+            
+            <div v-if="dirs.length || includeSubfolders" class="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 pb-3 bg-white dark:bg-cherry-900" data-subfolder-navigation>
+                <p class="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500">
+                    Subfolders                    <span v-if="!loading">({{ dirs.length }})</span>
+                </p>
+                <label class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer">
+                    <input
+                        type="checkbox"
+                        data-show-subfolder-contents
+                        :checked="includeSubfolders"
+                        @change="setIncludeSubfolders($event.target.checked)"
+                        class="rounded border-gray-300 accent-primary-600"
+                    >
+                    Show subfolder contents                </label>
+            </div>
+
+            <v-load-error
+    v-if="loadError && ! loading" class="m-1"
+    title="Couldn&#039;t load this list."
+     :message="loadError.message"     :retryable="loadError.retryable"
+     @retry="fetch()" ></v-load-error>
+
+            
+            <template v-else>
+            <div
+                v-for="(block, blockIndex) in displayBlocks"
+                
+                :key="meta ? block.id : 'first-load'"
+                :class="block.grouped ? 'mb-3' : 'flex-1 flex flex-col'"
+                data-explorer-block
+            >
+                <h3 v-if="block.heading" class="px-1 pb-1 pt-3 text-sm font-semibold text-gray-800 dark:text-white" data-explorer-stack-group>
+                    {{ block.heading }} <span class="font-normal text-gray-500 dark:text-gray-400">· {{ block.headingCount }}</span>
+                </h3>
+                <h4 v-if="block.subheading" class="px-1 pb-1 text-xs font-semibold text-gray-600 dark:text-gray-300" data-explorer-stack-key>{{ block.subheading }}</h4>
+                <v-dam-explorer-grid
+                    v-if="viewMode === 'grid'"
+                    :class="{ 'flex-1': ! block.grouped }"
+                    :directories="block.dirs"
+                    :assets="block.assets"
+                    :result-total="block.grouped ? null : (meta?.total_assets ?? null)"
+                    :result-offset="block.grouped ? 0 : ((meta?.current_page ?? 1) - 1) * (meta?.per_page ?? perPage)"
+                    :search-smart="search && ! similarTo ? smartSearch : null"
+                    :is-loading="loading && blockIndex === 0"
+                    :empty-state="emptyState"
+                    @empty-action="emptyAction"
+                    :tab-id="tabId"
+                    :current-dir-id="currentDirId"
+                    :clipboard="clipboard"
+                    :can-access-current-dir="canAccessCurrentDir"
+                    :selection="selection"
+                    @toggle-select="toggleSelect"
+                    @select-range="selectRange"
+                    @set-selection="setSelection"
+                    @navigate="goTo"
+                    @open-new-tab="openNewTab"
+                    @bookmark="bookmark"
+                    @refresh="fetch"
+                    @internal-drop="onInternalDrop"
+                    v-on:stack-drop="onStackDrop"
+                ></v-dam-explorer-grid>
+                <v-dam-explorer-list
+                    v-else
+                    :directories="block.dirs"
+                    :assets="block.assets"
+                    :result-total="block.grouped ? null : (meta?.total_assets ?? null)"
+                    :result-offset="block.grouped ? 0 : ((meta?.current_page ?? 1) - 1) * (meta?.per_page ?? perPage)"
+                    :search-smart="search && ! similarTo ? smartSearch : null"
+                    :is-loading="loading && blockIndex === 0"
+                    :empty-state="emptyState"
+                    @empty-action="emptyAction"
+                    :sort-by="sortBy"
+                    :sort-order="sortOrder"
+                    :tab-id="tabId"
+                    :current-dir-id="currentDirId"
+                    :clipboard="clipboard"
+                    :can-access-current-dir="canAccessCurrentDir"
+                    :selection="selection"
+                    :bookmarked-dir-ids="bookmarkedDirIds"
+                    @toggle-select="toggleSelect"
+                    @select-range="selectRange"
+                    @navigate="goTo"
+                    @open-new-tab="openNewTab"
+                    @bookmark="bookmark"
+                    @sort-change="onSort"
+                    @refresh="fetch"
+                    @internal-drop="onInternalDrop"
+                    v-on:stack-drop="onStackDrop"
+                ></v-dam-explorer-list>
+            </div>
+            </template>
+        </v-dam-drop-upload>
+
+        <div v-if="meta" class="flex justify-end max-[639px]:justify-center border-t border-gray-100 pt-3 dark:border-cherry-800" data-explorer-bottom-pagination>
+            <v-dam-explorer-pager
+                :current-page="meta.current_page ?? 1"
+                :last-page="meta.last_page ?? 1"
+                :per-page="perPage"
+                @page-change="onPage"
+                @per-page-change="onPerPage"
+            ></v-dam-explorer-pager>
+        </div>
+
+        
+        <div v-if="selectionBarHeight" class="shrink-0" aria-hidden="true" :style="{ height: selectionBarHeight + 'px' }" data-explorer-selection-bar-spacer></div>
+
+        <v-dam-folder-picker
+            :open="folderPicker.open"
+            :tab-id="tabId"
+            :excluded-dir-ids="selection.ids.filter(i => i.type === 'directory').map(i => i.id)"
+            @picked="onFolderPickerPicked"
+            @close="closeFolderPicker"
+        ></v-dam-folder-picker>
+
+        <div
+            v-if="operationOverlay.show"
+            class="fixed bottom-4 ltr:right-8 rtl:left-8 z-[10005] w-[460px] rounded-xl shadow-2xl overflow-hidden border border-gray-300 dark:border-cherry-600"
+            role="status"
+            aria-live="polite"
+        >
+            <div class="flex items-center justify-between px-4 py-2.5 bg-primary-600 dark:bg-primary-700">
+                <div class="flex items-center gap-2 flex-1 min-w-0">
+                    <svg class="animate-spin h-3.5 w-3.5 text-white/80 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span class="text-sm font-semibold text-white truncate" v-text="operationOverlay.label"></span>
+                </div>
+                <span
+                    v-if="operationOverlay.fileCount != null"
+                    class="text-xs text-white/70 flex-shrink-0 ml-2"
+                    v-text="':count file|:count files'.split('|').at(operationOverlay.fileCount === 1 ? 0 : -1).replace(':count', operationOverlay.fileCount)"
+                ></span>
+            </div>
+
+            <div v-if="operationOverlay.progress != null" class="px-4 py-2.5 bg-white dark:bg-cherry-800 border-t border-gray-100 dark:border-cherry-700">
+                <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-1.5">
+                    <span>Progress</span>
+                    <span v-text="operationOverlay.progress + '%'"></span>
+                </div>
+                <div class="h-1.5 bg-gray-200 dark:bg-cherry-600 rounded-full overflow-hidden">
+                    <div
+                        class="h-full bg-primary-600 dark:bg-primary-500 rounded-full transition-all duration-300"
+                        :style="{ width: operationOverlay.progress + '%' }"
+                    ></div>
+                </div>
+            </div>
+        </div>
+    </div>

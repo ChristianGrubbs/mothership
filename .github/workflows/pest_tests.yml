@@ -1,0 +1,1182 @@
+name: Pest Tests
+
+# Pull requests run only the fast SQLite leg, "Pest Core (SQLite)", which also runs
+# the DAM test-file gate (.github/scripts/check-dam-test-gate.php). Pushes never
+# trigger this workflow, so nothing re-runs on main after a merge.
+#
+# The slow and optional suites run nightly on main (cron 06:00 UTC, about 01:00
+# Central) and on demand: the PostgreSQL and MySQL legs (`pest`), the PostgreSQL +
+# Elasticsearch job, and the MariaDB and SQL Server installer legs. Run any of them
+# by hand with `gh workflow run pest_tests.yml --ref <branch>`; a dispatch runs all
+# of them plus the SQLite leg. A PostgreSQL-only regression is therefore caught the
+# next morning, not on its PR: deploy Studio from a main commit whose dispatched
+# nightly passed, or after an on-demand dispatch.
+#
+# 2026-10-29: the real nightly is a `workflow_dispatch` with `nightly=true` sent at 00:05
+# America/Chicago by a scheduled job on the operator's Mac (since 2026-10-15).
+# GitHub's own `schedule` run still fires, but it is created 5 to 7 hours after the cron (11:17-13:21
+# UTC on every night 2026-10-23 to 2026-10-29), so the gate defers it as outside-window and its
+# summary is red by design. Read the dispatched "Nightly: Pest Tests" run, not the `schedule` one.
+#
+# 2026-10-12 operator directive: PRs run fast checks only; slow and optional suites run nightly with a daytime guard.
+#
+# 2026-10-14 nightly repair: the old guard looked at the clock once, so a job that started late
+# "passed" in seconds and one that started at 05:45 ran into the day. Now (same contract as
+# playwright_test.yml):
+# * Trigger. GitHub's cron was the only trigger (operator decision 2026-10-14: no external timer);
+#   the operator replaced it on 2026-10-15 with a dispatch from the Mac (see the 2026-10-29 note
+#   above) because the cron fires hours late. A cron run created outside the window is deferred and
+#   the nightly summary goes red/deferred: that night has no nightly coverage, reported visibly. A hand dispatch with `nightly: true` gets the
+#   same window; a second nightly on one commit defers as a duplicate.
+# * Window. The "Nightly gate" job (no services) defers a run created outside 00:00-05:55
+#   America/Chicago or duplicating tonight's run. Each leg runs the guard first and starts its
+#   database (and Elasticsearch) only after it (.github/scripts/ci_service.sh; no job-level
+#   `services:`), so a leg picked up at 05:55 or later, or without enough window left, starts
+#   nothing. A running leg's watchdog cancels the run at 05:55.
+#   A plain dispatch (nightly unset) and pull requests are unguarded.
+# * Evidence. Every leg writes nightly-totals JSON from its JUnit reports, and the always-run
+#   "Nightly summary" job reports each leg as executed/passed, executed/failed, deferred,
+#   cancelled or not-run, red when a required leg is not executed/passed. The advisory MySQL,
+#   MariaDB and SQL Server legs stay listed (a red MySQL leg stays visible) but never turn it red.
+# Nightly runs carry a "Nightly:" run-name; the gate's duplicate check reads it (the runs API does
+# not expose dispatch inputs), so a plain on-demand dispatch never counts as tonight's nightly.
+run-name: "${{ (github.event_name == 'schedule' || inputs.nightly == true) && 'Nightly: Pest Tests' || (github.event.pull_request.title || github.workflow) }}"
+
+on:
+  schedule:
+    # 06:23 UTC = 01:23 CDT / 00:23 CST: inside the window year-round, off the top of the hour.
+    - cron: '23 6 * * *'
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      nightly:
+        description: 'Apply the overnight window, as the cron run does (leave unset for an on-demand run)'
+        type: boolean
+        default: false
+
+# A PR groups by its head branch and any other event by its ref type and name,
+# so a branch's runs share one branch-<name> group whichever event opened them.
+# The nightly and a dispatch on main share branch-main. A nightly never cancels an in-progress
+# nightly (the later trigger queues, then defers as a duplicate); other runs still replace an
+# older run in their group.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref && format('branch-{0}', github.head_ref) || format('{0}-{1}', github.ref_type, github.ref_name) }}
+  cancel-in-progress: ${{ !(github.event_name == 'schedule' || inputs.nightly == true) }}
+
+# actions: write lets the window watchdog cancel a nightly at 06:00 and the summary read its jobs.
+permissions:
+  contents: read
+  actions: write
+
+# PostgreSQL is the production database (the Studio runtime's `postgres` role,
+# tools/studio/runtime.py), so a behaviour that only holds on MySQL (JSON column
+# semantics, `->after()`, collation) must not be able to pass here and fail there.
+# Its leg is no longer a required check on pull requests (2026-10-12): it runs
+# nightly, and the required "Pest Core (SQLite)" leg gates the merge instead. The
+# static DAM test-file gate still reads this job's steps (see the SQLite job).
+#
+# MySQL stays as an advisory compatibility leg, not a gate. The codebase keeps
+# Mothership's dual-driver query layer (Mothership\Core GrammarQueryManager, guarded by
+# DatabaseDriverCoverageTest) and upstream mothership/mothership merges assume MySQL,
+# so drift there is worth seeing; it also carries the `wk_` table-prefix
+# coverage. A red MySQL leg is a finding to triage, never a blocker.
+#
+# 2026-10-09: the MySQL leg and both installer legs skip pull requests. They ran
+# on every PR push at about a third of its runner-minutes, on a two-runner pool
+# where queue wait, not execution, set the time to merge-ready.
+# 2026-10-12: the PostgreSQL leg and the Elasticsearch job join them, so every
+# job below except "Pest Core (SQLite)" runs on the nightly schedule and on
+# workflow_dispatch only.
+
+jobs:
+  nightly_gate:
+    # Runs first and starts no service containers: a nightly run that GitHub created outside the
+    # 00:00-06:00 America/Chicago window, or that duplicates tonight's earlier run on this commit,
+    # is deferred here, so its test jobs are skipped before any database or browser starts.
+    name: Nightly gate
+    # Pull requests run only the SQLite leg, which does not wait for the gate.
+    if: github.event_name != 'pull_request'
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","linux","x64","windows-gpu"]') }}
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+      reason: ${{ steps.gate.outputs.reason }}
+      duplicate_of: ${{ steps.gate.outputs.duplicate_of }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/scripts
+
+      # Not named like the per-job guard steps (.github/ci-verify.yml guard_steps): this job's
+      # decision is its work, so ci-verify counts it as executed.
+      - name: Decide whether tonight's run may start
+        id: gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          NIGHTLY_INPUT: ${{ inputs.nightly }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/nightly_guard.py gate
+
+  pest:
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","linux","x64","windows-gpu"]') }}
+    timeout-minutes: 75
+    name: Pest Tests (${{ matrix.label }})
+    continue-on-error: ${{ matrix.advisory }}
+
+    # Nightly and on demand only; a pull request skips this job.
+    #
+    # The PostgreSQL database is named mothership_test_ci because VectorizationLifecycleTest's
+    # two-process race (tools/testing/vectorization-race.php) commits real rows and so refuses
+    # any database not named mothership_test_*. This tmpfs service database is exactly that
+    # kind of disposable, so it carries the name and the case runs here instead of skipping
+    # on every leg.
+    needs: nightly_gate
+    if: github.event_name != 'pull_request' && needs.nightly_gate.outputs.run == 'true'
+    # The database is started by a step after the window guard (.github/scripts/ci_service.sh),
+    # not by a job-level `services:` block, which would start it before the guard could defer.
+    env:
+      CI_SVC_TAG: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-${{ strategy.job-index }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: PostgreSQL
+            connection: pgsql
+            image: postgres:16
+            port: 5432
+            database: mothership_test_ci
+            username: mothership
+            password: mothership
+            prefix: ''
+            health: pg_isready -U mothership
+            data: /var/lib/postgresql/data
+            extension: pdo_pgsql
+            advisory: false
+            # DRAFT window estimates (minutes a leg needs to finish): PostgreSQL measured 64 min on #219.
+            min_minutes: 70
+          - label: MySQL, advisory
+            connection: mysql
+            image: mysql:8.0
+            port: 3306
+            database: mothership
+            username: root
+            password: root
+            prefix: wk_
+            health: mysqladmin ping
+            data: /var/lib/mysql
+            extension: pdo_mysql
+            advisory: true
+            min_minutes: 45
+
+    steps:
+      # Checkout first so the guard runs from the repository; ci-verify treats steps before the guard
+      # as setup (.github/ci-verify.yml).
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Nightly window guard (00:00-06:00 America/Chicago)
+        id: guard
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          NIGHTLY_INPUT: ${{ inputs.nightly }}
+          GITHUB_TOKEN: ${{ github.token }}
+          ITEM_KEY: pest-${{ matrix.connection }}
+          ITEM_LABEL: Pest Tests (${{ matrix.label }})
+          ITEM_KIND: pest
+          ITEM_ADVISORY: ${{ matrix.advisory }}
+          MIN_MINUTES: ${{ matrix.min_minutes }}
+          JOB_TIMEOUT_MINUTES: '75'
+        run: python3 .github/scripts/nightly_guard.py
+
+      # Each image reads only its own variables, so one env list serves both legs. The host port is
+      # Docker's pick, so concurrent jobs on one self-hosted host never collide.
+      - name: Start service containers
+        if: steps.guard.outputs.run == 'true'
+        env:
+          CI_SVC_DEADLINE: ${{ steps.guard.outputs.cut_epoch }}
+        run: >-
+          bash .github/scripts/ci_service.sh start DB ${{ matrix.port }}
+          -e POSTGRES_USER=mothership -e POSTGRES_PASSWORD=mothership -e POSTGRES_DB=${{ matrix.database }}
+          -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=${{ matrix.database }}
+          --health-cmd="${{ matrix.health }}" --health-interval=5s --health-timeout=3s --health-retries=3
+          --tmpfs ${{ matrix.data }}:rw,noexec,nosuid,size=600m --tmpfs /tmp:rw,noexec,nosuid,size=100m
+          ${{ matrix.image }}
+
+      - name: Setup PHP
+        if: steps.guard.outputs.run == 'true'
+        uses: shivammathur/setup-php@2.37.2
+        with:
+          php-version: '8.4'
+          # pcntl + posix: SphereSeamConcurrentImportTest forks a real second process to race two
+          # Save-to-DAM imports against PostgreSQL's own row lock — the only way to reproduce the
+          # 2026-09-16 production double-submit without a second PHP thread PHP does not have.
+          # posix lets the forked child exit via SIGKILL rather than PHP's normal shutdown path,
+          # so it never re-runs the parent's own PHPUnit/coverage shutdown handlers a second time.
+          extensions: curl, exif, fileinfo, gd, intl, mbstring, openssl, pcntl, pdo, posix, ${{ matrix.extension }}, tokenizer, zip
+          ini-values: error_reporting=E_ALL
+          tools: composer:v2
+          coverage: none
+
+      - name: Install Composer dependencies
+        if: steps.guard.outputs.run == 'true'
+        uses: ramsey/composer-install@v3
+        with:
+          composer-options: "--optimize-autoloader"
+
+      - name: Setup Node
+        if: steps.guard.outputs.run == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Cache Node dependencies
+        if: steps.guard.outputs.run == 'true'
+        uses: actions/cache@v5
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-npm-${{ hashFiles('package.json') }}
+          restore-keys: ${{ runner.os }}-npm-
+
+      - name: Install Node dependencies
+        if: steps.guard.outputs.run == 'true'
+        run: npm install --omit=dev --no-audit --no-fund --no-progress --prefer-offline
+
+      - name: Setting Environment
+        if: steps.guard.outputs.run == 'true'
+        run: |
+          cp .env.example .env
+          sed -i "s|^\(APP_ENV=\s*\).*$|\1testing|" .env
+          sed -i "s|^\(DB_CONNECTION=\s*\).*$|\1${{ matrix.connection }}|" .env
+          sed -i "s|^\(DB_HOST=\s*\).*$|\1127.0.0.1|" .env
+          sed -i "s|^\(DB_PORT=\s*\).*$|\1${SVC_DB_PORT}|" .env
+          sed -i "s|^\(DB_DATABASE=\s*\).*$|\1${{ matrix.database }}|" .env
+          sed -i "s|^\(DB_USERNAME=\s*\).*$|\1${{ matrix.username }}|" .env
+          sed -i "s|^\(DB_PASSWORD=\s*\).*$|\1${{ matrix.password }}|" .env
+          sed -i "s|^\(DB_PREFIX=\s*\).*$|\1${{ matrix.prefix }}|" .env
+
+      - name: Running Mothership Installer
+        if: steps.guard.outputs.run == 'true'
+        run: php artisan mothership:install --skip-env-check --skip-admin-creation --with-demo-data
+
+      # mothership:install seeds only the PIM tables; seed the DAM Library root as the SQLite leg does.
+      - name: Seed the DAM Library root
+        if: steps.guard.outputs.run == 'true'
+        run: php artisan db:seed --force --no-interaction --class="Mothership\\DAM\\Database\\Seeders\\DirectoryTableSeeder"
+
+      - name: Running Pest Tests
+        if: steps.guard.outputs.run == 'true'
+        # Each worker owns a database clone. The suite runs as two halves so
+        # every half starts with fresh workers: per-process memory grows over
+        # thousands of tests and a single long run ends with a worker
+        # OOM-killed (exit 137), which aborts paratest mid-run.
+        # The teamcity log streams per-test results, so it survives a crashed
+        # worker where a junit report would not.
+        run: |
+          vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --parallel --processes=3 --colors=always --log-teamcity pest-teamcity-1.log --testsuite "Api Feature Test,Core Unit Test,DataTransfer Unit Test,User Feature Test,Admin Feature Test"
+          vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --parallel --processes=3 --colors=always --log-teamcity pest-teamcity-2.log --testsuite "Installer Feature Test,ElasticSearch Feature Test,Completeness Feature Test,Product Unit Test,Product Feature Test,Attribute Unit Test,Category Unit Test,Measurement Feature Test,AiAgent Unit Test,AppUrlGuard Unit Test,Webhook Unit Test,AppUrlGuard Feature Test"
+
+      # 2026-10-01: phpunit.xml's root "Feature" suite (tests/Feature) was in no step of this
+      # workflow, so DocumentationRoutesTest's route-inventory check, the guard PR #105 made for
+      # docs/api/routes.json, never ran in CI. Run by suite, not by file: every new file under
+      # tests/Feature is picked up without a list to maintain. `!cancelled()` so a red step above
+      # cannot hide it.
+      - name: Check root feature tests (tests/Feature)
+        if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always --testsuite Feature
+
+      - name: Check relationship queries
+        if: steps.guard.outputs.run == 'true'
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/AssetRelationshipTest.php
+
+      # Smart search and AI tagging (spec 2026-10-01): schema, codec, fusion, indexing, access leaks.
+      - name: Check smart search, AI index and AI tag access
+        if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Unit/AiIndex/VectorCodecTest.php packages/Mothership/DAM/tests/Unit/AiIndex/RrfTest.php packages/Mothership/DAM/tests/Feature/AiIndex/AiIndexSchemaTest.php packages/Mothership/DAM/tests/Feature/AiIndex/AiBridgeClientTest.php packages/Mothership/DAM/tests/Feature/AiIndex/AiIndexAssetJobTest.php packages/Mothership/DAM/tests/Feature/AiIndex/AiIndexTriggersTest.php packages/Mothership/DAM/tests/Feature/AiIndex/SmartSearchTest.php packages/Mothership/DAM/tests/Feature/AiIndex/SmartSearchEmbedCacheTest.php packages/Mothership/DAM/tests/Feature/AiIndex/SmartSearchAccessTest.php packages/Mothership/DAM/tests/Feature/AiIndex/AiIndexReconcileTest.php packages/Mothership/DAM/tests/Feature/AiIndex/AiTagReviewTest.php packages/Mothership/DAM/tests/Feature/AiIndex/AiDescribeAndRenameTest.php packages/Mothership/DAM/tests/Feature/AiIndex/AiEligibilityTest.php packages/Mothership/DAM/tests/Feature/AiIndex/MemberDescriptionsTest.php packages/Mothership/DAM/tests/Feature/AiIndex/FindSimilarTest.php packages/Mothership/DAM/tests/Feature/AiIndex/SmartSearchPostgresTest.php
+
+      # phpunit.xml has no "DAM Feature Test"/"DAM Unit Test" entry in the suites this workflow
+      # runs, so these two files executed nowhere: the folder-move authorization rules and the move
+      # job's failure reporting could regress with every check green.
+      #
+      # `!cancelled()` because these files are independent of the big suite above. Without it a red
+      # "Running Pest Tests" skips this step, and a check that only runs when everything else is
+      # already green reports nothing on exactly the runs where it would be read.
+      - name: Check directory move authorization and the move job failure path
+        if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/DirectoryMoveTest.php packages/Mothership/DAM/tests/Unit/JobsTest.php
+
+      # Same guard as the directory-move step: an unrelated failure in "Running Pest Tests" must
+      # not hide whether the Home and QuickView behavior passed.
+      - name: Check authenticated Transfers grants
+        if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
+        run: vendor/bin/pest packages/Mothership/DAM/tests/Feature/TransfersTest.php
+
+      - name: Check Home widgets and StylePress generation
+        if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/HomeTest.php packages/Mothership/DAM/tests/Feature/SignalAlertsTest.php packages/Mothership/DAM/tests/Feature/HomeRecentTypeLabelTest.php packages/Mothership/DAM/tests/Feature/HomeSystemQuickViewTest.php packages/Mothership/DAM/tests/Feature/HomeSystemQuickViewMigrationTest.php packages/Mothership/DAM/tests/Feature/StylePressWidgetTest.php packages/Mothership/DAM/tests/Feature/GenerationTitlerTest.php packages/Mothership/DAM/tests/Feature/GenerationPackageTest.php packages/Mothership/DAM/tests/Feature/StylePressCatalogTest.php packages/Mothership/DAM/tests/Feature/StylePressThumbnailDerivativesTest.php
+
+      # Same gap as the directory-move step above (phpunit.xml has no "DAM Feature Test" entry in
+      # the suites this workflow runs). Audited against every Pest file the 2026-09-16 batch of
+      # merged PRs added or changed since 24f82bdd: none of these were ever named in any step here
+      # either, so none had ever once executed in CI despite every check on their PRs going green —
+      # SphereSeam save/resolution and its review rounds (#175), asset neighbour navigation and
+      # asset details (#177), client-side model thumbnail capture (#176), the custom-thumbnail
+      # flow (#179).
+      #
+      # AssetInfoTest.php stayed out of this list on 2026-09-16 (its one red case asserted
+      # outdated card markup); repaired 2026-09-17, it runs in the last
+      # step of this job with the rest of that baseline.
+      #
+      # SphereSeamConcurrentImportTest runs first on purpose (2026-09-23): it commits real rows, so
+      # if its cleanup ever leaks the root-level exports folder again, SphereSeamTest's "reuses an
+      # existing root-level exports folder" fails here instead of only in a filename-order local run.
+      - name: Check batch DAM feature tests (2026-09-16 merges, never previously run in CI)
+        if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/SphereSeamConcurrentImportTest.php packages/Mothership/DAM/tests/Feature/SphereSeamTest.php packages/Mothership/DAM/tests/Feature/SharedHiggsfieldTest.php packages/Mothership/DAM/tests/Feature/SharedHiggsfieldQueueLifecycleTest.php packages/Mothership/DAM/tests/Feature/BlobLockRaceTest.php packages/Mothership/DAM/tests/Feature/AssetNeighboursTest.php packages/Mothership/DAM/tests/Feature/AssetTest.php packages/Mothership/DAM/tests/Feature/AssetHiddenEqualsMissingTest.php packages/Mothership/DAM/tests/Feature/AssetAccessDecisionTest.php packages/Mothership/DAM/tests/Feature/RouteInventoryTest.php packages/Mothership/DAM/tests/Feature/DirectoryHiddenEqualsMissingTest.php packages/Mothership/DAM/tests/Feature/ModelThumbnailCaptureTest.php packages/Mothership/DAM/tests/Feature/Api/ModelThumbnailApiTest.php packages/Mothership/DAM/tests/Feature/ModelFileThumbnailTest.php packages/Mothership/DAM/tests/Feature/StackFileThumbnailTest.php packages/Mothership/DAM/tests/Feature/AdobeFormatsTest.php packages/Mothership/DAM/tests/Feature/CustomThumbnailTest.php packages/Mothership/DAM/tests/Feature/PlaceholderThumbnailEtagTest.php packages/Mothership/DAM/tests/Feature/StackMemberThumbnailVersionTest.php
+
+      # 2026-10-08: two-connection races on PostgreSQL row locks (a forked process holds a second session).
+      # They commit real rows and clean them up, so they run in their own step like SphereSeamConcurrentImportTest.
+      #
+      # Admission is proved, not declared (tests/Support/TestTargetGuard.php, CI mode). Before the race tests the
+      # guard's own connection-free tests run, then .github/scripts/ci-pg-proof.sh derives a private proof (mode 0600,
+      # under RUNNER_TEMP) from THIS job's service container: container id, run id and attempt, workspace, the
+      # Docker-allocated host port for 5432, the tmpfs mount on the data directory, and the running postmaster's start
+      # time and system identifier. Its SHA-256 travels separately in the environment. The application admits the target
+      # before any provider boots and again at every connection; a missing or different fact refuses, never skips.
+      # --fail-on-skipped makes any skipped case fail the step. Only the PostgreSQL leg: the MySQL leg has no such service.
+      - name: Check manual/machine write races, mapping totals and organization name locks (PostgreSQL row locks)
+        if: matrix.connection == 'pgsql' && steps.guard.outputs.run == 'true'
+        env:
+          MOTHERSHIP_CI_SERVICE_ID: ${{ env.SVC_DB_ID }}
+          MOTHERSHIP_CI_SERVICE_PORT: ${{ env.SVC_DB_PORT }}
+          MOTHERSHIP_CI_DB_USER: ${{ matrix.username }}
+        run: |
+          vendor/bin/phpunit --no-configuration --bootstrap vendor/autoload.php --do-not-cache-result tests/Guard
+          php tests/Guard/pure-harness.php
+          # The guarded lane never generates the OAuth test keys; create them now, before the guard variables exist.
+          php tests/bootstrap.php
+          MOTHERSHIP_CI_PROOF_SHA256="$(bash .github/scripts/ci-pg-proof.sh)"
+          export MOTHERSHIP_CI_PROOF_SHA256
+          export MOTHERSHIP_CI_PROOF="$(cd "$RUNNER_TEMP" && pwd -P)/mothership-ci-pg-proof.json"
+          export MOTHERSHIP_REQUIRE_TARGET_GUARD=1
+          vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always --fail-on-skipped packages/Mothership/DAM/tests/Feature/AutomationManualWriteRacePostgresTest.php packages/Mothership/DAM/tests/Feature/MappingChunkCountsRacePostgresTest.php packages/Mothership/DAM/tests/Feature/AdminInvariantRacePostgresTest.php packages/Mothership/DAM/tests/Feature/AssetNameRacePostgresTest.php packages/Mothership/DAM/tests/Feature/OrganizationNameRacePostgresTest.php packages/Mothership/DAM/tests/Feature/AiIndex/MemberDescriptionsLockCommittedTest.php packages/Mothership/DAM/tests/Feature/StackReorderDeadlockTest.php
+
+      # 2026-10-10: the organization name lock under REPEATABLE READ (UX eval rev-J3). A request inside an outer
+      # transaction takes its snapshot, waits for the scope lock while a second session commits a name, and its
+      # uniqueness check must still see that name (locking reads); a holder that outlasts dam.organize.lock_wait
+      # gives 409 even though Laravel wraps the driver's lock wait timeout in a DeadlockException there. It needs
+      # MySQL's REPEATABLE READ, so it runs only on the MySQL leg, mirroring the PostgreSQL race step above;
+      # --fail-on-skipped makes a skip there fail. It commits real rows and removes them itself. The leg is advisory
+      # and skips pull requests (see the note above `jobs:`).
+      - name: Check the organization name lock under REPEATABLE READ (MySQL)
+        if: matrix.connection == 'mysql' && steps.guard.outputs.run == 'true'
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always --fail-on-skipped packages/Mothership/DAM/tests/Feature/OrganizationNameSnapshotMysqlTest.php
+
+      # 2026-10-10: the organization name lock's driver-neutral cases (lock timeout mapping, the transaction a timeout
+      # leaves behind). They run on every leg; the two-connection proofs are the steps around this one.
+      - name: Check the organization name lock (timeout and transaction handling)
+        if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/OrganizationNameLockTest.php packages/Mothership/DAM/tests/Feature/OrganizationNameLockTransactionTest.php
+
+      # The merge gate runs on PostgreSQL, so the gate guard (check-dam-test-gate.php) counts a file only when a step
+      # on that leg names it. This lists the REPEATABLE READ test there; its setUp skips every driver but
+      # MySQL/MariaDB before any query. No --fail-on-skipped here: the skip is the expected result on PostgreSQL.
+      - name: List the organization name REPEATABLE READ test on the gate leg (skips on PostgreSQL)
+        if: matrix.connection == 'pgsql' && steps.guard.outputs.run == 'true'
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/OrganizationNameSnapshotMysqlTest.php
+
+      # 2026-10-10: the last-full-admin rule under REPEATABLE READ (UX eval rev-C2). An import's outer transaction
+      # takes its snapshot, a second session deactivates a full admin and commits, and the import's guarded write
+      # must still see that change (locking reads). It needs MySQL's REPEATABLE READ, so it runs only on the MySQL
+      # leg, mirroring the PostgreSQL race step above; --fail-on-skipped makes a skip there fail. It commits real
+      # rows and removes them itself. The leg is advisory and skips pull requests (see the note above `jobs:`).
+      - name: Check the last-full-admin rule under REPEATABLE READ (MySQL)
+        if: matrix.connection == 'mysql' && steps.guard.outputs.run == 'true'
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always --fail-on-skipped packages/Mothership/DAM/tests/Feature/AdminInvariantSnapshotMysqlTest.php
+
+      # The same file on the PostgreSQL leg, the merge gate, so check-dam-test-gate.php credits it to a required-leg
+      # step. Here it skips by design (its setUp skips every driver but MySQL/MariaDB, before any write), so this step
+      # has no --fail-on-skipped; the MySQL step above is the one that proves it. Same pattern as
+      # AccessRebuildSnapshotTest's MySQL case. pgsql-only so the MySQL leg does not run it a second time.
+      - name: List the REPEATABLE READ snapshot test on the gate leg (skips on PostgreSQL)
+        if: matrix.connection == 'pgsql' && steps.guard.outputs.run == 'true'
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/AdminInvariantSnapshotMysqlTest.php
+
+      # 2026-09-16: first area worked off .github/dam-tests-not-in-ci.txt. All 87 cases pass on
+      # their own and together; the 83 QueryExceptions the one-process local run reported were not
+      # cross-file state but a SQLite-only schema defect (oauth_clients.id left as an integer rowid,
+      # fixed by AdminApi migration 2026_09_16_100000), so they never applied to this leg.
+      - name: Check DAM API feature tests
+        if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/Api/AssetApiTest.php packages/Mothership/DAM/tests/Feature/Api/AssetRelationshipApiTest.php packages/Mothership/DAM/tests/Feature/Api/CommentApiTest.php packages/Mothership/DAM/tests/Feature/Api/DirectoryApiTest.php packages/Mothership/DAM/tests/Feature/Api/LinkedResourcesApiTest.php packages/Mothership/DAM/tests/Feature/Api/PropertyApiTest.php packages/Mothership/DAM/tests/Feature/Api/ReorganizeApiTest.php packages/Mothership/DAM/tests/Feature/Api/ShareApiMutationAuthorizationTest.php packages/Mothership/DAM/tests/Feature/Api/TagApiTest.php
+
+      # 2026-09-16: second area worked off .github/dam-tests-not-in-ci.txt: every remaining
+      # directory file (tree, permissions, counts, search, delete). The 17 files pass in one
+      # process with no changes (125 cases on local SQLite), so they share a step.
+      # DirectoryTreeLockCommitTest commits real rows and probes the tree lock from a second session;
+      # it skips on SQLite, so it runs only in this PostgreSQL/MySQL job.
+      - name: Check DAM directory tests
+        if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/DeleteDirectoryTransactionTest.php packages/Mothership/DAM/tests/Feature/DirectoryAncestorPathsTest.php packages/Mothership/DAM/tests/Feature/DirectoryAssetCountRollupTest.php packages/Mothership/DAM/tests/Feature/DirectoryAssetCountsEndpointTest.php packages/Mothership/DAM/tests/Feature/DirectoryAutoGrantTest.php packages/Mothership/DAM/tests/Feature/DirectoryGrantedIdsResponseTest.php packages/Mothership/DAM/tests/Feature/DirectoryInheritChildrenTest.php packages/Mothership/DAM/tests/Feature/DirectoryMassDestroyTest.php packages/Mothership/DAM/tests/Feature/DirectorySearchTest.php packages/Mothership/DAM/tests/Feature/DirectoryTest.php packages/Mothership/DAM/tests/Feature/DirectoryTreeIntegrityTest.php packages/Mothership/DAM/tests/Feature/DirectoryTreeLockCommitTest.php packages/Mothership/DAM/tests/Feature/DirectoryTreeShowAssetsTest.php packages/Mothership/DAM/tests/Feature/DirectoryTreeAssetAccessTest.php packages/Mothership/DAM/tests/Feature/LibraryStructuralDirectoriesTest.php packages/Mothership/DAM/tests/Unit/AttemptDirectoryTest.php packages/Mothership/DAM/tests/Unit/DirectoryModelTest.php packages/Mothership/DAM/tests/Unit/DirectoryPermissionServiceTest.php packages/Mothership/DAM/tests/Unit/DirectoryRepositorySearchTest.php
+
+      # 2026-09-25: sharing slice 1 (ADR 0010): the access-list reader, the rebuild from today's grants and
+      # the rollout switch. Reads stay on grants until an operator runs dam:access:switch lists.
+      # AccessRebuildSnapshotTest and AccessModelRowLockTest commit real rows from a second session: the
+      # snapshot test's MySQL case runs only on the MySQL leg (REPEATABLE READ), and its PostgreSQL case and
+      # the row-lock test only on the PostgreSQL leg.
+      - name: Check DAM access lists (sharing slice 1)
+        if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/Access/AccessListReaderTest.php packages/Mothership/DAM/tests/Feature/Access/AccessListRebuildTest.php packages/Mothership/DAM/tests/Feature/Access/AccessSwitchTest.php packages/Mothership/DAM/tests/Feature/Access/AccessRebuildSnapshotTest.php packages/Mothership/DAM/tests/Feature/Access/AccessModelRowLockTest.php packages/Mothership/DAM/tests/Feature/Access/ShareLinksForEveryoneTest.php
+
+      # The cascade's locking proof is PostgreSQL-only (lockForUpdate() is a no-op on SQLite), so it runs
+      # here and is deliberately absent from the SQLite mirror below.
+      - name: Check DAM sharing dialog and cascade (sharing slice 3)
+        if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/Access/AccessListServiceTest.php packages/Mothership/DAM/tests/Feature/Access/AccessControllerTest.php packages/Mothership/DAM/tests/Feature/Access/ExplorerAccessModeTest.php packages/Mothership/DAM/tests/Feature/Access/ShareMenuGatingTest.php packages/Mothership/DAM/tests/Feature/Access/EffectiveAccessTest.php packages/Mothership/DAM/tests/Feature/Access/AccessCascadeLockingCommittedTest.php packages/Mothership/DAM/tests/Feature/Access/RoleShareKeyFenceCommittedTest.php
+
+      # 2026-09-26: sharing slice 2a (ADR 0010): every DAM writer keeps the access lists current on create,
+      # move and copy, behind the fence on the DAM_ACCESS_MODEL row. AccessInheritLockingCommittedTest and
+      # AccessFenceCommittedTest commit real rows from a second session and prove row locks, so both are
+      # PostgreSQL-only and deliberately absent from the SQLite mirror below.
+      - name: Check DAM lists follow writes (sharing slice 2a)
+        if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/Access/AccessFenceTest.php packages/Mothership/DAM/tests/Feature/Access/InheritOnCreateTest.php packages/Mothership/DAM/tests/Feature/Access/AdoptOnMoveTest.php packages/Mothership/DAM/tests/Feature/Access/AccessInheritLockingCommittedTest.php packages/Mothership/DAM/tests/Feature/Access/AccessFenceCommittedTest.php packages/Mothership/DAM/tests/Feature/Access/AccessCommittedTeardownTest.php packages/Mothership/DAM/tests/Unit/AccessFenceLockingClauseTest.php packages/Mothership/DAM/tests/Unit/CommittedResidueSweepTest.php
+
+      # 2026-09-26: sharing slice 2b (ADR 0010): under `lists` only, the move/delete guard, copy and
+      # zip filtering, and the move-preview endpoint's counts. Four of these commit no rows from a
+      # second session, so they run on both the PostgreSQL leg here and the SQLite mirror below —
+      # AccessListReaderLockingClauseTest included: its locking-clause case degrades to a documented
+      # no-op on SQLite (LockingClause's own exception; no clause to require there) rather than
+      # needing PostgreSQL specifically. MoveCopyAssetLockCommittedTest and
+      # MoveCopySameInvocationConcurrencyTest prove the file-row lock ordering and, forking a real
+      # second OS process (pcntl/posix, enabled above) to show the *same* handle() call resumes
+      # correctly once a revocation it waited through commits — not a fresh retry (Codex review of
+      # PR #75, findings 1, 2 and round 2's finding 6). Both are PostgreSQL-only, like slice 2a's own
+      # committed tests just above, and deliberately absent from the SQLite mirror.
+      - name: Check DAM move and copy refusals (sharing slice 2b)
+        if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/Access/MoveDeleteGuardTest.php packages/Mothership/DAM/tests/Feature/Access/CopyFilteringTest.php packages/Mothership/DAM/tests/Feature/Access/MovePreviewTest.php packages/Mothership/DAM/tests/Feature/Access/AccessListReaderLockingClauseTest.php packages/Mothership/DAM/tests/Feature/Access/MoveCopyAssetLockCommittedTest.php packages/Mothership/DAM/tests/Feature/Access/MoveCopySameInvocationConcurrencyTest.php
+
+      # 2026-09-17: third area worked off .github/dam-tests-not-in-ci.txt: the 94 remaining files
+      # that pass as written. They pass in one process on local SQLite, so the old
+      # "127 cases fail from cross-file state" reading was the SQLite oauth_clients defect fixed in
+      # #189, not shared state; they are split into four steps only to keep each log readable and
+      # each process's memory small. The other eight, which each failed on their own, run in
+      # this job's last DAM step.
+      - name: Check DAM feature tests, A to D
+        if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/AccessMatrixPostgresTest.php packages/Mothership/DAM/tests/Feature/ActionRequestTest.php packages/Mothership/DAM/tests/Feature/AiTagReviewQueueTest.php packages/Mothership/DAM/tests/Feature/AiVocabularyTest.php packages/Mothership/DAM/tests/Feature/AnalyticsIngestTest.php packages/Mothership/DAM/tests/Feature/AnalyticsPrivacyTest.php packages/Mothership/DAM/tests/Feature/AnalyticsReportsTest.php packages/Mothership/DAM/tests/Feature/AnalyticsRollupTest.php packages/Mothership/DAM/tests/Feature/AssetAvailabilityTest.php packages/Mothership/DAM/tests/Feature/AssetBundleReaderTest.php packages/Mothership/DAM/tests/Feature/AssetDeletionTest.php packages/Mothership/DAM/tests/Feature/AssetFilesAttachTest.php packages/Mothership/DAM/tests/Feature/AssetFilesChunkedAttachTest.php packages/Mothership/DAM/tests/Feature/CompoundAssetTest.php packages/Mothership/DAM/tests/Feature/AssetHistoryAccessTest.php packages/Mothership/DAM/tests/Feature/AssetMergeTest.php packages/Mothership/DAM/tests/Feature/AssetOptimizationTest.php packages/Mothership/DAM/tests/Feature/StackMemberOptimizeEditTest.php packages/Mothership/DAM/tests/Feature/AssetPathStorageTest.php packages/Mothership/DAM/tests/Feature/AssetPickerTest.php packages/Mothership/DAM/tests/Feature/AssetStackTest.php packages/Mothership/DAM/tests/Feature/AssetVectorizationTest.php packages/Mothership/DAM/tests/Feature/AttachmentActionsTest.php packages/Mothership/DAM/tests/Feature/StackFirstFileTest.php packages/Mothership/DAM/tests/Feature/StackMemberPlaybackTest.php packages/Mothership/DAM/tests/Feature/AttachmentBrowsingTest.php packages/Mothership/DAM/tests/Feature/AttachmentHistoryTest.php packages/Mothership/DAM/tests/Feature/AttachmentLineageTest.php packages/Mothership/DAM/tests/Feature/AttachmentSlotsTest.php packages/Mothership/DAM/tests/Feature/AutomationApiTest.php packages/Mothership/DAM/tests/Feature/AutomationRulesTest.php packages/Mothership/DAM/tests/Feature/AvailabilityAccessProbesTest.php packages/Mothership/DAM/tests/Feature/AvailabilityReviewProbesTest.php packages/Mothership/DAM/tests/Feature/BoardsTest.php packages/Mothership/DAM/tests/Feature/CaptureProfilesTest.php packages/Mothership/DAM/tests/Feature/ChunkUploadCleanupTest.php packages/Mothership/DAM/tests/Feature/ChunkUploadCompletionTest.php packages/Mothership/DAM/tests/Feature/ChunkUploadPartTest.php packages/Mothership/DAM/tests/Feature/ChunkUploadPersistenceTest.php packages/Mothership/DAM/tests/Feature/ChunkUploadSessionTest.php packages/Mothership/DAM/tests/Feature/CollectionAccessTest.php packages/Mothership/DAM/tests/Feature/CollectionApiTest.php packages/Mothership/DAM/tests/Feature/CollectionLinkTest.php packages/Mothership/DAM/tests/Feature/CollectionSlugTest.php packages/Mothership/DAM/tests/Feature/CommandTest.php packages/Mothership/DAM/tests/Feature/CommentTest.php packages/Mothership/DAM/tests/Feature/ContentStoreTest.php packages/Mothership/DAM/tests/Feature/DamSidebarMenuIconsTest.php packages/Mothership/DAM/tests/Feature/DamUpdaterRestoreTest.php packages/Mothership/DAM/tests/Feature/DamUpdaterVerifyTest.php packages/Mothership/DAM/tests/Feature/DamWebhookEventsTest.php packages/Mothership/DAM/tests/Feature/DownloadStartCookieTest.php
+
+      - name: Check DAM feature tests, E to M
+        if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/Access/GroupWriteAccessModelRaceTest.php packages/Mothership/DAM/tests/Feature/DerivativeImagesTest.php packages/Mothership/DAM/tests/Feature/ExactDuplicateNoticeTest.php packages/Mothership/DAM/tests/Feature/ExplorerAvailableVersionsTest.php packages/Mothership/DAM/tests/Feature/ExplorerCountItemsAccessTest.php packages/Mothership/DAM/tests/Feature/ExplorerMassCopyTest.php packages/Mothership/DAM/tests/Feature/ExplorerMassMoveTest.php packages/Mothership/DAM/tests/Feature/ExplorerPageFirstTest.php packages/Mothership/DAM/tests/Feature/ExplorerSortTest.php packages/Mothership/DAM/tests/Feature/ExplorerSubfoldersTest.php packages/Mothership/DAM/tests/Feature/ExplorerTagSearchTest.php packages/Mothership/DAM/tests/Feature/FileTest.php packages/Mothership/DAM/tests/Feature/FolderAccessHiddenEqualsMissingTest.php packages/Mothership/DAM/tests/Feature/FolderAccessTest.php packages/Mothership/DAM/tests/Feature/FolderUploadStructureTest.php packages/Mothership/DAM/tests/Feature/GameAssetPreviewTest.php packages/Mothership/DAM/tests/Feature/GeneratePanoramaPreviewTest.php packages/Mothership/DAM/tests/Feature/GenerateVideoPreviewsCommandTest.php packages/Mothership/DAM/tests/Feature/GlobalDetailsTest.php packages/Mothership/DAM/tests/Feature/GroqPromptEnhancerTest.php packages/Mothership/DAM/tests/Feature/GroupControllerTest.php packages/Mothership/DAM/tests/Feature/GuestUploadIsolationTest.php packages/Mothership/DAM/tests/Feature/GuestUploadPortalTest.php packages/Mothership/DAM/tests/Feature/GuestUploadReviewTest.php packages/Mothership/DAM/tests/Feature/HomeCalendarTest.php packages/Mothership/DAM/tests/Feature/HomeFavoritesTest.php packages/Mothership/DAM/tests/Feature/HomeFixedPageTest.php packages/Mothership/DAM/tests/Feature/HomePlaqueTest.php packages/Mothership/DAM/tests/Feature/HomeVideoDownloaderTest.php packages/Mothership/DAM/tests/Feature/HomeWidgetAccessTest.php packages/Mothership/DAM/tests/Feature/IconLibraryCardTest.php packages/Mothership/DAM/tests/Feature/ImageEditTest.php packages/Mothership/DAM/tests/Feature/InheritedAssetAttributeTest.php packages/Mothership/DAM/tests/Feature/LabelsTest.php packages/Mothership/DAM/tests/Feature/LargeRasterPreviewTest.php packages/Mothership/DAM/tests/Feature/LibraryMediaNavigationTest.php packages/Mothership/DAM/tests/Feature/LibrarySortTest.php packages/Mothership/DAM/tests/Feature/MassAssignTagsTest.php packages/Mothership/DAM/tests/Feature/MediaAspectRatioTest.php packages/Mothership/DAM/tests/Feature/MediaPlaybackControlsTest.php packages/Mothership/DAM/tests/Feature/MetadataFieldAdoptTest.php packages/Mothership/DAM/tests/Feature/MetadataFieldDefinitionsTest.php packages/Mothership/DAM/tests/Feature/MetadataFieldFiltersTest.php packages/Mothership/DAM/tests/Feature/MetadataFieldValuesTest.php packages/Mothership/DAM/tests/Feature/MetadataMappingsTest.php packages/Mothership/DAM/tests/Feature/ModelPrimaryViewTest.php packages/Mothership/DAM/tests/Feature/NameStemBackfillTest.php packages/Mothership/DAM/tests/Feature/NewUserUploadsTest.php packages/Mothership/DAM/tests/Unit/LangPluralTest.php packages/Mothership/DAM/tests/Feature/MissingAssetIdTest.php
+
+      - name: Check DAM feature tests, N to Z
+        if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/LayoutChromeTest.php packages/Mothership/DAM/tests/Feature/OptimizerClientTest.php packages/Mothership/DAM/tests/Feature/OrganizationApiTest.php packages/Mothership/DAM/tests/Feature/OrientationTest.php packages/Mothership/DAM/tests/Feature/OwnItemsOnlyTest.php packages/Mothership/DAM/tests/Feature/PanoramaDomainTest.php packages/Mothership/DAM/tests/Feature/PanoramaPreviewApiTest.php packages/Mothership/DAM/tests/Feature/PlaybackPreviewTest.php packages/Mothership/DAM/tests/Feature/ProductAssetBulkEditTest.php packages/Mothership/DAM/tests/Feature/PropertyTest.php packages/Mothership/DAM/tests/Feature/PropertyUnavailableAssetAccessTest.php packages/Mothership/DAM/tests/Feature/ReadSeamLibraryPathTest.php packages/Mothership/DAM/tests/Feature/RelatedAssetsTest.php packages/Mothership/DAM/tests/Feature/RemoteObjectStoreTest.php packages/Mothership/DAM/tests/Feature/RequestIdTest.php packages/Mothership/DAM/tests/Feature/RetentionPruneTest.php packages/Mothership/DAM/tests/Feature/RetiredDamRemovalTest.php packages/Mothership/DAM/tests/Feature/ReviewCommentsTest.php packages/Mothership/DAM/tests/Feature/ReviewNotificationsTest.php packages/Mothership/DAM/tests/Feature/RoleDamPermissionsTabTest.php packages/Mothership/DAM/tests/Feature/RoleShareKeysRequestTest.php packages/Mothership/DAM/tests/Feature/SandboxRoleBuilderTest.php packages/Mothership/DAM/tests/Feature/SavedSearchTest.php packages/Mothership/DAM/tests/Feature/SectionsTest.php packages/Mothership/DAM/tests/Feature/SecurityEventsTest.php packages/Mothership/DAM/tests/Feature/SecurityFixesTest.php packages/Mothership/DAM/tests/Feature/SecurityReportsTest.php packages/Mothership/DAM/tests/Feature/SeedDamDemoDataTest.php packages/Mothership/DAM/tests/Feature/ShareAccessOptionsTest.php packages/Mothership/DAM/tests/Feature/ShareControllerTest.php packages/Mothership/DAM/tests/Feature/ShareSlugApiTest.php packages/Mothership/DAM/tests/Feature/ShareSlugTest.php packages/Mothership/DAM/tests/Feature/ShareTokenHardeningTest.php packages/Mothership/DAM/tests/Feature/SharedAlternateFilesTest.php packages/Mothership/DAM/tests/Feature/SharedProxyPlaybackTest.php packages/Mothership/DAM/tests/Feature/SharedStackFilePreviewTest.php packages/Mothership/DAM/tests/Feature/StackMembersTest.php packages/Mothership/DAM/tests/Feature/SharedStackFilesTest.php packages/Mothership/DAM/tests/Feature/SharedViewerAvailabilityTest.php packages/Mothership/DAM/tests/Feature/SharedViewerTest.php packages/Mothership/DAM/tests/Feature/SidebarActiveRowTest.php packages/Mothership/DAM/tests/Feature/SimilarImagesTest.php packages/Mothership/DAM/tests/Feature/StackInsteadRaceTest.php packages/Mothership/DAM/tests/Feature/StackSuggestionsTest.php packages/Mothership/DAM/tests/Feature/StorageIntegrityTest.php packages/Mothership/DAM/tests/Feature/StylePressImportTest.php packages/Mothership/DAM/tests/Feature/SvgPreviewTest.php packages/Mothership/DAM/tests/Feature/TagHardeningTest.php packages/Mothership/DAM/tests/Feature/TagManagementTest.php packages/Mothership/DAM/tests/Feature/TagReindexTest.php packages/Mothership/DAM/tests/Feature/TagTest.php packages/Mothership/DAM/tests/Feature/TemplateAssetCreationTest.php packages/Mothership/DAM/tests/Feature/TrashPurgeRacePostgresTest.php packages/Mothership/DAM/tests/Feature/TrashTest.php packages/Mothership/DAM/tests/Feature/UploadTrackerTest.php packages/Mothership/DAM/tests/Feature/UploadEventCoverageTest.php packages/Mothership/DAM/tests/Feature/UserRoleEverydayAccessMigrationTest.php packages/Mothership/DAM/tests/Feature/VectorizationAllowanceTest.php packages/Mothership/DAM/tests/Feature/VectorizationDownloadHeadersTest.php packages/Mothership/DAM/tests/Feature/VectorizationReadinessTest.php packages/Mothership/DAM/tests/Feature/VectorizationToolTest.php packages/Mothership/DAM/tests/Feature/VectorizerClientTest.php packages/Mothership/DAM/tests/Feature/VideoEmbedTest.php packages/Mothership/DAM/tests/Feature/VideoPreviewProxyJobTest.php packages/Mothership/DAM/tests/Feature/VideoPreviewSelectionTest.php packages/Mothership/DAM/tests/Feature/VideoProxyPublisherTest.php packages/Mothership/DAM/tests/Feature/VideoProxyRetryTest.php packages/Mothership/DAM/tests/Feature/WebCollectionTest.php packages/Mothership/DAM/tests/Feature/WebCollectionsSidebarCardTest.php packages/Mothership/DAM/tests/Feature/WebPageAdminRouteTest.php packages/Mothership/DAM/tests/Feature/WebPageAuditTest.php packages/Mothership/DAM/tests/Feature/WebPageBundlerTest.php packages/Mothership/DAM/tests/Feature/WebPageClassificationTest.php packages/Mothership/DAM/tests/Feature/WebPageIndexTest.php packages/Mothership/DAM/tests/Feature/WebPagePreviewTest.php packages/Mothership/DAM/tests/Feature/WebPageShareRouteTest.php packages/Mothership/DAM/tests/Feature/WebPageThumbnailCaptureTest.php packages/Mothership/DAM/tests/Feature/WritesContentAddressedObjectsTest.php packages/Mothership/DAM/tests/Unit/PageGrantTest.php
+
+      - name: Check DAM console and unit tests
+        if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/Console/DamUpdateRestoreTest.php packages/Mothership/DAM/tests/Feature/Console/DamUpdateTest.php packages/Mothership/DAM/tests/Feature/Console/GenerateScaleDataTest.php packages/Mothership/DAM/tests/Feature/Console/StorageIntegrityCommandsTest.php packages/Mothership/DAM/tests/Unit/ActionRequestModelTest.php packages/Mothership/DAM/tests/Unit/AssetBundleWriterTest.php packages/Mothership/DAM/tests/Unit/AssetContentHardeningTest.php packages/Mothership/DAM/tests/Unit/AssetControlLockTest.php packages/Mothership/DAM/tests/Unit/AssetDataGridFilterTest.php packages/Mothership/DAM/tests/Unit/AssetHelperPlaceholderTest.php packages/Mothership/DAM/tests/Unit/AssetHelperTest.php packages/Mothership/DAM/tests/Unit/AssetModelTest.php packages/Mothership/DAM/tests/Unit/AssetPropertyPresenterTest.php packages/Mothership/DAM/tests/Unit/AssetResourceMappingRepositoryTest.php packages/Mothership/DAM/tests/Unit/AssetResourceMappingTest.php packages/Mothership/DAM/tests/Unit/AssetRuleTest.php packages/Mothership/DAM/tests/Unit/ChunkUploadLoggerTest.php packages/Mothership/DAM/tests/Unit/CliPanoramaWorkerTest.php packages/Mothership/DAM/tests/Unit/CommentModelTest.php packages/Mothership/DAM/tests/Unit/ExporterCoreCompatibilityTest.php packages/Mothership/DAM/tests/Unit/FileControllerTest.php packages/Mothership/DAM/tests/Unit/ListenerTest.php packages/Mothership/DAM/tests/Unit/MetadataExtractionServiceTest.php packages/Mothership/DAM/tests/Unit/ModelMetadataExtractionTest.php packages/Mothership/DAM/tests/Unit/PanoramaClassifierTest.php packages/Mothership/DAM/tests/Unit/PanoramaLoggerTest.php packages/Mothership/DAM/tests/Unit/PropertyModelTest.php packages/Mothership/DAM/tests/Unit/SafeZipExtractorTest.php packages/Mothership/DAM/tests/Unit/Sha256FileTest.php packages/Mothership/DAM/tests/Unit/ShareRepositoryTest.php packages/Mothership/DAM/tests/Unit/ShareKeyGrantTest.php packages/Mothership/DAM/tests/Unit/ApiShareControllerAssetAccessTest.php packages/Mothership/DAM/tests/Unit/TagModelTest.php packages/Mothership/DAM/tests/Unit/VideoPreviewProfileTest.php packages/Mothership/DAM/tests/Feature/Console/StorageReclaimCommandTest.php packages/Mothership/DAM/tests/Feature/Console/StorageBackupCommandTest.php packages/Mothership/DAM/tests/Unit/TarListingTest.php packages/Mothership/DAM/tests/Unit/BlendFileReaderTest.php packages/Mothership/DAM/tests/Unit/UnityPackageReaderTest.php
+
+      - name: Install DAM media tools (ExifTool, poppler, libvips, ffmpeg)
+        if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
+        # The FPM, queue and web images carry these (dockerfiles/fpm.Dockerfile); the runner
+        # does not. DngPreviewTest shells out to exiftool and vips, PdfThumbnailCleanupTest to
+        # pdftoppm, BatchProcessingTest to ffmpeg and ffprobe. One shared lock file, so jobs sharing
+        # a host take turns at apt.
+        run: |
+          if ! command -v exiftool >/dev/null || ! command -v pdftoppm >/dev/null || ! command -v vips >/dev/null || ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo flock /tmp/mothership-ci-libvips.lock sh -ec 'apt-get update && apt-get install -y --no-install-recommends libimage-exiftool-perl poppler-utils libvips-tools ffmpeg'
+          fi
+          exiftool -ver
+          command -v pdftoppm
+          vips --version
+          ffmpeg -hide_banner -version | head -n 1
+          command -v ffprobe
+
+      # HEIC/HEIF previews decode through libvips, installed just above. The explicit probe names a runner without a
+      # HEIF reader, and --fail-on-skipped makes any skipped case fail the step: this must run the real decoder.
+      - name: Check HEIC/HEIF previews (real libvips decoder, no skips)
+        if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
+        run: |
+          # grep -c reads the whole listing, so pipefail never sees vips killed by a closed pipe.
+          [ "$(vips -l | grep -c heifload)" -gt 0 ] || { echo '::error::libvips has no HEIF reader (heifload) on this runner'; exit 1; }
+          # heifload alone proves nothing: HEIC is HEVC, and Ubuntu's libheif ships that decoder as a separate plugin which
+          # --no-install-recommends leaves out (windows-gpu-2 WSL: "Unsupported codec (4.3000)"). The probe decodes a committed fixture and checks its pixels.
+          if ! bash .github/scripts/heif-hevc-probe.sh; then
+            sudo flock /tmp/mothership-ci-libvips.lock sh -ec 'apt-get update && apt-get install -y --no-install-recommends libheif-plugin-libde265'
+          fi
+          bash .github/scripts/heif-hevc-probe.sh || { echo '::error::libheif cannot decode HEVC (HEIC) on this runner; libheif-plugin-libde265 is missing'; exit 1; }
+          vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always --fail-on-skipped packages/Mothership/DAM/tests/Feature/HeifPreviewTest.php
+
+      # 2026-09-17: the last eight files of the 2026-09-16 baseline, each of which failed on its
+      # own: five stale or environment-bound tests repaired, one case that skips outside the
+      # disposable PostgreSQL database its race script insists on, and two that need the media
+      # tools installed just above.
+      - name: Check the last DAM tests off the 2026-09-16 baseline
+        if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/AssetDisplayNameTest.php packages/Mothership/DAM/tests/Feature/CompoundAssetObserverTest.php packages/Mothership/DAM/tests/Feature/AssetInfoTest.php packages/Mothership/DAM/tests/Feature/DamUpdaterBackupTest.php packages/Mothership/DAM/tests/Feature/DngPreviewTest.php packages/Mothership/DAM/tests/Feature/PdfThumbnailCleanupTest.php packages/Mothership/DAM/tests/Feature/ReadSeamAcceptanceTest.php packages/Mothership/DAM/tests/Feature/VectorizationLifecycleTest.php packages/Mothership/DAM/tests/Unit/AssetDataGridPrefixTest.php packages/Mothership/DAM/tests/Feature/StorageWriteSeamTest.php packages/Mothership/DAM/tests/Feature/ExplorerCopyAssetTest.php packages/Mothership/DAM/tests/Feature/FoldersAreMetadataAcceptanceTest.php packages/Mothership/DAM/tests/Feature/EditorResourcesAreBlobsAcceptanceTest.php packages/Mothership/DAM/tests/Feature/BatchProcessingTest.php packages/Mothership/DAM/tests/Feature/AssetShowQueryBudgetTest.php
+
+      # Its own step, after the media tools: the over-budget case shells out to ffmpeg.
+      - name: Check AI index image sampling (large rasters scale out of process)
+        if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/AiIndex/MediaSamplerRasterTest.php
+
+      - name: Check stack member metadata, naming and filter recovery
+        if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/StackMemberMetadataTest.php packages/Mothership/DAM/tests/Feature/AiIndex/StackMemberRenameTest.php packages/Mothership/DAM/tests/Feature/ExplorerFilterRecoveryTest.php
+
+      # The details layout outputs only the active tab's slot, so the shared lightbox Files "Open" needs
+      # must be emitted by the tab that is showing (server-rendered markup count on each tab).
+      - name: Check Files tab shared viewer mount
+        if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/AssetFilesViewerMountTest.php
+
+      # Not a regression gate: prints one JSON line of measured timing to the job log as
+      # perf evidence for the StylePress thumbnail perf PR. Runs on the PostgreSQL leg only,
+      # which is the merge gate; the real 148-image catalog lives at
+      # packages/Mothership/DAM/src/Resources/widgets/stylepress/assets/stylepress.
+      - name: Benchmark StylePress thumbnail requests (CI evidence, not a gate)
+        if: matrix.connection == 'pgsql' && steps.guard.outputs.run == 'true'
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/StylePressThumbnailBenchmarkTest.php
+
+      - name: Check image editor document lifecycle
+        if: matrix.connection == 'pgsql' && steps.guard.outputs.run == 'true'
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/ImageEditorDocumentTest.php packages/Mothership/DAM/tests/Feature/ImageEditorSchemaV2Test.php packages/Mothership/DAM/tests/Feature/ImageEditingCapabilityTest.php
+
+      - name: Check Hub resources and Feedback
+        if: matrix.connection == 'pgsql' && steps.guard.outputs.run == 'true'
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/CreativeHub/HubResourceInspectorTest.php packages/Mothership/DAM/tests/Feature/CreativeHub/HubResourceStoreTest.php packages/Mothership/DAM/tests/Feature/CreativeHub/HubResourceAccessTest.php packages/Mothership/DAM/tests/Feature/CreativeHub/HubResourceUploadTest.php packages/Mothership/DAM/tests/Feature/CreativeHub/HubResourcePageTest.php packages/Mothership/DAM/tests/Feature/Feedback/FeedbackReportTest.php packages/Mothership/DAM/tests/Feature/Feedback/FeedbackUiTest.php packages/Mothership/DAM/tests/Feature/Feedback/FeedbackTriageTest.php
+
+      # Removes this job's service containers whatever happened (success, failure, cancel by the watchdog),
+      # ahead of reporting and uploads so a stalled upload cannot use up the cancellation grace first.
+      - name: Stop service containers
+        if: always()
+        env:
+          CI_SVC_DEADLINE: ${{ steps.guard.outputs.cut_epoch }}
+        run: bash .github/scripts/ci_service.sh stop
+
+      - name: Upload failure report
+        if: failure() && steps.guard.outputs.run == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: pest-${{ matrix.connection }}-teamcity
+          path: pest-teamcity-*.log
+          if-no-files-found: ignore
+
+      - name: Record nightly totals
+        if: always()
+        env:
+          ITEM_KEY: pest-${{ matrix.connection }}
+          ITEM_LABEL: Pest Tests (${{ matrix.label }})
+          ITEM_KIND: pest
+          ITEM_ADVISORY: ${{ matrix.advisory }}
+          JOB_STATUS: ${{ job.status }}
+        run: python3 .github/scripts/nightly_totals.py junit --dir "$RUNNER_TEMP/junit"
+
+      - name: Upload nightly totals
+        if: always() && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-totals-pest-${{ matrix.connection }}
+          path: ${{ runner.temp }}/nightly-totals/
+          retention-days: 14
+
+  # The installer offers four drivers (Installer::DATABASE_DRIVERS: mysql, mariadb, pgsql,
+  # sqlsrv), but the legs above only ever build a schema on PostgreSQL, MySQL and SQLite, so a
+  # grammar gap on the other two landed unseen: Laravel's SqlServerGrammar has no insertOrIgnore
+  # compiler, which a review of PR #36 caught by reading the code, not by running it (2026-09-23).
+  # These legs run the installer only, with no test suite on top: they answer "does a fresh
+  # install finish on this driver". Both are advisory, and a red leg is a finding to triage,
+  # never a blocker. Like the MySQL leg they skip pull requests and run nightly and on demand (see the note above `jobs:`).
+  installer:
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","linux","x64","windows-gpu"]') }}
+    timeout-minutes: 30
+    name: Installer (${{ matrix.label }})
+    needs: nightly_gate
+    if: github.event_name != 'pull_request' && needs.nightly_gate.outputs.run == 'true'
+    continue-on-error: ${{ matrix.advisory }}
+    # The database is started by a step after the window guard (.github/scripts/ci_service.sh).
+    env:
+      CI_SVC_TAG: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-${{ strategy.job-index }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: MariaDB, advisory
+            connection: mariadb
+            image: mariadb:11.4
+            port: 3306
+            database: mothership
+            username: root
+            password: root
+            # healthcheck.sh ships in the image; MariaDB 11 images no longer carry the
+            # mysql-named client binaries the MySQL leg's `mysqladmin ping` relies on.
+            options: >-
+              --health-cmd="healthcheck.sh --connect --innodb_initialized"
+              --health-interval=5s
+              --health-timeout=3s
+              --health-retries=6
+              --tmpfs /var/lib/mysql:rw,noexec,nosuid,size=600m
+            extension: pdo_mysql
+            advisory: true
+            min_minutes: 15
+          - label: SQL Server, advisory
+            connection: sqlsrv
+            image: mcr.microsoft.com/mssql/server:2022-latest
+            port: 1433
+            database: mothership
+            username: sa
+            # SQL Server refuses an SA password without three character classes.
+            password: Mothership-ci-1
+            # No tmpfs (SQL Server opens its files with O_DIRECT, which tmpfs rejects) and no
+            # health check: the image's sqlcmd path has moved between releases, so the
+            # "Create the SQL Server database" step polls for readiness through PHP instead.
+            # The cap is headroom over MSSQL_MEMORY_LIMIT_MB below, on a 12 GB WSL VM that also
+            # hosts the pest job's database.
+            options: --memory=3g
+            extension: sqlsrv, pdo_sqlsrv
+            advisory: true
+            min_minutes: 20
+
+    steps:
+      # Checkout first so the guard runs from the repository; ci-verify treats steps before the guard
+      # as setup (.github/ci-verify.yml).
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Nightly window guard (00:00-06:00 America/Chicago)
+        id: guard
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          NIGHTLY_INPUT: ${{ inputs.nightly }}
+          GITHUB_TOKEN: ${{ github.token }}
+          ITEM_KEY: installer-${{ matrix.connection }}
+          ITEM_LABEL: Installer (${{ matrix.label }})
+          ITEM_KIND: installer
+          ITEM_ADVISORY: ${{ matrix.advisory }}
+          MIN_MINUTES: ${{ matrix.min_minutes }}
+          JOB_TIMEOUT_MINUTES: '30'
+        run: python3 .github/scripts/nightly_guard.py
+
+      # Each image reads only its own variables, so one env list serves both legs.
+      - name: Start service containers
+        if: steps.guard.outputs.run == 'true'
+        env:
+          CI_SVC_DEADLINE: ${{ steps.guard.outputs.cut_epoch }}
+        run: >-
+          bash .github/scripts/ci_service.sh start DB ${{ matrix.port }}
+          -e MARIADB_ROOT_PASSWORD=${{ matrix.password }} -e MARIADB_DATABASE=${{ matrix.database }}
+          -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD=${{ matrix.password }} -e MSSQL_MEMORY_LIMIT_MB=2048
+          ${{ matrix.options }}
+          ${{ matrix.image }}
+
+      - name: Setup PHP
+        if: steps.guard.outputs.run == 'true'
+        uses: shivammathur/setup-php@2.37.2
+        with:
+          php-version: '8.4'
+          extensions: curl, fileinfo, gd, intl, mbstring, openssl, pdo, ${{ matrix.extension }}, tokenizer, zip
+          ini-values: error_reporting=E_ALL
+          tools: composer:v2
+          coverage: none
+
+      # On this pool setup-php enables prebuilt sqlsrv/pdo_sqlsrv but does not install the
+      # Microsoft ODBC driver they load at connect time (first run, 2026-09-23: SQLSTATE[IMSSP]
+      # "requires the Microsoft ODBC Driver"). Installed once per runner host from Microsoft's
+      # apt repository; the lock file makes jobs sharing a host take turns at apt.
+      - name: Install the Microsoft ODBC driver
+        if: matrix.connection == 'sqlsrv' && steps.guard.outputs.run == 'true'
+        run: |
+          if ! odbcinst -q -d -n "ODBC Driver 18 for SQL Server" >/dev/null 2>&1; then
+            sudo flock /tmp/mothership-ci-msodbcsql.lock sh -ec '
+              . /etc/os-release
+              deb="$(mktemp --suffix=.deb)"
+              curl -fsSL -o "$deb" "https://packages.microsoft.com/config/ubuntu/$VERSION_ID/packages-microsoft-prod.deb"
+              dpkg -i "$deb"
+              rm -f "$deb"
+              apt-get update
+              ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 unixodbc
+            '
+          fi
+          odbcinst -q -d -n "ODBC Driver 18 for SQL Server"
+
+      - name: Install Composer dependencies
+        if: steps.guard.outputs.run == 'true'
+        uses: ramsey/composer-install@v3
+        with:
+          composer-options: "--optimize-autoloader"
+
+      - name: Setting Environment
+        if: steps.guard.outputs.run == 'true'
+        run: |
+          cp .env.example .env
+          sed -i "s|^\(APP_ENV=\s*\).*$|\1testing|" .env
+          sed -i "s|^\(DB_CONNECTION=\s*\).*$|\1${{ matrix.connection }}|" .env
+          sed -i "s|^\(DB_HOST=\s*\).*$|\1127.0.0.1|" .env
+          sed -i "s|^\(DB_PORT=\s*\).*$|\1${SVC_DB_PORT}|" .env
+          sed -i "s|^\(DB_DATABASE=\s*\).*$|\1${{ matrix.database }}|" .env
+          sed -i "s|^\(DB_USERNAME=\s*\).*$|\1${{ matrix.username }}|" .env
+          sed -i "s|^\(DB_PASSWORD=\s*\).*$|\1${{ matrix.password }}|" .env
+          # Read only by the sqlsrv connection (config/database.php): the container's
+          # certificate is self-signed and ODBC Driver 18 encrypts by default.
+          echo "DB_TRUST_SERVER_CERTIFICATE=true" >> .env
+          php artisan key:generate --force --no-interaction
+
+      # The SQL Server image creates no application database, and it takes a while to accept
+      # logins after the container starts, so wait for a login, then create the database.
+      - name: Create the SQL Server database
+        if: matrix.connection == 'sqlsrv' && steps.guard.outputs.run == 'true'
+        env:
+          DB_PORT: ${{ env.SVC_DB_PORT }}
+          DB_DATABASE: ${{ matrix.database }}
+          DB_USERNAME: ${{ matrix.username }}
+          DB_PASSWORD: ${{ matrix.password }}
+        run: |
+          php -r '
+            $dsn = "sqlsrv:Server=127.0.0.1,".getenv("DB_PORT").";TrustServerCertificate=1";
+            for ($i = 1; ; $i++) {
+                try { $pdo = new PDO($dsn, getenv("DB_USERNAME"), getenv("DB_PASSWORD")); break; }
+                catch (PDOException $e) { if ($i >= 60) throw $e; fwrite(STDERR, "waiting for SQL Server ($i)\n"); sleep(2); }
+            }
+            $pdo->exec("CREATE DATABASE [".getenv("DB_DATABASE")."]");
+            echo "created ".getenv("DB_DATABASE"), PHP_EOL;
+          '
+
+      # Every migration from an empty database, on its own so a schema failure reads apart from
+      # a seeding failure in the installer step that follows.
+      - name: Migrate from empty
+        if: steps.guard.outputs.run == 'true'
+        run: php artisan migrate:fresh --force --no-interaction
+
+      - name: Running Mothership Installer
+        if: steps.guard.outputs.run == 'true'
+        run: php artisan mothership:install --skip-env-check --skip-admin-creation --with-demo-data
+
+      - name: Seed the DAM Library root
+        if: steps.guard.outputs.run == 'true'
+        run: php artisan db:seed --force --no-interaction --class="Mothership\\DAM\\Database\\Seeders\\DirectoryTableSeeder"
+
+      # dam_optimizations.asset_file_id is NO ACTION on SQL Server (error 1785), so the app clears
+      # it before a file or asset goes; only a real server shows whether those deletes succeed.
+      - name: Check optimization links clear on file and asset delete
+        if: steps.guard.outputs.run == 'true'
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/AssetOptimizationTest.php --filter="clears the optimization link"
+
+  # Migrations branch on SQLite, which no other leg runs. Core Unit holds the
+  # migration and grammar tests, so it runs here against a SQLite file. The
+  # installer only accepts server drivers, so the schema is built by hand:
+  # migrate, seed, then the DAM directories.
+
+      # Removes this job's service containers whatever happened (success, failure, cancel by the watchdog),
+      # ahead of reporting and uploads so a stalled upload cannot use up the cancellation grace first.
+      - name: Stop service containers
+        if: always()
+        env:
+          CI_SVC_DEADLINE: ${{ steps.guard.outputs.cut_epoch }}
+        run: bash .github/scripts/ci_service.sh stop
+
+      - name: Record nightly totals
+        if: always()
+        env:
+          ITEM_KEY: installer-${{ matrix.connection }}
+          ITEM_LABEL: Installer (${{ matrix.label }})
+          ITEM_KIND: installer
+          ITEM_ADVISORY: ${{ matrix.advisory }}
+          JOB_STATUS: ${{ job.status }}
+        run: python3 .github/scripts/nightly_totals.py junit --dir "$RUNNER_TEMP/junit"
+
+      - name: Upload nightly totals
+        if: always() && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-totals-installer-${{ matrix.connection }}
+          path: ${{ runner.temp }}/nightly-totals/
+          retention-days: 14
+
+  pest-sqlite:
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","linux","x64","windows-gpu"]') }}
+    timeout-minutes: 75
+    name: Pest Core (SQLite)
+    # The only job a pull request runs. The nightly skips it: the other jobs are the slow legs,
+    # and a PR already tested this one. A dispatch still runs it.
+    if: github.event_name != 'schedule' && inputs.nightly != true
+
+    env:
+      DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@2.37.2
+        with:
+          php-version: '8.4'
+          extensions: curl, exif, fileinfo, gd, intl, mbstring, openssl, pdo, pdo_sqlite, sqlite3, tokenizer, zip
+          ini-values: error_reporting=E_ALL
+          tools: composer:v2
+          coverage: none
+
+      - name: Install Composer dependencies
+        uses: ramsey/composer-install@v3
+        with:
+          composer-options: "--optimize-autoloader"
+
+      # DAM tests run in this workflow only when a step names the file: phpunit's "DAM Feature
+      # Test" suite is not among the suites it runs. That let every new Pest file from the
+      # 2026-09-16 batch merge green without ever executing, and 126 of 148 files had never run
+      # here at all. This step fails when a DAM test file is not named on a Pest line of the
+      # `pest` job, the merge gate. The dated baseline that carried the 126
+      # (.github/dam-tests-not-in-ci.txt) was worked to zero on 2026-09-17 and is gone: there is
+      # no list to add a file to, only a step. The SQLite job below names most of the same files
+      # for a second signal but is not checked; some steps are PostgreSQL-only by design.
+      # It parses the workflow as YAML (symfony/yaml, hence after Composer) and credits a file
+      # only as an argument of a required-leg `vendor/bin/pest` command; see the script header.
+      # Comments, step names and `true # vendor/bin/pest …` decoys counted under the earlier
+      # grep (to 2026-10-01). --self-test first proves the decoys still do not count.
+      - name: Setting Environment
+        run: |
+          cp .env.example .env
+          sed -i "s|^\(APP_ENV=\s*\).*$|\1testing|" .env
+          sed -i "s|^\(DB_CONNECTION=\s*\).*$|\1sqlite|" .env
+          sed -i "s|^\(DB_DATABASE=\s*\).*$|\1$DB_DATABASE|" .env
+          touch "$DB_DATABASE"
+          php artisan key:generate --force --no-interaction
+
+      - name: Building the schema
+        run: |
+          php artisan migrate --force --no-interaction
+          php artisan db:seed --force --no-interaction
+          php artisan db:seed --force --no-interaction --class="Mothership\\DAM\\Database\\Seeders\\DirectoryTableSeeder"
+
+      - name: Every DAM test file is named in the gate job
+        run: |
+          php .github/scripts/check-dam-test-gate.php --self-test
+          php .github/scripts/check-dam-test-gate.php
+
+      - name: Check authenticated Transfers grants
+        run: vendor/bin/pest packages/Mothership/DAM/tests/Feature/TransfersTest.php
+
+      - name: Running Core tests
+        run: vendor/bin/pest --colors=always --testsuite "Core Unit Test"
+
+      # Mirror of the gate job's root-suite step, for a SQLite signal of its own.
+      - name: Check root feature tests (tests/Feature)
+        if: ${{ !cancelled() }}
+        run: vendor/bin/pest --colors=always --testsuite Feature
+
+      - name: Check relationship queries
+        run: vendor/bin/pest --colors=always packages/Mothership/DAM/tests/Feature/AssetRelationshipTest.php
+
+      # The PostgreSQL legs are the gate but have been red for reasons of their own, so this leg is
+      # where the directory-move rules get a green-to-red signal of their own.
+      - name: Check directory move authorization and the move job failure path
+        if: '!cancelled()'
+        run: vendor/bin/pest --colors=always packages/Mothership/DAM/tests/Feature/DirectoryMoveTest.php packages/Mothership/DAM/tests/Unit/JobsTest.php
+
+      # Same coverage gap, same batch of files, run here too for the same green-to-red signal
+      # independent of the PostgreSQL legs' own unrelated redness. SphereSeamConcurrentImportTest
+      # forks a real process to race PostgreSQL's own row lock and skips itself on every other
+      # driver (including this SQLite leg), so pcntl/posix are deliberately not added to this
+      # job's extensions — nothing here needs them.
+      - name: Check batch DAM feature tests (2026-09-16 merges, never previously run in CI)
+        if: ${{ !cancelled() }}
+        run: vendor/bin/pest --colors=always packages/Mothership/DAM/tests/Feature/SphereSeamTest.php packages/Mothership/DAM/tests/Feature/SharedHiggsfieldTest.php packages/Mothership/DAM/tests/Feature/SharedHiggsfieldQueueLifecycleTest.php packages/Mothership/DAM/tests/Feature/SphereSeamConcurrentImportTest.php packages/Mothership/DAM/tests/Feature/AssetNeighboursTest.php packages/Mothership/DAM/tests/Feature/AssetTest.php packages/Mothership/DAM/tests/Feature/AssetHiddenEqualsMissingTest.php packages/Mothership/DAM/tests/Feature/AssetAccessDecisionTest.php packages/Mothership/DAM/tests/Feature/RouteInventoryTest.php packages/Mothership/DAM/tests/Feature/DirectoryHiddenEqualsMissingTest.php packages/Mothership/DAM/tests/Feature/ModelThumbnailCaptureTest.php packages/Mothership/DAM/tests/Feature/Api/ModelThumbnailApiTest.php packages/Mothership/DAM/tests/Feature/CustomThumbnailTest.php packages/Mothership/DAM/tests/Feature/PlaceholderThumbnailEtagTest.php packages/Mothership/DAM/tests/Feature/StackMemberThumbnailVersionTest.php
+
+      # Every case here authenticates through a Passport client, which no SQLite schema could
+      # create until AdminApi migration 2026_09_16_100000 (oauth_clients.id integer rowid -> uuid);
+      # this step is that migration's regression check.
+      - name: Check DAM API feature tests
+        if: ${{ !cancelled() }}
+        run: vendor/bin/pest --colors=always packages/Mothership/DAM/tests/Feature/Api/AssetApiTest.php packages/Mothership/DAM/tests/Feature/Api/AssetRelationshipApiTest.php packages/Mothership/DAM/tests/Feature/Api/CommentApiTest.php packages/Mothership/DAM/tests/Feature/Api/DirectoryApiTest.php packages/Mothership/DAM/tests/Feature/Api/LinkedResourcesApiTest.php packages/Mothership/DAM/tests/Feature/Api/PropertyApiTest.php packages/Mothership/DAM/tests/Feature/Api/ReorganizeApiTest.php packages/Mothership/DAM/tests/Feature/Api/ShareApiMutationAuthorizationTest.php packages/Mothership/DAM/tests/Feature/Api/TagApiTest.php
+
+      - name: Check DAM directory tests
+        if: ${{ !cancelled() }}
+        run: vendor/bin/pest --colors=always packages/Mothership/DAM/tests/Feature/DeleteDirectoryTransactionTest.php packages/Mothership/DAM/tests/Feature/DirectoryAncestorPathsTest.php packages/Mothership/DAM/tests/Feature/DirectoryAssetCountRollupTest.php packages/Mothership/DAM/tests/Feature/DirectoryAssetCountsEndpointTest.php packages/Mothership/DAM/tests/Feature/DirectoryAutoGrantTest.php packages/Mothership/DAM/tests/Feature/DirectoryGrantedIdsResponseTest.php packages/Mothership/DAM/tests/Feature/DirectoryInheritChildrenTest.php packages/Mothership/DAM/tests/Feature/DirectoryMassDestroyTest.php packages/Mothership/DAM/tests/Feature/DirectorySearchTest.php packages/Mothership/DAM/tests/Feature/DirectoryTest.php packages/Mothership/DAM/tests/Feature/DirectoryTreeIntegrityTest.php packages/Mothership/DAM/tests/Feature/DirectoryTreeShowAssetsTest.php packages/Mothership/DAM/tests/Feature/DirectoryTreeAssetAccessTest.php packages/Mothership/DAM/tests/Feature/LibraryStructuralDirectoriesTest.php packages/Mothership/DAM/tests/Unit/AttemptDirectoryTest.php packages/Mothership/DAM/tests/Unit/DirectoryModelTest.php packages/Mothership/DAM/tests/Unit/DirectoryPermissionServiceTest.php packages/Mothership/DAM/tests/Unit/DirectoryRepositorySearchTest.php
+
+      - name: Check DAM access lists (sharing slice 1)
+        if: ${{ !cancelled() }}
+        run: vendor/bin/pest --colors=always packages/Mothership/DAM/tests/Feature/Access/AccessListReaderTest.php packages/Mothership/DAM/tests/Feature/Access/AccessListRebuildTest.php packages/Mothership/DAM/tests/Feature/Access/AccessSwitchTest.php packages/Mothership/DAM/tests/Feature/Access/AccessRebuildSnapshotTest.php packages/Mothership/DAM/tests/Feature/Access/AccessModelRowLockTest.php packages/Mothership/DAM/tests/Feature/Access/ShareLinksForEveryoneTest.php
+
+      - name: Check DAM sharing dialog and cascade (sharing slice 3)
+        if: ${{ !cancelled() }}
+        run: vendor/bin/pest --colors=always packages/Mothership/DAM/tests/Feature/Access/AccessListServiceTest.php packages/Mothership/DAM/tests/Feature/Access/AccessControllerTest.php packages/Mothership/DAM/tests/Feature/Access/ExplorerAccessModeTest.php packages/Mothership/DAM/tests/Feature/Access/ShareMenuGatingTest.php packages/Mothership/DAM/tests/Feature/Access/EffectiveAccessTest.php
+
+      - name: Check DAM lists follow writes (sharing slice 2a)
+        if: ${{ !cancelled() }}
+        run: vendor/bin/pest --colors=always packages/Mothership/DAM/tests/Feature/Access/AccessFenceTest.php packages/Mothership/DAM/tests/Feature/Access/InheritOnCreateTest.php packages/Mothership/DAM/tests/Feature/Access/AdoptOnMoveTest.php packages/Mothership/DAM/tests/Unit/AccessFenceLockingClauseTest.php packages/Mothership/DAM/tests/Unit/CommittedResidueSweepTest.php
+
+      - name: Check DAM move and copy refusals (sharing slice 2b)
+        if: ${{ !cancelled() }}
+        run: vendor/bin/pest --colors=always packages/Mothership/DAM/tests/Feature/Access/MoveDeleteGuardTest.php packages/Mothership/DAM/tests/Feature/Access/CopyFilteringTest.php packages/Mothership/DAM/tests/Feature/Access/MovePreviewTest.php packages/Mothership/DAM/tests/Feature/Access/AccessListReaderLockingClauseTest.php
+
+      - name: Check DAM feature tests, A to D
+        if: ${{ !cancelled() }}
+        run: vendor/bin/pest --colors=always packages/Mothership/DAM/tests/Feature/AccessMatrixPostgresTest.php packages/Mothership/DAM/tests/Feature/ActionRequestTest.php packages/Mothership/DAM/tests/Feature/AiTagReviewQueueTest.php packages/Mothership/DAM/tests/Feature/AiVocabularyTest.php packages/Mothership/DAM/tests/Feature/AnalyticsIngestTest.php packages/Mothership/DAM/tests/Feature/AnalyticsPrivacyTest.php packages/Mothership/DAM/tests/Feature/AnalyticsReportsTest.php packages/Mothership/DAM/tests/Feature/AnalyticsRollupTest.php packages/Mothership/DAM/tests/Feature/AssetAvailabilityTest.php packages/Mothership/DAM/tests/Feature/AssetBundleReaderTest.php packages/Mothership/DAM/tests/Feature/AssetDeletionTest.php packages/Mothership/DAM/tests/Feature/AssetFilesAttachTest.php packages/Mothership/DAM/tests/Feature/AssetFilesChunkedAttachTest.php packages/Mothership/DAM/tests/Feature/CompoundAssetTest.php packages/Mothership/DAM/tests/Feature/AssetHistoryAccessTest.php packages/Mothership/DAM/tests/Feature/AssetMergeTest.php packages/Mothership/DAM/tests/Feature/AssetOptimizationTest.php packages/Mothership/DAM/tests/Feature/StackMemberOptimizeEditTest.php packages/Mothership/DAM/tests/Feature/AssetPathStorageTest.php packages/Mothership/DAM/tests/Feature/AssetPickerTest.php packages/Mothership/DAM/tests/Feature/AssetStackTest.php packages/Mothership/DAM/tests/Feature/AssetVectorizationTest.php packages/Mothership/DAM/tests/Feature/AttachmentActionsTest.php packages/Mothership/DAM/tests/Feature/StackFirstFileTest.php packages/Mothership/DAM/tests/Feature/StackMemberPlaybackTest.php packages/Mothership/DAM/tests/Feature/AttachmentBrowsingTest.php packages/Mothership/DAM/tests/Feature/AttachmentHistoryTest.php packages/Mothership/DAM/tests/Feature/AttachmentLineageTest.php packages/Mothership/DAM/tests/Feature/AttachmentSlotsTest.php packages/Mothership/DAM/tests/Feature/AutomationApiTest.php packages/Mothership/DAM/tests/Feature/AutomationRulesTest.php packages/Mothership/DAM/tests/Feature/AvailabilityAccessProbesTest.php packages/Mothership/DAM/tests/Feature/AvailabilityReviewProbesTest.php packages/Mothership/DAM/tests/Feature/BoardsTest.php packages/Mothership/DAM/tests/Feature/CaptureProfilesTest.php packages/Mothership/DAM/tests/Feature/ChunkUploadCleanupTest.php packages/Mothership/DAM/tests/Feature/ChunkUploadCompletionTest.php packages/Mothership/DAM/tests/Feature/ChunkUploadPartTest.php packages/Mothership/DAM/tests/Feature/ChunkUploadPersistenceTest.php packages/Mothership/DAM/tests/Feature/ChunkUploadSessionTest.php packages/Mothership/DAM/tests/Feature/CollectionAccessTest.php packages/Mothership/DAM/tests/Feature/CollectionApiTest.php packages/Mothership/DAM/tests/Feature/CollectionLinkTest.php packages/Mothership/DAM/tests/Feature/CollectionSlugTest.php packages/Mothership/DAM/tests/Feature/CommandTest.php packages/Mothership/DAM/tests/Feature/CommentTest.php packages/Mothership/DAM/tests/Feature/DamSidebarMenuIconsTest.php packages/Mothership/DAM/tests/Feature/DamUpdaterRestoreTest.php packages/Mothership/DAM/tests/Feature/DamUpdaterVerifyTest.php packages/Mothership/DAM/tests/Feature/DamWebhookEventsTest.php packages/Mothership/DAM/tests/Feature/DownloadStartCookieTest.php
+
+      - name: Check DAM feature tests, E to M
+        if: ${{ !cancelled() }}
+        run: vendor/bin/pest --colors=always packages/Mothership/DAM/tests/Feature/ExactDuplicateNoticeTest.php packages/Mothership/DAM/tests/Feature/ExplorerAvailableVersionsTest.php packages/Mothership/DAM/tests/Feature/ExplorerMassCopyTest.php packages/Mothership/DAM/tests/Feature/ExplorerMassMoveTest.php packages/Mothership/DAM/tests/Feature/ExplorerPageFirstTest.php packages/Mothership/DAM/tests/Feature/ExplorerSortTest.php packages/Mothership/DAM/tests/Feature/ExplorerSubfoldersTest.php packages/Mothership/DAM/tests/Feature/ExplorerTagSearchTest.php packages/Mothership/DAM/tests/Feature/FileTest.php packages/Mothership/DAM/tests/Feature/FolderAccessHiddenEqualsMissingTest.php packages/Mothership/DAM/tests/Feature/FolderAccessTest.php packages/Mothership/DAM/tests/Feature/FolderUploadStructureTest.php packages/Mothership/DAM/tests/Feature/GameAssetPreviewTest.php packages/Mothership/DAM/tests/Feature/GeneratePanoramaPreviewTest.php packages/Mothership/DAM/tests/Feature/GenerateVideoPreviewsCommandTest.php packages/Mothership/DAM/tests/Feature/GlobalDetailsTest.php packages/Mothership/DAM/tests/Feature/GroqPromptEnhancerTest.php packages/Mothership/DAM/tests/Feature/GroupControllerTest.php packages/Mothership/DAM/tests/Feature/GuestUploadIsolationTest.php packages/Mothership/DAM/tests/Feature/GuestUploadPortalTest.php packages/Mothership/DAM/tests/Feature/GuestUploadReviewTest.php packages/Mothership/DAM/tests/Feature/HomeCalendarTest.php packages/Mothership/DAM/tests/Feature/HomeFavoritesTest.php packages/Mothership/DAM/tests/Feature/HomeFixedPageTest.php packages/Mothership/DAM/tests/Feature/HomePlaqueTest.php packages/Mothership/DAM/tests/Feature/HomeVideoDownloaderTest.php packages/Mothership/DAM/tests/Feature/HomeWidgetAccessTest.php packages/Mothership/DAM/tests/Feature/IconLibraryCardTest.php packages/Mothership/DAM/tests/Feature/ImageEditTest.php packages/Mothership/DAM/tests/Feature/InheritedAssetAttributeTest.php packages/Mothership/DAM/tests/Feature/LabelsTest.php packages/Mothership/DAM/tests/Feature/LargeRasterPreviewTest.php packages/Mothership/DAM/tests/Feature/LibraryMediaNavigationTest.php packages/Mothership/DAM/tests/Feature/LibrarySortTest.php packages/Mothership/DAM/tests/Feature/MassAssignTagsTest.php packages/Mothership/DAM/tests/Feature/MediaAspectRatioTest.php packages/Mothership/DAM/tests/Feature/MediaPlaybackControlsTest.php packages/Mothership/DAM/tests/Feature/MetadataFieldAdoptTest.php packages/Mothership/DAM/tests/Feature/MetadataFieldDefinitionsTest.php packages/Mothership/DAM/tests/Feature/MetadataFieldFiltersTest.php packages/Mothership/DAM/tests/Feature/MetadataFieldValuesTest.php packages/Mothership/DAM/tests/Feature/MetadataMappingsTest.php packages/Mothership/DAM/tests/Feature/ModelPrimaryViewTest.php packages/Mothership/DAM/tests/Feature/NameStemBackfillTest.php packages/Mothership/DAM/tests/Feature/NewUserUploadsTest.php packages/Mothership/DAM/tests/Unit/LangPluralTest.php packages/Mothership/DAM/tests/Feature/MissingAssetIdTest.php
+
+      - name: Check DAM feature tests, N to Z
+        if: ${{ !cancelled() }}
+        run: vendor/bin/pest --colors=always packages/Mothership/DAM/tests/Feature/LayoutChromeTest.php packages/Mothership/DAM/tests/Feature/OptimizerClientTest.php packages/Mothership/DAM/tests/Feature/OrganizationApiTest.php packages/Mothership/DAM/tests/Feature/OrientationTest.php packages/Mothership/DAM/tests/Feature/OwnItemsOnlyTest.php packages/Mothership/DAM/tests/Feature/PanoramaDomainTest.php packages/Mothership/DAM/tests/Feature/PanoramaPreviewApiTest.php packages/Mothership/DAM/tests/Feature/PlaybackPreviewTest.php packages/Mothership/DAM/tests/Feature/ProductAssetBulkEditTest.php packages/Mothership/DAM/tests/Feature/PropertyTest.php packages/Mothership/DAM/tests/Feature/PropertyUnavailableAssetAccessTest.php packages/Mothership/DAM/tests/Feature/ReadSeamLibraryPathTest.php packages/Mothership/DAM/tests/Feature/RelatedAssetsTest.php packages/Mothership/DAM/tests/Feature/RemoteObjectStoreTest.php packages/Mothership/DAM/tests/Feature/RequestIdTest.php packages/Mothership/DAM/tests/Feature/RetentionPruneTest.php packages/Mothership/DAM/tests/Feature/RetiredDamRemovalTest.php packages/Mothership/DAM/tests/Feature/ReviewCommentsTest.php packages/Mothership/DAM/tests/Feature/ReviewNotificationsTest.php packages/Mothership/DAM/tests/Feature/RoleDamPermissionsTabTest.php packages/Mothership/DAM/tests/Feature/RoleShareKeysRequestTest.php packages/Mothership/DAM/tests/Feature/SandboxRoleBuilderTest.php packages/Mothership/DAM/tests/Feature/SavedSearchTest.php packages/Mothership/DAM/tests/Feature/SectionsTest.php packages/Mothership/DAM/tests/Feature/SecurityEventsTest.php packages/Mothership/DAM/tests/Feature/SecurityFixesTest.php packages/Mothership/DAM/tests/Feature/SecurityReportsTest.php packages/Mothership/DAM/tests/Feature/SeedDamDemoDataTest.php packages/Mothership/DAM/tests/Feature/ShareAccessOptionsTest.php packages/Mothership/DAM/tests/Feature/ShareControllerTest.php packages/Mothership/DAM/tests/Feature/ShareSlugApiTest.php packages/Mothership/DAM/tests/Feature/ShareSlugTest.php packages/Mothership/DAM/tests/Feature/ShareTokenHardeningTest.php packages/Mothership/DAM/tests/Feature/SharedAlternateFilesTest.php packages/Mothership/DAM/tests/Feature/SharedProxyPlaybackTest.php packages/Mothership/DAM/tests/Feature/SharedStackFilePreviewTest.php packages/Mothership/DAM/tests/Feature/SharedStackFilesTest.php packages/Mothership/DAM/tests/Feature/SharedViewerAvailabilityTest.php packages/Mothership/DAM/tests/Feature/SharedViewerTest.php packages/Mothership/DAM/tests/Feature/SidebarActiveRowTest.php packages/Mothership/DAM/tests/Feature/SimilarImagesTest.php packages/Mothership/DAM/tests/Feature/StackInsteadRaceTest.php packages/Mothership/DAM/tests/Feature/StackSuggestionsTest.php packages/Mothership/DAM/tests/Feature/StylePressImportTest.php packages/Mothership/DAM/tests/Feature/SvgPreviewTest.php packages/Mothership/DAM/tests/Feature/TagHardeningTest.php packages/Mothership/DAM/tests/Feature/TagManagementTest.php packages/Mothership/DAM/tests/Feature/TagReindexTest.php packages/Mothership/DAM/tests/Feature/TagTest.php packages/Mothership/DAM/tests/Feature/TemplateAssetCreationTest.php packages/Mothership/DAM/tests/Feature/TrashPurgeRacePostgresTest.php packages/Mothership/DAM/tests/Feature/TrashTest.php packages/Mothership/DAM/tests/Feature/UploadTrackerTest.php packages/Mothership/DAM/tests/Feature/UploadEventCoverageTest.php packages/Mothership/DAM/tests/Feature/UserRoleEverydayAccessMigrationTest.php packages/Mothership/DAM/tests/Feature/VectorizationAllowanceTest.php packages/Mothership/DAM/tests/Feature/VectorizationReadinessTest.php packages/Mothership/DAM/tests/Feature/VectorizationToolTest.php packages/Mothership/DAM/tests/Feature/VectorizerClientTest.php packages/Mothership/DAM/tests/Feature/VideoEmbedTest.php packages/Mothership/DAM/tests/Feature/VideoPreviewProxyJobTest.php packages/Mothership/DAM/tests/Feature/VideoPreviewSelectionTest.php packages/Mothership/DAM/tests/Feature/VideoProxyPublisherTest.php packages/Mothership/DAM/tests/Feature/VideoProxyRetryTest.php packages/Mothership/DAM/tests/Feature/WebCollectionTest.php packages/Mothership/DAM/tests/Feature/WebCollectionsSidebarCardTest.php packages/Mothership/DAM/tests/Feature/WebPageAdminRouteTest.php packages/Mothership/DAM/tests/Feature/WebPageAuditTest.php packages/Mothership/DAM/tests/Feature/WebPageBundlerTest.php packages/Mothership/DAM/tests/Feature/WebPageClassificationTest.php packages/Mothership/DAM/tests/Feature/WebPageIndexTest.php packages/Mothership/DAM/tests/Feature/WebPagePreviewTest.php packages/Mothership/DAM/tests/Feature/WebPageShareRouteTest.php packages/Mothership/DAM/tests/Feature/WebPageThumbnailCaptureTest.php packages/Mothership/DAM/tests/Feature/WritesContentAddressedObjectsTest.php packages/Mothership/DAM/tests/Unit/PageGrantTest.php
+
+      - name: Check DAM console and unit tests
+        if: ${{ !cancelled() }}
+        run: vendor/bin/pest --colors=always packages/Mothership/DAM/tests/Feature/Console/DamUpdateRestoreTest.php packages/Mothership/DAM/tests/Feature/Console/DamUpdateTest.php packages/Mothership/DAM/tests/Feature/Console/GenerateScaleDataTest.php packages/Mothership/DAM/tests/Unit/ActionRequestModelTest.php packages/Mothership/DAM/tests/Unit/AssetBundleWriterTest.php packages/Mothership/DAM/tests/Unit/AssetContentHardeningTest.php packages/Mothership/DAM/tests/Unit/AssetControlLockTest.php packages/Mothership/DAM/tests/Unit/AssetDataGridFilterTest.php packages/Mothership/DAM/tests/Unit/AssetHelperPlaceholderTest.php packages/Mothership/DAM/tests/Unit/AssetHelperTest.php packages/Mothership/DAM/tests/Unit/AssetModelTest.php packages/Mothership/DAM/tests/Unit/AssetPropertyPresenterTest.php packages/Mothership/DAM/tests/Unit/AssetResourceMappingRepositoryTest.php packages/Mothership/DAM/tests/Unit/AssetResourceMappingTest.php packages/Mothership/DAM/tests/Unit/AssetRuleTest.php packages/Mothership/DAM/tests/Unit/ChunkUploadLoggerTest.php packages/Mothership/DAM/tests/Unit/CliPanoramaWorkerTest.php packages/Mothership/DAM/tests/Unit/CommentModelTest.php packages/Mothership/DAM/tests/Unit/ExporterCoreCompatibilityTest.php packages/Mothership/DAM/tests/Unit/FileControllerTest.php packages/Mothership/DAM/tests/Unit/ListenerTest.php packages/Mothership/DAM/tests/Unit/MetadataExtractionServiceTest.php packages/Mothership/DAM/tests/Unit/PanoramaClassifierTest.php packages/Mothership/DAM/tests/Unit/PanoramaLoggerTest.php packages/Mothership/DAM/tests/Unit/PropertyModelTest.php packages/Mothership/DAM/tests/Unit/SafeZipExtractorTest.php packages/Mothership/DAM/tests/Unit/Sha256FileTest.php packages/Mothership/DAM/tests/Unit/ShareRepositoryTest.php packages/Mothership/DAM/tests/Unit/ShareKeyGrantTest.php packages/Mothership/DAM/tests/Unit/ApiShareControllerAssetAccessTest.php packages/Mothership/DAM/tests/Unit/TagModelTest.php packages/Mothership/DAM/tests/Unit/VideoPreviewProfileTest.php packages/Mothership/DAM/tests/Feature/Console/StorageReclaimCommandTest.php packages/Mothership/DAM/tests/Feature/Console/StorageBackupCommandTest.php packages/Mothership/DAM/tests/Unit/TarListingTest.php packages/Mothership/DAM/tests/Unit/BlendFileReaderTest.php packages/Mothership/DAM/tests/Unit/UnityPackageReaderTest.php
+
+      - name: Install DAM media tools (ExifTool, poppler, libvips, ffmpeg)
+        if: ${{ !cancelled() }}
+        # The FPM, queue and web images carry these (dockerfiles/fpm.Dockerfile); the runner
+        # does not. DngPreviewTest shells out to exiftool and vips, PdfThumbnailCleanupTest to
+        # pdftoppm, BatchProcessingTest to ffmpeg and ffprobe. One shared lock file, so jobs sharing
+        # a host take turns at apt.
+        run: |
+          if ! command -v exiftool >/dev/null || ! command -v pdftoppm >/dev/null || ! command -v vips >/dev/null || ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo flock /tmp/mothership-ci-libvips.lock sh -ec 'apt-get update && apt-get install -y --no-install-recommends libimage-exiftool-perl poppler-utils libvips-tools ffmpeg'
+          fi
+          exiftool -ver
+          command -v pdftoppm
+          vips --version
+          ffmpeg -hide_banner -version | head -n 1
+          command -v ffprobe
+
+      # HEIC/HEIF previews decode through libvips, installed just above. The explicit probe names a runner without a
+      # HEIF reader, and --fail-on-skipped makes any skipped case fail the step: this must run the real decoder.
+      - name: Check HEIC/HEIF previews (real libvips decoder, no skips)
+        if: ${{ !cancelled() }}
+        run: |
+          # grep -c reads the whole listing, so pipefail never sees vips killed by a closed pipe.
+          [ "$(vips -l | grep -c heifload)" -gt 0 ] || { echo '::error::libvips has no HEIF reader (heifload) on this runner'; exit 1; }
+          # heifload alone proves nothing: HEIC is HEVC, and Ubuntu's libheif ships that decoder as a separate plugin which
+          # --no-install-recommends leaves out (windows-gpu-2 WSL: "Unsupported codec (4.3000)"). The probe decodes a committed fixture and checks its pixels.
+          if ! bash .github/scripts/heif-hevc-probe.sh; then
+            sudo flock /tmp/mothership-ci-libvips.lock sh -ec 'apt-get update && apt-get install -y --no-install-recommends libheif-plugin-libde265'
+          fi
+          bash .github/scripts/heif-hevc-probe.sh || { echo '::error::libheif cannot decode HEVC (HEIC) on this runner; libheif-plugin-libde265 is missing'; exit 1; }
+          vendor/bin/pest --colors=always --fail-on-skipped packages/Mothership/DAM/tests/Feature/HeifPreviewTest.php
+
+      # Run after media tools so the real PNG/WebP/EXIF working-copy regressions execute on a fresh runner.
+      - name: Check image editor (schema v2 parity and document lifecycle)
+        if: ${{ !cancelled() }}
+        run: vendor/bin/pest --colors=always packages/Mothership/DAM/tests/Feature/ImageEditorDocumentTest.php packages/Mothership/DAM/tests/Feature/ImageEditorSchemaV2Test.php packages/Mothership/DAM/tests/Feature/ImageEditingCapabilityTest.php
+
+      - name: Check Hub resources and Feedback
+        if: ${{ !cancelled() }}
+        # The two directories, not a file list: a new Hub resource or Feedback test runs here with no second edit. The
+        # `pest` job above still names each file, because the DAM test-file gate reads that list.
+        run: vendor/bin/pest --colors=always packages/Mothership/DAM/tests/Feature/CreativeHub packages/Mothership/DAM/tests/Feature/Feedback
+
+      - name: Check the last DAM tests off the 2026-09-16 baseline
+        if: ${{ !cancelled() }}
+        run: vendor/bin/pest --colors=always packages/Mothership/DAM/tests/Feature/AssetDisplayNameTest.php packages/Mothership/DAM/tests/Feature/CompoundAssetObserverTest.php packages/Mothership/DAM/tests/Feature/AssetInfoTest.php packages/Mothership/DAM/tests/Feature/DamUpdaterBackupTest.php packages/Mothership/DAM/tests/Feature/DngPreviewTest.php packages/Mothership/DAM/tests/Feature/PdfThumbnailCleanupTest.php packages/Mothership/DAM/tests/Feature/ReadSeamAcceptanceTest.php packages/Mothership/DAM/tests/Feature/VectorizationLifecycleTest.php packages/Mothership/DAM/tests/Unit/AssetDataGridPrefixTest.php packages/Mothership/DAM/tests/Feature/StorageWriteSeamTest.php packages/Mothership/DAM/tests/Feature/ExplorerCopyAssetTest.php packages/Mothership/DAM/tests/Feature/FoldersAreMetadataAcceptanceTest.php packages/Mothership/DAM/tests/Feature/EditorResourcesAreBlobsAcceptanceTest.php packages/Mothership/DAM/tests/Feature/BatchProcessingTest.php packages/Mothership/DAM/tests/Feature/AssetShowQueryBudgetTest.php
+
+      - name: Check AI index image sampling (large rasters scale out of process)
+        if: ${{ !cancelled() }}
+        run: vendor/bin/pest --colors=always packages/Mothership/DAM/tests/Feature/AiIndex/MediaSamplerRasterTest.php
+
+      - name: Check stack member metadata, naming and filter recovery
+        if: ${{ !cancelled() }}
+        run: vendor/bin/pest --colors=always packages/Mothership/DAM/tests/Feature/StackMemberMetadataTest.php packages/Mothership/DAM/tests/Feature/AiIndex/StackMemberRenameTest.php packages/Mothership/DAM/tests/Feature/ExplorerFilterRecoveryTest.php
+
+      # The details layout outputs only the active tab's slot, so the shared lightbox Files "Open" needs
+      # must be emitted by the tab that is showing (server-rendered markup count on each tab).
+      - name: Check Files tab shared viewer mount
+        if: ${{ !cancelled() }}
+        run: vendor/bin/pest --colors=always packages/Mothership/DAM/tests/Feature/AssetFilesViewerMountTest.php
+
+  pest-elasticsearch:
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","linux","x64","windows-gpu"]') }}
+    timeout-minutes: 75
+    name: Pest Tests (PostgreSQL + Elasticsearch)
+    # 2026-09-16: never on pull requests (a third 75-minute-budget job on every PR push, on a
+    # two-runner pool). 2026-10-12: nightly and on workflow_dispatch, like the PostgreSQL leg.
+    # A red here is triaged from the nightly run.
+    needs: nightly_gate
+    if: github.event_name != 'pull_request' && needs.nightly_gate.outputs.run == 'true'
+    # PostgreSQL and Elasticsearch are started by a step after the window guard (.github/scripts/ci_service.sh).
+    env:
+      CI_SVC_TAG: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-${{ strategy.job-index }}
+
+    steps:
+      # Checkout first so the guard runs from the repository; ci-verify treats steps before the guard
+      # as setup (.github/ci-verify.yml).
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Nightly window guard (00:00-06:00 America/Chicago)
+        id: guard
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          NIGHTLY_INPUT: ${{ inputs.nightly }}
+          GITHUB_TOKEN: ${{ github.token }}
+          ITEM_KEY: pest-elasticsearch
+          ITEM_LABEL: Pest Tests (PostgreSQL + Elasticsearch)
+          ITEM_KIND: pest
+          ITEM_ADVISORY: 'false'
+          MIN_MINUTES: '45'
+          JOB_TIMEOUT_MINUTES: '75'
+        run: python3 .github/scripts/nightly_guard.py
+
+      - name: Start service containers
+        if: steps.guard.outputs.run == 'true'
+        env:
+          CI_SVC_DEADLINE: ${{ steps.guard.outputs.cut_epoch }}
+        run: |
+          bash .github/scripts/ci_service.sh start POSTGRES 5432 \
+            -e POSTGRES_USER=mothership -e POSTGRES_PASSWORD=mothership -e POSTGRES_DB=mothership \
+            --health-cmd="pg_isready -U mothership" --health-interval=5s --health-timeout=3s --health-retries=3 \
+            --tmpfs /var/lib/postgresql/data:rw,noexec,nosuid,size=600m --tmpfs /tmp:rw,noexec,nosuid,size=100m \
+            postgres:16
+          bash .github/scripts/ci_service.sh start ELASTICSEARCH 9200 \
+            -e discovery.type=single-node -e xpack.security.enabled=false -e ES_JAVA_OPTS='-Xms256m -Xmx256m' \
+            --health-cmd="curl -s http://localhost:9200/_cluster/health || exit 1" \
+            --health-interval=10s --health-timeout=5s --health-retries=10 \
+            elasticsearch:8.17.0
+
+      - name: Setup PHP
+        if: steps.guard.outputs.run == 'true'
+        uses: shivammathur/setup-php@2.37.2
+        with:
+          php-version: '8.4'
+          extensions: curl, fileinfo, gd, intl, mbstring, openssl, pdo, pdo_pgsql, tokenizer, zip
+          ini-values: error_reporting=E_ALL
+          tools: composer:v2
+          coverage: none
+
+      - name: Install Composer dependencies
+        if: steps.guard.outputs.run == 'true'
+        uses: ramsey/composer-install@v3
+        with:
+          composer-options: "--optimize-autoloader"
+
+      - name: Setup Node
+        if: steps.guard.outputs.run == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Cache Node dependencies
+        if: steps.guard.outputs.run == 'true'
+        uses: actions/cache@v5
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-npm-${{ hashFiles('package.json') }}
+          restore-keys: ${{ runner.os }}-npm-
+
+      - name: Install Node dependencies
+        if: steps.guard.outputs.run == 'true'
+        run: npm install --omit=dev --no-audit --no-fund --no-progress --prefer-offline
+
+      - name: Setting Environment
+        if: steps.guard.outputs.run == 'true'
+        run: |
+          cp .env.example .env
+          sed -i "s|^\(APP_ENV=\s*\).*$|\1testing|" .env
+          sed -i "s|^\(DB_CONNECTION=\s*\).*$|\1pgsql|" .env
+          sed -i "s|^\(DB_HOST=\s*\).*$|\1127.0.0.1|" .env
+          sed -i "s|^\(DB_PORT=\s*\).*$|\1${SVC_POSTGRES_PORT}|" .env
+          sed -i "s|^\(DB_DATABASE=\s*\).*$|\1mothership|" .env
+          sed -i "s|^\(DB_USERNAME=\s*\).*$|\1mothership|" .env
+          sed -i "s|^\(DB_PASSWORD=\s*\).*$|\1mothership|" .env
+
+      - name: Running Mothership Installer
+        if: steps.guard.outputs.run == 'true'
+        run: php artisan mothership:install --skip-env-check --skip-admin-creation --with-demo-data
+
+      # mothership:install seeds only the PIM tables; seed the DAM Library root as the SQLite leg does.
+      - name: Seed the DAM Library root
+        if: steps.guard.outputs.run == 'true'
+        run: php artisan db:seed --force --no-interaction --class="Mothership\\DAM\\Database\\Seeders\\DirectoryTableSeeder"
+
+      - name: Enable Elasticsearch and build indexes
+        if: steps.guard.outputs.run == 'true'
+        run: |
+          sed -i "s|^\(ELASTICSEARCH_ENABLED=\s*\).*$|\1true|" .env
+          sed -i "s|^\(ELASTICSEARCH_HOST=\s*\).*$|\1http://127.0.0.1:${SVC_ELASTICSEARCH_PORT}|" .env
+          sed -i "s|^\(ELASTICSEARCH_INDEX_PREFIX=\s*\).*$|\1mothership_test|" .env
+          php artisan config:clear
+          curl -s "http://127.0.0.1:${SVC_ELASTICSEARCH_PORT}/_cluster/health" | python3 -m json.tool
+          php artisan mothership:product:index
+          php artisan mothership:category:index
+
+      - name: Running Pest Tests
+        if: steps.guard.outputs.run == 'true'
+        # Each worker owns a database clone. The suite runs as two halves so
+        # every half starts with fresh workers: per-process memory grows over
+        # thousands of tests and a single long run ends with a worker
+        # OOM-killed (exit 137), which aborts paratest mid-run.
+        run: |
+          vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --parallel --processes=3 --colors=always --testsuite "Api Feature Test,Core Unit Test,DataTransfer Unit Test,User Feature Test,Admin Feature Test"
+          vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --parallel --processes=3 --colors=always --testsuite "Installer Feature Test,ElasticSearch Feature Test,Completeness Feature Test,Product Unit Test,Product Feature Test,Attribute Unit Test,Category Unit Test,Measurement Feature Test,AiAgent Unit Test,AppUrlGuard Unit Test,Webhook Unit Test,AppUrlGuard Feature Test"
+
+      # Removes this job's service containers whatever happened (success, failure, cancel by the watchdog),
+      # ahead of reporting and uploads so a stalled upload cannot use up the cancellation grace first.
+      - name: Stop service containers
+        if: always()
+        env:
+          CI_SVC_DEADLINE: ${{ steps.guard.outputs.cut_epoch }}
+        run: bash .github/scripts/ci_service.sh stop
+
+      - name: Record nightly totals
+        if: always()
+        env:
+          ITEM_KEY: pest-elasticsearch
+          ITEM_LABEL: Pest Tests (PostgreSQL + Elasticsearch)
+          ITEM_KIND: pest
+          ITEM_ADVISORY: 'false'
+          JOB_STATUS: ${{ job.status }}
+        run: python3 .github/scripts/nightly_totals.py junit --dir "$RUNNER_TEMP/junit"
+
+      - name: Upload nightly totals
+        if: always() && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-totals-pest-elasticsearch
+          path: ${{ runner.temp }}/nightly-totals/
+          retention-days: 14
+
+  nightly_summary:
+    name: Nightly summary
+    needs: [nightly_gate, pest, installer, pest-elasticsearch]
+    if: always() && github.event_name != 'pull_request'
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","linux","x64","windows-gpu"]') }}
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/scripts
+
+      - name: Download nightly totals
+        # A run the gate deferred uploaded no totals; the summary still reports every job.
+        continue-on-error: true
+        uses: actions/download-artifact@v5
+        with:
+          pattern: nightly-totals-*
+          path: nightly-totals
+          merge-multiple: true
+
+      - name: Summarize the night
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TOTALS_DIR: nightly-totals
+          SUMMARY_JOB: Nightly summary
+          IGNORE_JOBS: Pest Core (SQLite)
+          GATE_JOB: Nightly gate
+          GATE_RUN: ${{ needs.nightly_gate.outputs.run }}
+          GATE_REASON: ${{ needs.nightly_gate.outputs.reason }}
+          GATE_DUPLICATE_OF: ${{ needs.nightly_gate.outputs.duplicate_of }}
+        run: python3 .github/scripts/nightly_summary.py
+
+      - name: Upload nightly summary
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-summary-pest-${{ github.run_id }}
+          path: nightly-summary.json
+          retention-days: 30

@@ -1,0 +1,25 @@
+.dam-model-viewer { display:flex; flex-direction:column; width:100%; height:100%; min-height:300px; color:#e5e7eb; background:#222833; position:relative; font:14px/1.4 system-ui,sans-serif; }
+.dam-model-viewer > p { padding:18px; margin:0; }
+.dam-model-progress { display:block; width:calc(100% - 36px); max-width:420px; height:6px; margin:0 18px; accent-color:#a7c7ff; }
+.dam-model-progress[hidden] { display:none; }
+.dam-model-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:12px; background:#151a23; z-index:2; }
+.dam-model-toolbar[hidden] { display:none; }
+.dam-model-toolbar button,.dam-model-toolbar select,.dam-model-toolbar summary { background:#303a49; color:#fff; border:1px solid #536074; border-radius:6px; padding:6px 10px; cursor:pointer; font:inherit; }
+.dam-model-toolbar button:hover { background:#43516a; }
+.dam-model-toolbar :focus-visible { outline:2px solid #a7c7ff; outline-offset:2px; }
+.dam-model-toolbar input[type=range] { width:150px; accent-color:#a7c7ff; }
+.dam-model-stage { position:relative; flex:1; min-height:0; overflow:hidden; }
+.dam-model-stage canvas { display:block; width:100%; height:100%; touch-action:none; }
+.dam-model-objects { position:relative; }
+.dam-model-objects > div { position:absolute; top:100%; left:0; margin-top:5px; max-height:260px; width:260px; overflow:auto; padding:10px; background:#151a23; border:1px solid #536074; border-radius:6px; box-shadow:0 8px 20px #0008; }
+.dam-model-objects label { display:flex; gap:8px; padding:5px 0; overflow-wrap:anywhere; }
+.dam-model-objects input { accent-color:#a7c7ff; }
+.dam-model-palette { display:flex; gap:4px; max-width:220px; flex-wrap:wrap; }
+.dam-model-palette span { display:block; width:16px; height:16px; border:1px solid #a0a8b5; border-radius:50%; }
+.dam-model-hint { font-size:11px; color:#b4bdcd; margin-left:auto; }
+.dam-model-time { display:inline-block; font-size:12px; font-variant-numeric:tabular-nums; white-space:pre; text-align:right; }
+.dam-model-primary { display:flex; flex-wrap:wrap; gap:8px; align-items:center; flex-basis:100%; border-top:1px solid #536074; padding-top:10px; }
+.dam-model-primary[hidden] { display:none; }
+.dam-model-primary > span:first-child { flex-basis:100%; color:#b4bdcd; }
+.dam-model-toolbar button:disabled { opacity:.55; cursor:wait; }
+@media (max-width:700px) { .dam-model-hint { display:none; } .dam-model-toolbar {gap:6px;padding:8px;} }

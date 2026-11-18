@@ -1,0 +1,63 @@
+<?php
+
+namespace Mothership\DAM\Listeners;
+
+use Mothership\Category\Contracts\CategoryField;
+use Mothership\Category\Repositories\CategoryFieldRepository;
+use Mothership\DAM\Repositories\AssetRepository;
+use Mothership\DAM\Repositories\AssetResourceMappingRepository;
+
+class Category
+{
+    public function __construct(
+        protected AssetRepository $assetRepository,
+        protected CategoryFieldRepository $categoryFieldRepository,
+        protected AssetResourceMappingRepository $assetResourceMappingRepository
+    ) {}
+
+    public function afterUpdateOrCreate($category)
+    {
+        $activeAssetFields = $this->categoryFieldRepository->findWhere(['status' => 1, 'type' => 'asset']);
+
+        $additionalData = $category->additional_data;
+
+        $categoryId = $category->id;
+
+        $currentLocaleCode = core()->getRequestedLocaleCode();
+
+        foreach ($activeAssetFields as $assetField) {
+            $fieldCode = $assetField->code;
+
+            $value = $this->getCategoryValue($additionalData, $assetField, $fieldCode, $currentLocaleCode);
+
+            if (empty($value)) {
+                $this->assetResourceMappingRepository->deleteCategoryAssetMappings($categoryId, $fieldCode);
+
+                continue;
+            }
+
+            $value = str_contains($value, ',') ? explode(',', $value) : [$value];
+
+            $assets = $this->assetRepository->findWhereIn('id', $value);
+
+            if (! $assets) {
+                continue;
+            }
+
+            $this->assetResourceMappingRepository->createCategoryAssetMappings($assets, $categoryId, $fieldCode);
+        }
+    }
+
+    protected function getCategoryValue(
+        array $additionalData,
+        CategoryField $field,
+        string $fieldCode,
+        string $currentLocaleCode
+    ): mixed {
+        if ($field->isLocaleBasedField()) {
+            return $additionalData['locale_specific'][$currentLocaleCode][$fieldCode] ?? null;
+        }
+
+        return $additionalData['common'][$fieldCode] ?? null;
+    }
+}

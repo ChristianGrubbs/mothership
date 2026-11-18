@@ -1,0 +1,83 @@
+<?php
+
+namespace Mothership\Core\Http\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+
+class SecureHeaders
+{
+    /**
+     * Unwanted header list.
+     */
+    private array $unwantedHeaderList = [
+        'X-Powered-By',
+        'Server',
+    ];
+
+    /**
+     * Routes another site is meant to frame: the DAM's tokenized embeds (P6 D26). They get no X-Frame-Options, which
+     * would refuse every other origin; their own CSP frame-ancestors names who may frame them.
+     */
+    private const FRAMEABLE_ROUTES = [
+        'dam.embed.show',
+        'dam.embed.media',
+    ];
+
+    /**
+     * Handle an incoming request.
+     *
+     * @param  Request  $request
+     * @return mixed
+     */
+    public function handle($request, Closure $next)
+    {
+        $this->removeUnwantedHeaders();
+
+        $response = $next($request);
+
+        $this->setHeaders($response, frameable: $request->routeIs(...self::FRAMEABLE_ROUTES));
+
+        return $response;
+    }
+
+    /**
+     * Set headers.
+     *
+     * @param  Response  $response
+     */
+    private function setHeaders($response, bool $frameable = false): void
+    {
+        // Don't clobber a stricter Referrer-Policy an inner layer already set (e.g. passport's 'no-referrer').
+        if (! $response->headers->has('Referrer-Policy')) {
+            $response->headers->set('Referrer-Policy', 'no-referrer-when-downgrade');
+        }
+
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+        $response->headers->set('X-XSS-Protection', '1; mode=block');
+        if ($frameable) {
+            $response->headers->remove('X-Frame-Options');
+        } else {
+            $response->headers->set('X-Frame-Options', 'SAMEORIGIN');
+        }
+
+        $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+        $response->headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+        $response->headers->set('X-Permitted-Cross-Domain-Policies', 'none');
+    }
+
+    /**
+     * Remove unwanted headers.
+     */
+    private function removeUnwantedHeaders(): void
+    {
+        if (headers_sent()) {
+            return;
+        }
+
+        foreach ($this->unwantedHeaderList as $header) {
+            header_remove($header);
+        }
+    }
+}

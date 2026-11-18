@@ -1,0 +1,7 @@
+*.sqlite
+# SQLite sidecars, and the per-process copies Pest's --parallel run creates
+# (database/<name>.sqlite_test_<N>, plus their own -journal files).
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite_test_*

@@ -1,0 +1,289 @@
+{{-- Shimmer only until the first load lands. A reload (per page, page, sort, filter) keeps the toolbar
+     mounted: swapping it for the shimmer replaced every control, so the focused one (the per-page toggle,
+     a pagination button) was destroyed and keyboard focus fell to <body>. --}}
+<template v-if="isLoading && ! hasLoaded">
+    {{-- The loaded toolbar row is 46 px tall; the shimmer is 38 px. Bottom padding only, so the shimmer's
+         mt-7 still collapses with the margin above the way the loaded row's does, and the folders and
+         grid below keep their place when the first load lands. --}}
+    <div style="padding-bottom: 8px">
+        <x-admin::shimmer.datagrid.toolbar />
+    </div>
+</template>
+
+<template v-else>
+    <div class="relative mt-7 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div class="flex flex-1 min-w-[120px] gap-x-1">
+            <div
+                class="flex w-full items-center gap-x-1"
+                v-if="applied.massActions.indices.length"
+            >
+                {{-- Above the per-page wrapper (z-20), which follows it and covers the open menu once the toolbar wraps on a phone. --}}
+                <div class="relative z-30">
+                <x-admin::dropdown>
+                    <x-slot:toggle>
+                        <button
+                            type="button"
+                            class="inline-flex w-full max-w-max cursor-pointer appearance-none items-center justify-between gap-x-2 rounded-md border dark:border-gray-500 bg-white dark:bg-cherry-900 px-2.5 py-1.5 text-center leading-6 text-gray-600 dark:text-gray-300 transition-all marker:shadow hover:border-gray-400 dark:hover:border-gray-400 focus:border-gray-400 dark:focus:border-gray-400 focus:ring-black"
+                        >
+                            <span>
+                                @lang('admin::app.components.datagrid.toolbar.mass-actions.select-action')
+                            </span>
+
+                            <span class="icon-chevron-down text-2xl"></span>
+                        </button>
+                    </x-slot>
+
+                    <x-slot:menu class="!p-0 shadow-[0_5px_20px_rgba(0,0,0,0.15)] dark:border-gray-800">
+                        <template v-for="massAction in visibleMassActions">
+                            <li
+                                class="group/item relative overflow-visible"
+                                v-if="massAction?.options?.length"
+                            >
+                                <a
+                                    class="flex gap-1.5 justify-between whitespace-no-wrap cursor-not-allowed rounded-t px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-primary-50 dark:hover:bg-cherry-800"
+                                    href="javascript:void(0);"
+                                >
+                                    <i
+                                        class="text-2xl"
+                                        :class="massAction.icon"
+                                        v-if="massAction?.icon"
+                                    >
+                                    </i>
+
+                                    <span>
+                                        @{{ massAction.title }}
+                                    </span>
+
+                                    <i class="icon-chevron-right text-xl -mt-px rtl:rotate-180" aria-hidden="true"></i>
+                                </a>
+
+                                <ul class="absolute ltr:left-full rtl:right-full top-0 z-10 hidden w-max min-w-[150px] border dark:border-cherry-800 rounded bg-white dark:bg-cherry-800 shadow-[0_5px_20px_rgba(0,0,0,0.15)] group-hover/item:block">
+                                    <li v-for="option in massAction.options">
+                                        <a
+                                            class="whitespace-no-wrap block rounded-t px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-primary-50 dark:hover:bg-cherry-800"
+                                            href="javascript:void(0);"
+                                            v-text="option.label"
+                                            @click="performMassAction(massAction, option)"
+                                        >
+                                        </a>
+                                    </li>
+                                </ul>
+                            </li>
+
+                            <li v-else>
+                                <a
+                                    class="flex gap-1.5 whitespace-no-wrap rounded-b px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-primary-50 dark:hover:bg-cherry-800"
+                                    href="javascript:void(0);"
+                                    @click="performMassAction(massAction)"
+                                >
+                                    <i
+                                        class="text-2xl"
+                                        :class="massAction.icon"
+                                        v-if="massAction?.icon"
+                                    >
+                                    </i>
+
+                                    @{{ massAction.title }}
+                                </a>
+                            </li>
+                        </template>
+                    </x-slot>
+                </x-admin::dropdown>
+                </div>
+
+                <div class="ltr:pl-2.5 rtl:pr-2.5">
+                    <p class="text-sm font-light text-gray-800 dark:text-white">
+
+                        @{{ "@lang('admin::app.components.datagrid.toolbar.length-of')".replace(':length', applied.massActions.indices.length) }}
+
+                        @{{ "@lang('admin::app.components.datagrid.toolbar.selected')".replace(':total', available.meta.total) }}
+                    </p>
+                </div>
+            </div>
+
+            <div
+                class="flex w-full items-center gap-x-1"
+                v-else
+            >
+                <div class="flex max-w-[445px] items-center max-sm:w-full max-sm:max-w-full">
+                    <div class="relative w-full">
+                        <input
+                            type="text"
+                            name="search"
+                            :value="getAppliedColumnValues('all')"
+                            class="block w-full rounded-lg border dark:border-gray-500 bg-white dark:bg-cherry-900 py-1.5 ltr:pl-3 rtl:pr-3 ltr:pr-10 rtl:pl-10 leading-6 text-gray-600 dark:text-gray-300 transition-all hover:border-gray-400 dark:hover:border-gray-400 focus:border-gray-400  dark:focus:border-gray-400"
+                            :placeholder="available.searchPlaceholder"
+                            autocomplete="off"
+                            @input="debouncedFilterPage"
+                        >
+
+                        <div class="icon-search pointer-events-none absolute ltr:right-2.5 rtl:left-2.5 top-2 flex items-center text-2xl">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="shrink-0 ltr:pl-2.5 rtl:pr-2.5">
+                    {{-- "singular|plural" (trans_choice form); locales without a pipe keep one string for every count. --}}
+                    <p v-if="available.meta?.total !== undefined && ! loadError" class="text-sm font-light text-gray-800 dark:text-white whitespace-nowrap">
+                        @{{ (forms => forms[available.meta.total === 1 && forms.length > 1 ? 0 : forms.length - 1])(@json(trans('admin::app.components.datagrid.toolbar.results')).split('|')).replace(':total', available.meta.total) }}
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap gap-x-4 gap-y-2 items-center">
+            <x-admin::drawer width="350px" ref="filterDrawer">
+                <x-slot:toggle>
+                    <div>
+                        <div
+                            class="relative inline-flex w-full max-w-max ltr:pl-3 rtl:pr-3 ltr:pr-5 rtl:pl-5 cursor-pointer select-none appearance-none items-center justify-between gap-x-1 rounded-md border dark:border-gray-500 bg-white dark:bg-cherry-900 px-1 py-1.5 text-center text-gray-600 dark:text-gray-300 transition-all marker:shadow hover:border-gray-400 dark:hover:border-gray-400 focus:outline-none focus:ring-2"
+                            :class="{'[&>*]:text-primary-700 [&>*]:dark:text-white': hasAppliedFilters()}"
+                        >
+                            <span class="icon-filter text-2xl"></span>
+
+                            <span>
+                                @lang('admin::app.components.datagrid.toolbar.filter.title')
+                            </span>
+
+                            <span
+                                class="ltr:ml-0.5 rtl:mr-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-100 px-1.5 text-xs font-medium text-primary-700 dark:bg-cherry-800 dark:text-primary-400"
+                                data-applied-filter-count
+                                v-if="hasAppliedFilters()"
+                                v-text="appliedFilterCount()"
+                            ></span>
+                        </div>
+
+                        <div class="z-10 hidden w-full divide-y divide-gray-100 rounded bg-white dark:bg-cherry-800 shadow">
+                        </div>
+                    </div>
+                </x-slot>
+
+                <x-slot:header>
+                    <div class="flex justify-between items-center p-3">
+                        <p class="text-base text-gray-800 dark:text-white font-semibold">
+                            @lang('admin::app.components.datagrid.filters.title')
+                        </p>
+                    </div>
+                </x-slot>
+
+                <x-slot:content class="!p-5">
+                    <x-dam::datagrid.filters />
+                </x-slot>
+
+                <x-slot:footer class="mt-auto border-t border-gray-100 bg-white p-5 dark:border-cherry-800 dark:bg-cherry-800">
+                    <div class="flex flex-col gap-y-1">
+                        <button
+                            type="button"
+                            class="primary-button w-full justify-center text-center"
+                            @click="runFilters()"
+                        >
+                            @lang('admin::app.components.datagrid.filters.save')
+                        </button>
+
+                        <button
+                            type="button"
+                            class="transparent-button justify-center self-center text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                            data-clear-all-filters
+                            :disabled="! hasAppliedFilters()"
+                            @click="clearAllFilters()"
+                        >
+                            @lang('admin::app.components.datagrid.filters.custom-filters.clear-all')
+                        </button>
+                    </div>
+                </x-slot>
+            </x-admin::drawer>
+
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-2">
+                <div class="relative z-20">
+                <x-admin::dropdown>
+                    <x-slot:toggle>
+                        <button
+                            type="button"
+                            data-dam-per-page-toggle
+                            class="inline-flex w-full max-w-max cursor-pointer appearance-none items-center justify-between gap-x-2 rounded-md border dark:border-gray-500 bg-white dark:bg-cherry-900 px-2.5 py-1.5 text-center leading-6 text-gray-600 dark:text-gray-300 transition-all marker:shadow hover:border-gray-400 dark:hover:border-gray-400 focus:border-gray-400 dark:focus:border-gray-400"
+                        >
+                            <span v-text="applied.pagination.perPage"></span>
+
+                            <span class="icon-chevron-down text-2xl"></span>
+                        </button>
+                    </x-slot>
+
+                    <x-slot:menu>
+                        <x-admin::dropdown.menu.item
+                            v-for="perPageOption in available.meta.per_page_options"
+                            ::data-dam-per-page-option="perPageOption"
+                            v-text="perPageOption"
+                            @click="changePerPageOption(perPageOption)"
+                        >
+                        </x-admin::dropdown.menu.item>
+                    </x-slot>
+                </x-admin::dropdown>
+                </div>
+
+                <p class="whitespace-nowrap text-gray-600 dark:text-gray-300">
+                    @lang('admin::app.components.datagrid.toolbar.per-page')
+                </p>
+
+                <input
+                    type="text"
+                    class="inline-flex min-h-[38px] max-w-[60px] appearance-none items-center justify-center gap-x-1 rounded-md border dark:border-gray-500 bg-white dark:bg-cherry-900 px-3 py-1.5 text-center leading-6 text-gray-600 dark:text-gray-300 transition-all marker:shadow hover:border-gray-400 dark:hover:border-gray-400 focus:outline-none focus:border-gray-400 dark:focus:border-gray-400 max-sm:hidden"
+                    :value="available.meta.current_page"
+                    @change="changePage(parseInt($event.target.value))"
+                >
+
+                <div class="whitespace-nowrap text-gray-600 dark:text-gray-300">
+                    <span> @lang('admin::app.components.datagrid.toolbar.of') </span>
+
+                    <span v-text="available.meta.last_page"></span>
+                </div>
+
+                {{-- The arrows stay live during a reload and step from the requested page, so they disable from it too. --}}
+                <div class="flex items-center gap-1">
+                    <button
+                        type="button"
+                        class="inline-flex w-full max-w-max cursor-pointer appearance-none items-center justify-between gap-x-1 rounded-md border border-transparent text-center text-gray-600 dark:text-gray-300 transition-all marker:shadow hover:bg-primary-100 dark:hover:bg-gray-800 active:border-gray-300"
+                        :class="{ 'opacity-40 pointer-events-none': applied.pagination.page <= 1 }"
+                        @click="changePage('first')"
+                        title="@lang('admin::app.components.datagrid.toolbar.pagination.first-page')"
+                        aria-label="@lang('admin::app.components.datagrid.toolbar.pagination.first-page')"
+                    >
+                        <span class="text-2xl" aria-hidden="true">&#171;</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        class="inline-flex w-full max-w-max cursor-pointer appearance-none items-center justify-between gap-x-1 rounded-md border border-transparent p-1.5 text-center text-gray-600 dark:text-gray-300 transition-all marker:shadow hover:bg-primary-100 dark:hover:bg-gray-800 active:border-gray-300"
+                        :class="{ 'opacity-40 pointer-events-none': applied.pagination.page <= 1 }"
+                        @click="changePage('previous')"
+                        title="@lang('admin::app.components.datagrid.toolbar.pagination.previous-page')"
+                        aria-label="@lang('admin::app.components.datagrid.toolbar.pagination.previous-page')"
+                    >
+                        <span class="text-2xl" aria-hidden="true">&#8249;</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        class="inline-flex w-full max-w-max cursor-pointer appearance-none items-center justify-between gap-x-1 rounded-md border border-transparent p-1.5 text-center text-gray-600 dark:text-gray-300 transition-all marker:shadow hover:bg-primary-100 dark:hover:bg-gray-800 active:border-gray-300"
+                        :class="{ 'opacity-40 pointer-events-none': applied.pagination.page >= available.meta.last_page }"
+                        @click="changePage('next')"
+                        title="@lang('admin::app.components.datagrid.toolbar.pagination.next-page')"
+                        aria-label="@lang('admin::app.components.datagrid.toolbar.pagination.next-page')"
+                    >
+                        <span class="text-2xl" aria-hidden="true">&#8250;</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        class="inline-flex w-full max-w-max cursor-pointer appearance-none items-center justify-between gap-x-1 rounded-md border border-transparent text-center text-gray-600 dark:text-gray-300 transition-all marker:shadow hover:bg-primary-100 dark:hover:bg-gray-800 active:border-gray-300"
+                        :class="{ 'opacity-40 pointer-events-none': applied.pagination.page >= available.meta.last_page }"
+                        @click="changePage('last')"
+                        title="@lang('admin::app.components.datagrid.toolbar.pagination.last-page')"
+                        aria-label="@lang('admin::app.components.datagrid.toolbar.pagination.last-page')"
+                    >
+                        <span class="text-2xl" aria-hidden="true">&#187;</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>

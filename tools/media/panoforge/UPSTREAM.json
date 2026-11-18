@@ -1,0 +1,45 @@
+{
+  "name": "PanoForge",
+  "repository": "https://github.com/Belenos-Toutatis/PanoForge",
+  "commit": "5bcfbe8a9d5b59746a80529ef2fa75d3999e1909",
+  "license": "MIT",
+  "vendored": [
+    "LICENSE",
+    "core/osv.py", "core/maps.py", "core/gpx.py", "core/stitch.py", "core/spherical.py",
+    "core/osv_meta/extract_djmd.py", "core/osv_meta/mp4parse.py", "core/osv_meta/pbdecode.py"
+  ],
+  "sha256_note": "sha256 of each file's UPSTREAM content at the pinned commit (before any local_modifications below), so the pin is independently checkable by fetching just that file at 5bcfbe8a9d5b59746a80529ef2fa75d3999e1909 and hashing it -- no re-clone or diff needed. A file with no entry in local_modifications must currently match this hash exactly; a file listed in local_modifications will differ from this hash by exactly the documented change.",
+  "sha256": {
+    "LICENSE": "6fee5547f9d7ddb9d600ea4476b0f461a987703b6e4dc7ebbc71533cf15bfc62",
+    "core/osv.py": "9fee5053068ad5ed3b02f9f1ee08bc8b1f2d3690687028e9690e2cd0558232fa",
+    "core/maps.py": "2e55b56b3e25579157be2dde8f0e09cf2f120c064abc93ec6ed2993f407ec98b",
+    "core/gpx.py": "bcc5426643b92fa0d4a0c98be44775eee07eb1bcdfd271d8b63350b76d762ad2",
+    "core/stitch.py": "0e915b9197049765fd57a6f93ef65560c72a3e33fa146f9bd1002ddab66c829a",
+    "core/spherical.py": "add4509babc482f8542ab68eceb33052c61ee6c341e8957b9932e148db4692bb",
+    "core/osv_meta/extract_djmd.py": "34e3cd4241000c4508bf0b077c6974ab22b680f3c25b7f51ab8738b0db6f6dbb",
+    "core/osv_meta/mp4parse.py": "4decc06cd28e2282d83f77e2c7667c83272ccbf197fe4b844493a94c529fa38a",
+    "core/osv_meta/pbdecode.py": "1fef1115ced1f39e5f25082369db6e06c8f3e60afc7f40053e6782b4d9879e95"
+  },
+  "local_modifications": [
+    {
+      "file": "core/spherical.py",
+      "line": 24,
+      "before": "from app.core.gpx import GpxPoint, resample",
+      "after": "from tools.media.panoforge.core.gpx import GpxPoint, resample",
+      "reason": "import-path adjustment for vendoring under tools/media/panoforge/ instead of upstream's app/ package layout. No semantic change: same symbols, same module, same behavior."
+    },
+    {
+      "file": "core/stitch.py",
+      "line": 32,
+      "before": "try:  # import package (app.core.stitch) ou import à plat (tests/outillage)",
+      "after": "try:  # import package (tools.media.panoforge.core.stitch) ou import à plat (tests/outillage)",
+      "reason": "comment-only update to name the vendored package path instead of upstream's app.core.stitch; the try/except ImportError fallback logic itself is untouched. No semantic change."
+    },
+    {
+      "file": "core/osv_meta/extract_djmd.py",
+      "changed_ranges": ["42", "73-158", "179-252"],
+      "local_sha256": "e2399b04edb43a17fecb78e37a1efd589aa2907dc39d900ea4b427e34270f67f",
+      "reason": "Mothership ingests real Avata360 OSV files. Their lens calibration is under top.2.5 fields 3/4, their extrinsic quaternion is nested at field 26, and some files carry an all-zero legacy field-21 quaternion placeholder that must fall through to field 26. Optional telemetry fields may also use different wire types. The decoder preserves the pinned Osmo layout while accepting the Avata layout and ignoring incompatible optional telemetry instead of aborting conversion."
+    }
+  ]
+}

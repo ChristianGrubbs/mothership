@@ -1,0 +1,30 @@
+<?php
+
+namespace Mothership\Core\Database\Factories;
+
+use Illuminate\Database\Eloquent\Factories\Factory;
+use Mothership\Core\Models\ChannelTranslation;
+
+/**
+ * @extends Factory<ChannelTranslation>
+ */
+class ChannelTranslationFactory extends Factory
+{
+    /**
+     * The name of the factory's corresponding model.
+     *
+     * @var string
+     */
+    protected $model = ChannelTranslation::class;
+
+    /**
+     * Define the model's default state.
+     */
+    public function definition(): array
+    {
+        return [
+            'locale'   => 'en_US',
+            'name'     => fake()->word,
+        ];
+    }
+}

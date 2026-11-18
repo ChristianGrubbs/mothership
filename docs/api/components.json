@@ -1,0 +1,26 @@
+{
+  "securitySchemes": {
+    "integrationBearer": {
+      "type": "http",
+      "scheme": "bearer",
+      "description": "Passport access credential for an active API integration; route permissions also apply."
+    },
+    "adminSession": {
+      "type": "apiKey",
+      "in": "cookie",
+      "name": "laravel_session",
+      "description": "The configured application session cookie. Use the actual session.cookie value in the generated release document."
+    },
+    "csrfHeader": {
+      "type": "apiKey",
+      "in": "header",
+      "name": "X-CSRF-TOKEN",
+      "description": "Required by the web middleware for session-authenticated writes."
+    },
+    "mcpBearer": {
+      "type": "http",
+      "scheme": "bearer",
+      "description": "Resource-bound PKCE authorization-code grant for an active human Mothership user and allowlisted MCP client; mcp:use scope."
+    }
+  }
+}

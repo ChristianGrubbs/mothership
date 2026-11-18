@@ -1,0 +1,302 @@
+name: JavaScript Tests
+
+# The repository's Node suites (DAM unit tests, SphereSeam, and the
+# Playwright-driven DOM tests under tools/browser) had no CI job at all, so a
+# pure-JavaScript change could pass every check and still ship a broken UI —
+# how PR #138 shipped a Home gadget popup whose only exit was gated behind a
+# suppressed window.confirm. Pest, Pint and the e2e-pw specs cover PHP and
+# end-to-end flows; none of them execute these files.
+#
+# Pull requests run automatically (GitHub tests the PR's merge ref); pushes
+# never do, so nothing re-runs on main after a merge. These are fast checks and
+# stay on pull requests. workflow_dispatch runs them by hand, e.g. to check main
+# on demand.
+#
+# 2026-10-12 operator directive: PRs run fast checks only; slow and optional suites run nightly with a daytime guard.
+on:
+  pull_request:
+  workflow_dispatch:
+
+# A PR groups by its head branch and any other event by its ref type and name,
+# so a branch's runs share one branch-<name> group whichever event opened them.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref && format('branch-{0}', github.head_ref) || format('{0}-{1}', github.ref_type, github.ref_name) }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FORCE_COLOR: 1
+
+jobs:
+  js_tests:
+    # Self-hosted pool on the operator's Windows PC (runners windows-gpu-1 and
+    # windows-gpu-2, both Linux/X64 carrying the custom `windows-gpu` label).
+    # Never GitHub-hosted.
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","linux","x64","windows-gpu"]') }}
+    timeout-minutes: 30
+    name: Node & Browser Tests
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      # .gitignore excludes package-lock.json repo-wide but re-includes the DAM
+      # one, so that package alone has a committed lock to key a cache on and to
+      # feed `npm ci`.
+      - name: Cache DAM npm dependencies
+        uses: actions/cache@v5
+        with:
+          path: packages/Mothership/DAM/node_modules
+          key: ${{ runner.os }}-dam-npm-${{ hashFiles('packages/Mothership/DAM/package-lock.json') }}
+          restore-keys: ${{ runner.os }}-dam-npm-
+
+      # tests/e2e-pw has no committed lock, so its caches key on the manifest.
+      - name: Cache Playwright npm dependencies
+        uses: actions/cache@v5
+        with:
+          path: tests/e2e-pw/node_modules
+          key: ${{ runner.os }}-e2e-npm-${{ hashFiles('tests/e2e-pw/package.json') }}
+          restore-keys: ${{ runner.os }}-e2e-npm-
+
+      # Both runners in this pool (windows-gpu-1 and windows-gpu-2) live on one
+      # host and share one home directory, so a shared ~/.cache/ms-playwright
+      # let one job's cache restore rewrite Chromium while another job was
+      # launching it: run 37743529318 lost 13 browser tests to "spawn ETXTBSY"
+      # at 07:40:49 while main's run restored that cache 07:40:35-07:40:50.
+      # Each runner instance keeps its own browser directory beside its
+      # workspace, which a checkout never cleans.
+      - name: Use a per-runner Playwright browser directory
+        run: echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_WORKSPACE/.ms-playwright" >> "$GITHUB_ENV"
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
+          key: ${{ runner.os }}-playwright-${{ hashFiles('tests/e2e-pw/package.json') }}
+
+      # The DAM manifest supplies every runtime these suites load: `three` for
+      # the model-scene and 3MF tests, `esbuild` for the bundles the image and
+      # PDF DOM tests build, and the Vue / Sortable / vuedraggable globals the
+      # browser tests inject into the page.
+      - name: Install DAM npm dependencies
+        run: npm ci --no-audit --no-fund --no-progress --prefix packages/Mothership/DAM
+
+      # tests/e2e-pw is where Playwright already lives in this repo; the browser
+      # suites require() its module directory rather than declaring their own.
+      - name: Install Playwright and Chromium
+        run: |
+          set -euo pipefail
+          cd tests/e2e-pw
+          npm install --no-progress --prefer-offline
+          # Chromium's system packages are pre-installed on the runner host when it is provisioned,
+          # so this downloads the browser only and never touches apt: `--with-deps`
+          # always ran `apt-get update`, and two jobs on the one host collided on /var/lib/apt/lists/lock
+          # (exit 100), a lock apt cannot be told to wait for.
+          npx playwright install chromium
+
+      # Every path the browser suites read from the environment, resolved once
+      # and verified to exist. An unset MOTHERSHIP_PLAYWRIGHT_MODULE_PATH turns
+      # every browser test into a silent skip, which is exactly the blind spot
+      # this workflow exists to close, so a missing file fails here instead.
+      - name: Resolve browser test runtime paths
+        run: |
+          set -euo pipefail
+          dam="$GITHUB_WORKSPACE/packages/Mothership/DAM/node_modules"
+          playwright="$GITHUB_WORKSPACE/tests/e2e-pw/node_modules/playwright"
+          vue="$dam/vue/dist/vue.global.js"
+          sortable="$dam/sortablejs/Sortable.min.js"
+          vuedraggable="$dam/vuedraggable/dist/vuedraggable.umd.js"
+          test -d "$playwright"
+          test -f "$vue"
+          test -f "$sortable"
+          test -f "$vuedraggable"
+          test -d "$dam/vue"
+          {
+            # Three spellings of the same Vue build, because the suites ask for
+            # it three ways: a script path to inject, and a package directory the
+            # vectorization tests require.resolve() before deriving dist/.
+            echo "MOTHERSHIP_PLAYWRIGHT_MODULE_PATH=$playwright"
+            echo "MOTHERSHIP_VUE_RUNTIME_PATH=$vue"
+            echo "MOTHERSHIP_VUE_GLOBAL_PATH=$vue"
+            echo "MOTHERSHIP_VUE_MODULE_PATH=$dam/vue"
+            echo "MOTHERSHIP_SORTABLE_PATH=$sortable"
+            echo "MOTHERSHIP_VUEDRAGGABLE_PATH=$vuedraggable"
+            # The suites default to installed Google Chrome, which the runners do
+            # not carry; the bundled Chromium installed above is the same browser
+            # family the Playwright E2E workflow already runs on this pool.
+            echo "MOTHERSHIP_BROWSER_CHANNEL=chromium"
+          } >> "$GITHUB_ENV"
+
+      - name: Studio runtime unit tests
+        run: python3 -m unittest discover -s tools/studio/tests -v
+
+      # Proves the resolved module really drives a browser before any suite runs,
+      # so a broken install fails as a browser problem rather than as a wall of
+      # test failures.
+      - name: Verify Playwright launches a browser
+        run: |
+          node -e '
+            const path = process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH;
+            const channel = process.env.MOTHERSHIP_BROWSER_CHANNEL;
+            require(path).chromium.launch({ headless: true, channel })
+              .then(async browser => { console.log("launched", browser.version()); await browser.close(); })
+              .catch(error => { console.error(error); process.exit(1); });
+          '
+
+      # Node 22 (the runner's version) does not accept a DIRECTORY argument to
+      # --test: it tries to require() the path and dies with "Cannot find
+      # module". Directory discovery only works on newer Node, so enumerate the
+      # files and pass them explicitly. The count check also fails loudly if
+      # discovery ever matches nothing, rather than running an empty suite.
+      - name: DAM JavaScript tests
+        run: |
+          set -euo pipefail
+          files=()
+          while IFS= read -r f; do files+=("$f"); done < <(find packages/Mothership/DAM/tests/js -type f \( -name '*.test.mjs' -o -name '*.test.cjs' \) | sort)
+          echo "discovered ${#files[@]} DAM test files"
+          test "${#files[@]}" -gt 0
+          node --test "${files[@]}"
+
+      - name: Transfers signaling and authentication tests
+        if: '!cancelled()'
+        run: |
+          npm ci --no-audit --no-fund --prefix tools/transfers
+          npm test --prefix tools/transfers
+
+      - name: SphereSeam tests
+        if: '!cancelled()'
+        run: node --test packages/Mothership/SphereSeam/tests/sphereseam.test.mjs
+
+      # `node --test` runs the discovered files in parallel processes, each
+      # driving its own Chromium; the count check fails loudly if discovery
+      # ever matches nothing, rather than running an empty suite.
+      - name: Browser DOM tests
+        if: '!cancelled()'
+        run: |
+          # Actions' bash does not set pipefail, so without this the pipe would
+          # return tee's status and a red suite would report as a green step.
+          set -euo pipefail
+          files=()
+          while IFS= read -r f; do files+=("$f"); done < <(find tools/browser/tests -type f \( -name '*.test.cjs' -o -name '*.test.mjs' \) | sort)
+          echo "discovered ${#files[@]} browser test files"
+          test "${#files[@]}" -gt 0
+          node --test "${files[@]}" 2>&1 | tee "$RUNNER_TEMP/browser-tests.log"
+
+      # docs/ops/navigation-performance.md: "Release acceptance must report zero
+      # skips." The one standing exception is the password-protected-PDF test,
+      # which needs an encrypted fixture that is not in the repository
+      # (MOTHERSHIP_PDF_PASSWORD_FIXTURE). Any further skip means a runtime path
+      # went missing and browser coverage quietly stopped running.
+      - name: Assert browser tests ran
+        if: '!cancelled()'
+        run: |
+          set -euo pipefail
+          # FORCE_COLOR makes the spec reporter emit ANSI escapes; strip them
+          # before matching so the end-of-line anchors still hold.
+          log="$RUNNER_TEMP/browser-summary.txt"
+          sed $'s/\033\\[[0-9;]*m//g' "$RUNNER_TEMP/browser-tests.log" > "$log"
+          skipped=$(sed -n 's/^.*[[:space:]]skipped \([0-9][0-9]*\)[[:space:]]*$/\1/p' "$log" | tail -n 1)
+          passed=$(sed -n 's/^.*[[:space:]]pass \([0-9][0-9]*\)[[:space:]]*$/\1/p' "$log" | tail -n 1)
+          echo "browser suite: pass=$passed skipped=$skipped"
+          test -n "$passed" && test "$passed" -gt 0
+          test -n "$skipped" && test "$skipped" -le 1
+
+      # Reuse this job's browser cache and per-runner directory.
+      - name: Setup PHP for authenticated replay integration
+        if: '!cancelled()'
+        uses: shivammathur/setup-php@2.37.2
+        with:
+          php-version: '8.4'
+          extensions: curl, exif, fileinfo, gd, intl, mbstring, openssl, pdo, pdo_sqlite, sqlite3, tokenizer, zip
+          tools: composer:v2
+          coverage: none
+
+      - name: Install replay fixture PHP dependencies
+        if: '!cancelled()'
+        uses: ramsey/composer-install@v3
+        with:
+          composer-options: "--optimize-autoloader"
+
+      - name: Real SDK replay through authenticated relay
+        if: '!cancelled()'
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ${{ github.workspace }}/database/replay-test.sqlite
+        run: |
+          cp .env.example .env
+          touch "$DB_DATABASE"
+          php artisan key:generate --force --no-interaction
+          php artisan migrate --force --no-interaction
+          php artisan db:seed --force --no-interaction
+          node --test tools/replay/browser.test.cjs
+
+  # The admin and DAM bundles under public/themes/*/build are served straight
+  # from the repository: no Dockerfile, deploy script or Studio step runs
+  # `npm run build`. A template that starts using a new Tailwind utility, or a
+  # change to bundled JavaScript, does nothing in production until someone
+  # rebuilds and commits the bundle. By 2026-09-23 the Library folder cards had
+  # no grid, and the 3D viewer's flip buttons and build plates had never been
+  # built. This job rebuilds both bundles from their lockfiles and fails on any
+  # difference, naming the classes the committed CSS lacks.
+  bundles:
+    # Same self-hosted pool as js_tests. Never GitHub-hosted.
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","linux","x64","windows-gpu"]') }}
+    timeout-minutes: 15
+    name: Committed Frontend Bundles
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Rebuild the admin and DAM bundles
+        run: tools/frontend/build-bundles.sh
+
+      # The check below only fails when a PR is stale, so prove on every run
+      # that it still fails (and names the missing classes) on a fixture repo.
+      - name: Freshness checker tests
+        run: node --test tools/frontend/tests/check-bundles.test.cjs
+
+      - name: Committed bundles match the rebuild
+        run: node tools/frontend/check-bundles.cjs
+
+      # Required: proves the advisory Blade-script lint below still catches the 1096e385
+      # class (Vue `@error` read by Blade as its directive), so a silent linter cannot pass.
+      - name: Blade script lint self-test
+        run: node --test tools/frontend/tests/lint-blade-scripts.test.cjs
+
+  # ADVISORY, not a required gate (docs/reference/guardrails.md). The DAM keeps most of its
+  # Vue/JS inside <script> blocks in Blade views, where no JS tooling looks; this parses those
+  # bodies and Vue attribute expressions, and flags Blade directive names used as Vue event
+  # shorthand (`@error=` compiles as Blade's @error, the 1096e385 bug). It never fails the
+  # build: findings are reported in the step log for a human to read.
+  blade_lint:
+    # Same self-hosted pool as js_tests. Never GitHub-hosted.
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","linux","x64","windows-gpu"]') }}
+    timeout-minutes: 10
+    name: Blade Script Lint (advisory)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Lint scripts embedded in DAM Blade views (advisory)
+        continue-on-error: true
+        run: node tools/frontend/lint-blade-scripts.cjs

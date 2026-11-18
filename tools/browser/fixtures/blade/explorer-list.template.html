@@ -1,0 +1,275 @@
+
+    <div
+        class="dam-list border border-gray-200 dark:border-cherry-700 rounded-lg overflow-hidden bg-white dark:bg-cherry-900 min-h-72"
+        @dragover.prevent
+        @drop.prevent="onSpaceDrop($event)"
+    >
+
+        <div v-if="isLoading" class="divide-y divide-gray-100 dark:divide-cherry-800 p-2">
+            <div v-for="n in 8" :key="n" class="h-10 my-1 rounded bg-gray-100 dark:bg-cherry-800 animate-pulse"></div>
+        </div>
+
+        <template v-else>
+            <div class="dam-list-row px-4 py-2 bg-gray-50 dark:bg-cherry-800 border-b border-gray-200 dark:border-cherry-700 text-xs font-bold uppercase tracking-widest text-gray-400">
+                <span></span>
+                <span></span>
+                <span class="cursor-pointer hover:text-gray-600 dark:hover:text-white" @click="sort('name')">
+                    Name <span v-if="sortBy==='name'">{{ sortOrder==='asc'?'↑':'↓' }}</span>
+                </span>
+                <span class="dam-list-col-type">Type</span>
+                <span class="dam-list-col-size cursor-pointer hover:text-gray-600 dark:hover:text-white" @click="sort('size')">
+                    Size <span v-if="sortBy==='size'">{{ sortOrder==='asc'?'↑':'↓' }}</span>
+                </span>
+                <span class="dam-list-col-date cursor-pointer hover:text-gray-600 dark:hover:text-white" @click="sort('updated_at')">
+                    Modified <span v-if="sortBy==='updated_at'">{{ sortOrder==='asc'?'↑':'↓' }}</span>
+                </span>
+                <span class="[grid-column-end:-1] text-right ltr:pr-1 rtl:pl-1 dam-list-actions-label">Actions</span>
+            </div>
+
+            <div
+                v-for="dir in directories" :key="`d-${dir.id}`"
+                class="dam-list-row px-4 py-2.5 text-sm border-b border-gray-100 dark:border-cherry-800 items-center cursor-pointer hover:bg-primary-100 dark:hover:bg-primary-800/50 transition-colors"
+                :class="{ 'ring-2 ring-inset ring-primary-400': dropTargetId === dir.id, 'bg-primary-50 dark:bg-primary-900/40': isSelectedById(dir.id, 'directory') }"
+                :data-dir-id="dir.id"
+                :data-selected="isSelectedById(dir.id, 'directory')"
+                draggable="true"
+                @click="onRowClick($event, dir, 'directory', () => $emit('navigate', dir))"
+                @contextmenu.prevent.stop="showCtx($event, dir, 'directory')"
+                @dragstart="onDirDragStart($event, dir)"
+                @dragend="onDragEnd"
+                @dragover.prevent="onDirDragOver($event, dir)"
+                @dragleave="onDirDragLeave($event, dir)"
+                @drop.prevent.stop="onDirDrop($event, dir)"
+            >
+                <div
+                    class="dam-list-select-cell flex items-center justify-center self-stretch -my-2.5 -ml-2 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-600"
+                    role="checkbox"
+                    tabindex="0"
+                    :aria-checked="isSelectedById(dir.id, 'directory')"
+                    :aria-label="'Select :name'.replace(':name', () => dir.name)"
+                    :id="`sel-dir-${dir.id}`"
+                    @click.stop="onCheckboxClick($event, dir, 'directory')"
+                    @keydown.space.prevent.stop="onCheckboxClick($event, dir, 'directory')"
+                    @keydown.enter.prevent.stop="onCheckboxClick($event, dir, 'directory')"
+                >
+                    <span class="rounded-md text-xl" :class="isSelectedById(dir.id, 'directory') ? 'icon-checkbox-check text-primary-700' : 'icon-checkbox-normal'"></span>
+                </div>
+                <i class="icon-dam-folder text-lg text-primary-400"></i>
+                <div class="min-w-0">
+                    <span class="flex items-center gap-1 min-w-0">
+                        <span class="font-medium text-primary-700 dark:text-primary-300 truncate">{{ dir.name }}</span>
+                        <span
+    v-if="dir.access_mode === 'private'"
+    class="inline-flex shrink-0 items-center text-gray-400 dark:text-slate-400"
+    role="img"
+    aria-label="Only you"
+    title="Only you"
+    data-dam-access-indicator="private"
+>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+</span>
+<span
+    v-else-if="dir.access_mode === 'people'"
+    class="inline-flex shrink-0 items-center text-primary-500 dark:text-primary-400"
+    role="img"
+    aria-label="Shared"
+    title="Shared"
+    data-dam-access-indicator="people"
+>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+</span>
+<span
+    v-else-if="dir.access_mode === 'everyone'"
+    class="inline-flex shrink-0 items-center text-primary-500 dark:text-primary-400"
+    role="img"
+    aria-label="Everyone"
+    title="Everyone"
+    data-dam-access-indicator="everyone"
+>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M2 12h20"></path><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+</span>
+                    </span>
+                    <span class="dam-list-compact-meta text-xs text-gray-400 truncate block">
+                        Folder · {{ ":count items".replace(':count', dir.assets_count + dir.children_count) }}
+                    </span>
+                </div>
+                <span class="dam-list-col-type text-gray-400 text-xs">Folder</span>
+                <span class="dam-list-col-size text-gray-400 text-xs">{{ ":count items".replace(':count', dir.assets_count + dir.children_count) }}</span>
+                <span class="dam-list-col-date text-gray-400 text-xs">{{ fmtDate(dir.updated_at) }}</span>
+                <div class="flex gap-2 items-center justify-end [grid-column-end:-1]">
+                    <div class="dam-list-inline-actions gap-2 items-center">
+                                        <button v-if="dir.can_access !== false" type="button" class="icon-dam-rename text-gray-400 hover:text-primary-600 text-base" @click.stop="renameDir(dir)" title="Rename" :aria-label="'Rename' + ' ' + dir.name"></button>
+                                                            <button v-if="dir.can_access !== false" type="button" class="icon-dam-delete text-gray-400 hover:text-red-500 text-base" @click.stop="delDir(dir)" title="Delete" :aria-label="'Delete' + ' ' + dir.name"></button>
+                                        </div>
+                    <button
+                        type="button"
+                        class="dam-ctx-trigger flex items-center justify-center text-gray-400 hover:text-primary-600"
+                        @click.stop="showCtx($event, dir, 'directory')"
+                        title="Actions"
+                        :aria-label="'Actions for :name'.replace(':name', () => dir.name)"
+                        aria-haspopup="menu"
+                    >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="12" cy="19" r="2"></circle></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div v-if="directories.length && assets.length" class="px-4 py-2 bg-gray-50 dark:bg-cherry-800 border-b border-gray-200 dark:border-cherry-700 text-xs font-bold uppercase tracking-widest text-gray-400">
+                Files            </div>
+
+            <div
+                v-for="asset in assets" :key="`a-${asset.id}`"
+                class="dam-list-row px-4 py-2.5 text-sm border-b border-gray-100 dark:border-cherry-800 items-center cursor-pointer hover:bg-primary-100 dark:hover:bg-primary-800/50 transition-colors"
+                data-dam-asset-open
+                :data-dam-asset-id="asset.id"
+                style="position:relative"
+                v-dam-custom-thumbnail-drop="asset"
+                :class="{ 'bg-primary-50 dark:bg-primary-900/40': isSelectedById(asset.id, 'asset'), 'ring-2 ring-inset ring-primary-400 !bg-primary-100 dark:!bg-primary-900/60': stackDropId === asset.id }"
+                :data-selected="isSelectedById(asset.id, 'asset')"
+                draggable="true"
+                                    @click="onRowClick($event, asset, 'asset', () => openAsset(asset, 'preview'))"
+                                @contextmenu.prevent.stop="showCtx($event, asset, 'asset')"
+                @dragstart="onAssetDragStart($event, asset)"
+                @dragend="onDragEnd"
+                                    @dragover="onStackDragOver($event, asset)"
+                    @dragleave="onStackDragLeave($event, asset)"
+                    @drop="onStackDrop($event, asset)"
+                            >
+                <div
+                    class="dam-list-select-cell flex items-center justify-center self-stretch -my-2.5 -ml-2 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-600"
+                    role="checkbox"
+                    tabindex="0"
+                    :aria-checked="isSelectedById(asset.id, 'asset')"
+                    :aria-label="'Select :name'.replace(':name', () => (asset.display_name || asset.file_name))"
+                    :id="`sel-asset-${asset.id}`"
+                    @click.stop="onCheckboxClick($event, asset, 'asset')"
+                    @keydown.space.prevent.stop="onCheckboxClick($event, asset, 'asset')"
+                    @keydown.enter.prevent.stop="onCheckboxClick($event, asset, 'asset')"
+                >
+                    <span class="rounded-md text-xl" :class="isSelectedById(asset.id, 'asset') ? 'icon-checkbox-check text-primary-700' : 'icon-checkbox-normal'"></span>
+                </div>
+                <img v-if="assetThumbnail(asset)" :key="assetThumbnail(asset)" v-dam-thumbnail="assetThumbnail(asset)" :alt="asset.file_name || asset.display_name" style="width:28px;height:28px;object-fit:contain" draggable="false" data-dam-stack-anchor />
+                <i v-else class="text-lg" :class="icon(asset.file_type)"></i>
+                <div class="min-w-0">
+                    <span class="flex items-center gap-1 min-w-0">
+                        <span class="text-gray-700 dark:text-gray-200 truncate"><bdi>{{ (asset.display_name || asset.file_name) }}</bdi></span>
+                        <!-- A stack opens into its files (D5) from its count, as on the grid card. The row itself opens the main file. -->
+                                                <button
+                            v-if="Number(asset.attachment_count || 0) > 1"
+                            type="button"
+                            class="relative shrink-0 inline-flex items-center gap-1 rounded-full bg-gray-700 px-1.5 py-px text-[11px] font-semibold leading-4 text-white hover:bg-primary-600 max-[639px]:after:absolute max-[639px]:after:-inset-x-1 max-[639px]:after:-inset-y-3 max-[639px]:after:content-[''] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+                            :aria-label="stackOpenLabel(asset)"
+                            :title="stackOpenLabel(asset)"
+                            data-dam-stack-open
+                            @click.stop="openStack({ asset, el: $event.currentTarget.closest('[data-dam-asset-open]') })"
+                        >
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="3" width="13" height="13" rx="2"></rect><path d="M16 21H5a2 2 0 0 1-2-2V8"></path></svg>
+                            {{ asset.attachment_count }}
+                        </button>
+                                                <span v-if="asset.match?.page" class="shrink-0 rounded bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:text-gray-300" :title="asset.match.snippet || ''" data-dam-match-page>{{ matchPageLabel(asset) }}</span>
+                        <span v-else-if="asset.match?.ai" class="shrink-0 rounded bg-violet-100 dark:bg-violet-900/40 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:text-violet-200" title="Matched by meaning: no word in the name or details matches your search, but the AI found this file relevant." data-dam-match-ai>AI</span>
+                        <span
+    v-if="asset.access_mode === 'private'"
+    class="inline-flex shrink-0 items-center text-gray-400 dark:text-slate-400"
+    role="img"
+    aria-label="Only you"
+    title="Only you"
+    data-dam-access-indicator="private"
+>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+</span>
+<span
+    v-else-if="asset.access_mode === 'people'"
+    class="inline-flex shrink-0 items-center text-primary-500 dark:text-primary-400"
+    role="img"
+    aria-label="Shared"
+    title="Shared"
+    data-dam-access-indicator="people"
+>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+</span>
+<span
+    v-else-if="asset.access_mode === 'everyone'"
+    class="inline-flex shrink-0 items-center text-primary-500 dark:text-primary-400"
+    role="img"
+    aria-label="Everyone"
+    title="Everyone"
+    data-dam-access-indicator="everyone"
+>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M2 12h20"></path><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+</span>
+                        <!-- Other versions attached under Related files (AvailableVersions), as on the grid card. -->
+                        <span
+                            v-for="chip in versionChips(asset)"
+                            :key="chip.kind + chip.label"
+                            class="shrink-0 px-1 rounded font-bold uppercase text-white"
+                            style="font-size:9px;line-height:14px;"
+                            :style="{ background: chipColor(chip) }"
+                            :title="chipTitle(chip)"
+                            data-dam-version-chip
+                        >{{ chip.label }}</span>
+                    </span>
+                    <span class="dam-list-compact-meta text-xs text-gray-400 truncate block">{{ rowType(asset) }} · {{ fmtSize(rowSize(asset)) }}</span>
+                    <span v-if="stackLine(asset)" class="text-xs font-medium text-primary-700 dark:text-primary-300 truncate block" :title="stackLine(asset)" data-dam-stack-line>{{ stackLine(asset) }}</span>
+                    <span v-if="Number(asset.attachment_count || 0) > 1 && (stackDropId === asset.id || (dragHint && draggingId !== asset.id))" class="text-xs font-semibold block" :class="stackDropId === asset.id ? 'text-primary-700 dark:text-primary-200' : 'text-primary-600 dark:text-primary-300'" data-dam-stack-drop-hint>Drop to add to stack</span>
+                    <!-- P4a (D9): the card fields, in priority order, each label then value. -->
+                    <span v-if="asset.card_fields?.length" class="flex min-w-0 flex-wrap gap-x-3 gap-y-0.5 text-xs" data-dam-card-fields>
+                        <span
+                            v-for="field in asset.card_fields"
+                            :key="field.code"
+                            class="min-w-0 max-w-full truncate sm:max-w-[16rem]"
+                            :title="`${field.label}: ${field.value}`"
+                            :data-dam-card-field="field.code"
+                        ><span class="text-gray-400">{{ field.label }}</span> <span class="font-medium text-gray-700 dark:text-gray-200">{{ field.value }}</span></span>
+                    </span>
+                    <span v-if="asset.unavailable_label" class="block"><span class="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold leading-4 bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200" :data-dam-availability-badge="asset.unavailable">{{ asset.unavailable_label }}</span></span>
+                    <span v-if="asset.proxy_status_label" class="block"><span class="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold leading-4" :class="asset.proxy_status === 'failed' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200'" :data-dam-proxy-badge="asset.proxy_status">{{ asset.proxy_status_label }}</span></span>
+                    <!-- The uploader, from created_by; a file with no owner shows nothing. -->
+                    <span v-if="asset.owner_name" class="text-xs text-gray-400 truncate block" :title="`Uploaded by ${asset.owner_name}`" data-dam-asset-owner>{{ asset.owner_name }}</span>
+                </div>
+                <div class="dam-list-col-type items-center overflow-hidden"><span class="text-xs font-bold rounded px-1 py-px uppercase whitespace-nowrap overflow-hidden" style="max-width:100%;text-overflow:ellipsis;" :class="[badge(asset.file_type, asset.extension), asset.adobe && Number(asset.attachment_count || 0) <= 1 ? 'inline-flex items-center gap-1' : '']" :title="rowTypeTitle(asset) || (asset.adobe && Number(asset.attachment_count || 0) <= 1 ? asset.adobe.title : null)"><img v-if="asset.adobe && Number(asset.attachment_count || 0) <= 1" :src="adobeIcon(asset.adobe)" alt="" class="h-3.5 w-3.5 shrink-0 rounded-[3px]" draggable="false">{{ rowType(asset) }}</span></div>
+                <span class="dam-list-col-size text-gray-400 text-xs" :title="rowSizeTitle(asset)">{{ fmtSize(rowSize(asset)) }}</span>
+                <span class="dam-list-col-date text-gray-400 text-xs">{{ fmtDate(asset.updated_at) }}</span>
+                <div class="flex gap-2 items-center justify-end [grid-column-end:-1]">
+                    <div class="dam-list-inline-actions gap-2 items-center">
+                                        <button type="button" class="icon-dam-preview text-gray-400 hover:text-primary-600 text-base" @click.stop="preview(asset.id)" :title="Number(asset.attachment_count || 0) > 1 ? 'Open main file' : 'Preview'" :aria-label="'Preview :name'.replace(':name', () => asset.display_name || asset.file_name)"></button>
+                                                            <button type="button" class="icon-edit text-gray-400 hover:text-primary-600 text-base" @click.stop="edit(asset.id)" title="Edit" :aria-label="'Edit :name'.replace(':name', () => asset.display_name || asset.file_name)"></button>
+                                                            <button type="button" class="icon-delete text-gray-400 hover:text-red-500 text-base" @click.stop="del(asset)" title="Delete" :aria-label="'Delete :name'.replace(':name', () => asset.display_name || asset.file_name)"></button>
+                                        </div>
+                    <button
+                        type="button"
+                        class="dam-ctx-trigger flex items-center justify-center text-gray-400 hover:text-primary-600"
+                        @click.stop="showCtx($event, asset, 'asset')"
+                        title="Actions"
+                        :aria-label="'Actions for :name'.replace(':name', () => asset.display_name || asset.file_name)"
+                        aria-haspopup="menu"
+                    >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="12" cy="19" r="2"></circle></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div v-if="!directories.length && !assets.length" class="flex flex-col items-center justify-center py-16 gap-3" data-explorer-empty>
+                <img src="http://mothership.test/themes/dam/build/assets/no-records-found-Dw1Lp69h.svg" class="w-24 h-24 opacity-60" alt="" />
+                <p class="font-bold text-gray-700 dark:text-slate-50 text-center">{{ emptyState?.message ?? 'No Records Available.' }}</p>
+                <button v-if="emptyState?.action" type="button" class="secondary-button" @click="$emit('empty-action')">{{ emptyState.action }}</button>
+            </div>
+        </template>
+
+        <v-dam-explorer-ctx
+            v-if="ctx.on"
+            :key="ctxKey"
+            :x="ctx.x"
+            :y="ctx.y"
+            :item="ctx.item"
+            :item-type="ctx.type"
+            :tab-id="tabId"
+            :clipboard="clipboard"
+            :selection="selection"
+            @close="closeCtx"
+            @navigate="$emit('navigate', $event)"
+            @open-new-tab="$emit('open-new-tab', $event)"
+            @bookmark="$emit('bookmark', $event)"
+            @refresh="$emit('refresh')"
+        ></v-dam-explorer-ctx>
+    </div>

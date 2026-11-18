@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f6f7f8">
+    <title>Plaque Maker</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="plaque-core.js"></script>
+    <script src="plaque-encode.js"></script>
+    <script src="plaque-sounds.js"></script>
+    <script src="app.js" defer></script>
+</head>
+<body>
+    <main class="shell">
+        <header class="page-head">
+            <div>
+                <p class="eyebrow">VIDEO OVERLAYS</p>
+                <h1>Plaque Maker</h1>
+                <p>Animated plaques with an icon or image, a title, a subtitle, an optional amount and a sound. Everything runs on this device.</p>
+            </div>
+        </header>
+
+        <div class="toolbar" role="toolbar" aria-label="Set actions">
+            <label class="set-name"><span class="sr-only">Set name</span><input data-set-name maxlength="120" aria-label="Set name" data-agh-ephemeral></label>
+            <div class="toolbar-group">
+                <button type="button" class="outline" data-action="add-blank">New plaque</button>
+                <button type="button" class="outline" data-action="open-presets">Presets</button>
+                <button type="button" class="outline" data-ai-open hidden>Generate</button>
+            </div>
+            <div class="toolbar-group">
+                <button type="button" class="icon-button" data-action="undo" aria-label="Undo" title="Undo (⌘Z)"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5 M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
+                <button type="button" class="icon-button" data-action="redo" aria-label="Redo" title="Redo (⇧⌘Z)"><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5 M20 9H10a6 6 0 0 0 0 12h3"/></svg></button>
+            </div>
+            <div class="toolbar-group end">
+                <span class="save-state" data-save-state role="status" aria-live="polite"></span>
+                <button type="button" class="outline" data-action="open-set">Open</button>
+                <button type="button" class="outline" data-action="open-handoff">Share</button>
+                <button type="button" class="primary" data-action="open-export">Export</button>
+            </div>
+        </div>
+
+        <div class="workspace">
+            <section class="panel list-panel" aria-labelledby="list-title">
+                <div class="panel-head"><h2 id="list-title">Plaques</h2><span class="count" data-count></span></div>
+                <p class="list-tools" data-list-tools hidden><button type="button" class="link" data-action="select-all">Select all</button><button type="button" class="link" data-action="select-none">Clear selection</button></p>
+                <ol class="plaque-list" data-list aria-label="Plaques in this set"></ol>
+                <p class="list-empty" data-list-empty>No plaques yet.</p>
+            </section>
+
+            <section class="panel preview-panel" aria-label="Preview">
+                <div class="draft-banner" data-draft-banner hidden>
+                    <span><strong>Preset draft</strong> · <span data-draft-name></span>. Edit it, then add it to the set.</span>
+                    <span class="draft-actions"><button type="button" class="outline small" data-action="discard-draft">Discard</button><button type="button" class="primary small" data-action="commit-draft">Add to set</button></span>
+                </div>
+                <div class="stage" data-stage>
+                    <canvas data-preview aria-label="Plaque preview"></canvas>
+                    <div class="empty-state" data-empty hidden>
+                        <svg viewBox="0 0 120 64" aria-hidden="true"><rect x="10" y="14" width="100" height="36" rx="8"/><rect x="18" y="22" width="20" height="20" rx="5"/><path d="M46 27h44 M46 37h28"/></svg>
+                        <h2>Start your first plaque</h2>
+                        <p>Make one from scratch, pick a preset, or open a set you exported before.</p>
+                        <div class="empty-actions">
+                            <button type="button" class="primary" data-action="add-blank">Blank plaque</button>
+                            <button type="button" class="outline" data-action="open-presets">Choose a preset</button>
+                            <button type="button" class="outline" data-action="open-set">Open a set</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="transport" data-transport>
+                    <div class="transport-row">
+                        <button type="button" class="primary play" data-action="play" aria-label="Play">Play</button>
+                        <button type="button" class="icon-button" data-action="step-back" aria-label="Previous frame" title="Previous frame (←)"><svg viewBox="0 0 24 24"><path d="M6 5v14"/><path d="M19 5L9 12l10 7z" fill="currentColor"/></svg></button>
+                        <button type="button" class="icon-button" data-action="step-forward" aria-label="Next frame" title="Next frame (→)"><svg viewBox="0 0 24 24"><path d="M18 5v14"/><path d="M5 5l10 7-10 7z" fill="currentColor"/></svg></button>
+                        <label class="scope"><span class="sr-only">Play</span><select data-scope aria-label="What to play"><option value="current">This plaque</option><option value="selected">Selected plaques</option><option value="set">Whole set</option></select></label>
+                        <label class="check mute"><input type="checkbox" data-mute> Mute</label>
+                        <span class="clock" data-clock>0:00.00 / 0:00.00</span>
+                    </div>
+                    <input type="range" class="scrubber" data-scrub min="0" step="0.001" value="0" aria-label="Playhead">
+                </div>
+                <details class="output-panel" data-output-panel>
+                    <summary><span>Output</span><span class="summary-value" data-output-summary></span></summary>
+                    <div class="field-grid">
+                        <label>Crop<select data-out="mode"><option value="frame">Place in a frame</option><option value="tight">Tight around the plaque</option></select></label>
+                        <label data-frame-only>Frame<select data-out="frame"><option value="landscape">Landscape 1920 × 1080</option><option value="portrait">Portrait 1080 × 1920</option><option value="square">Square 1080 × 1080</option><option value="custom">Custom size</option></select></label>
+                        <label data-custom-only>Width<input type="number" min="16" max="4096" step="2" data-out="width"></label>
+                        <label data-custom-only>Height<input type="number" min="16" max="4096" step="2" data-out="height"></label>
+                        <label>Frame rate<select data-out="fps"><option value="24">24 fps</option><option value="25">25 fps</option><option value="30">30 fps</option><option value="50">50 fps</option><option value="60">60 fps</option></select></label>
+                        <label>Scale<input type="number" min="0.25" max="4" step="0.05" data-out="scale"></label>
+                        <label data-frame-only>Margin<input type="number" min="0" max="1000" step="4" data-out="margin"></label>
+                    </div>
+                    <fieldset class="anchor-grid" data-frame-only><legend>Placement</legend><div data-anchors></div></fieldset>
+                </details>
+            </section>
+
+            <section class="panel inspector" data-inspector aria-label="Edit plaque"></section>
+        </div>
+    </main>
+
+    <dialog data-dialog="presets" aria-labelledby="presets-title">
+        <form method="dialog" class="dialog-body">
+            <header class="dialog-head"><h2 id="presets-title">Presets</h2><button class="icon-button" value="close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12 M18 6L6 18"/></svg></button></header>
+            <label class="topic-search">Describe your video<input data-topic-input placeholder="For example: weekly podcast with a merch sale" data-agh-ephemeral></label>
+            <div class="topic-results" data-topic-results></div>
+            <div class="tabs" role="tablist" data-preset-tabs></div>
+            <div class="preset-grid" data-preset-grid></div>
+        </form>
+    </dialog>
+
+    <dialog data-dialog="export" aria-labelledby="export-title">
+        <form method="dialog" class="dialog-body">
+            <header class="dialog-head"><h2 id="export-title">Export</h2><button class="icon-button" value="close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12 M18 6L6 18"/></svg></button></header>
+            <div class="field-grid two">
+                <label>Plaques<select data-export-scope><option value="current">This plaque</option><option value="selected">Selected plaques</option><option value="set">Whole set</option></select></label>
+                <label>Format<select data-export-format></select></label>
+            </div>
+            <p class="hint" data-export-hint></p>
+            <div class="field-grid two" data-export-options></div>
+            <div class="progress" data-export-progress hidden><span data-export-bar></span></div>
+            <p class="notice" role="status" aria-live="polite" data-export-status></p>
+            <footer class="dialog-foot"><button type="button" class="outline" data-action="cancel-export" hidden>Cancel</button><button type="button" class="primary" data-action="run-export">Export</button></footer>
+        </form>
+    </dialog>
+
+    <dialog data-dialog="open" aria-labelledby="open-title">
+        <form method="dialog" class="dialog-body">
+            <header class="dialog-head"><h2 id="open-title">Open a set</h2><button class="icon-button" value="close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12 M18 6L6 18"/></svg></button></header>
+            <p class="dialog-lead">A set replaces the one you are editing. Undo brings it back.</p>
+            <div class="open-options">
+                <label class="outline file-button">Open a file…<input type="file" accept=".json,application/json" data-open-file></label>
+                <button type="button" class="outline" data-action="paste-set">Paste from clipboard</button>
+            </div>
+            <label class="paste-box">Or paste set JSON here<textarea rows="5" data-paste-text spellcheck="false" data-agh-ephemeral></textarea></label>
+            <div class="dialog-foot"><button type="button" class="outline" data-action="import-text">Import pasted text</button></div>
+            <h3 class="subhead">From The Mothership library</h3>
+            <div class="library-sets" data-library-sets><p class="hint">Loading saved sets…</p></div>
+            <ul class="errors" data-open-errors></ul>
+        </form>
+    </dialog>
+
+    <dialog data-dialog="handoff" aria-labelledby="handoff-title">
+        <form method="dialog" class="dialog-body">
+            <header class="dialog-head"><h2 id="handoff-title">Share</h2><button class="icon-button" value="close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12 M18 6L6 18"/></svg></button></header>
+            <section class="handoff">
+                <h3>Save to the library</h3>
+                <p>Files the set's renders and its <code>.plaque.json</code> into a Mothership folder, through the normal upload.</p>
+                <div class="field-grid two">
+                    <label>Folder<select data-library-folder><option value="">Loading folders…</option></select></label>
+                    <label>Render as<select data-library-format><option value="png">PNG still per plaque</option><option value="apng">APNG animation</option><option value="gif">GIF animation</option><option value="webm-key">WebM (chroma key)</option><option value="none">No render, set only</option></select></label>
+                    <label>Plaques<select data-library-scope><option value="set">Whole set</option><option value="selected">Selected plaques</option><option value="current">This plaque</option></select></label>
+                    <label class="check"><input type="checkbox" data-library-wav checked> Include the sound as WAV</label>
+                </div>
+                <div class="dialog-foot"><button type="button" class="primary" data-action="save-library">Save to library</button></div>
+                <p class="notice" role="status" aria-live="polite" data-library-status></p>
+            </section>
+            <section class="handoff">
+                <h3>Hand to an agent</h3>
+                <p>Copies the set as JSON, images and sounds included. An agent edits it and hands it back through <strong>Open → Paste</strong>, or saves a <code>.plaque.json</code> to the library.</p>
+                <div class="dialog-foot"><button type="button" class="outline" data-action="copy-agent">Copy set for an agent</button></div>
+                <p class="notice" role="status" aria-live="polite" data-agent-status></p>
+            </section>
+        </form>
+    </dialog>
+
+    <dialog data-dialog="ai" aria-labelledby="ai-title">
+        <form method="dialog" class="dialog-body">
+            <header class="dialog-head"><h2 id="ai-title">Generate a set</h2><button class="icon-button" value="close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12 M18 6L6 18"/></svg></button></header>
+            <label>What is the video about?<textarea rows="3" data-ai="description" placeholder="A weekly cooking show: new episode, a sponsor thank-you, and a follow reminder" data-agh-ephemeral></textarea></label>
+            <div class="field-grid three">
+                <label>Themed plaques<input type="number" min="0" max="20" value="3" data-ai="themed"></label>
+                <label>Social plaques<input type="number" min="0" max="10" value="1" data-ai="social"></label>
+                <label>Donation plaques<input type="number" min="0" max="10" value="0" data-ai="donation"></label>
+                <label>Video length<input data-ai="length" placeholder="10 minutes"></label>
+                <label>Destination<select data-ai="destination"><option>Long video</option><option>Short vertical video</option><option>Livestream</option><option>Presentation</option></select></label>
+                <label>Tone<select data-ai="tone"><option>Friendly</option><option>Bold</option><option>Professional</option><option>Playful</option><option>Calm</option></select></label>
+            </div>
+            <p class="notice" role="status" aria-live="polite" data-ai-status></p>
+            <div class="ai-preview" data-ai-preview hidden></div>
+            <footer class="dialog-foot">
+                <button type="button" class="outline" data-action="ai-replace" hidden>Replace the set</button>
+                <button type="button" class="outline" data-action="ai-append" hidden>Append to the set</button>
+                <button type="button" class="primary" data-action="ai-generate">Generate</button>
+            </footer>
+        </form>
+    </dialog>
+    <p class="toast" role="status" aria-live="polite" data-toast hidden></p>
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+    "name": "mothership/laravel-product",
+    "license": "MIT",
+    "require": {},
+    "autoload": {
+        "psr-4": {
+            "Mothership\\Product\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Mothership\\Product\\Providers\\ProductServiceProvider"
+            ],
+            "aliases": {
+                "Bouncer": "Mothership\\Product\\Facades\\Bouncer"
+            }
+        }
+    },
+    "minimum-stability": "dev"
+}

@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Mothership documentation",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1000,
+      530
+    ]
+  },
+  "components": [
+    {
+      "id": "source",
+      "type": "backend",
+      "label": "Runtime routes",
+      "sublabel": "Laravel route inventory",
+      "pos": [
+        40,
+        80
+      ],
+      "size": [
+        220,
+        85
+      ]
+    },
+    {
+      "id": "contracts",
+      "type": "database",
+      "label": "Reviewed contracts",
+      "sublabel": "157 integration operations",
+      "pos": [
+        390,
+        80
+      ],
+      "size": [
+        220,
+        85
+      ]
+    },
+    {
+      "id": "compiler",
+      "type": "backend",
+      "label": "API compiler",
+      "sublabel": "Coverage + source hashes",
+      "pos": [
+        740,
+        80
+      ],
+      "size": [
+        220,
+        85
+      ]
+    },
+    {
+      "id": "reference",
+      "type": "database",
+      "label": "Published reference",
+      "sublabel": "OpenAPI + route coverage",
+      "pos": [
+        740,
+        330
+      ],
+      "size": [
+        220,
+        85
+      ]
+    },
+    {
+      "id": "help",
+      "type": "frontend",
+      "label": "Help center",
+      "sublabel": "Permission: help",
+      "pos": [
+        390,
+        330
+      ],
+      "size": [
+        220,
+        85
+      ]
+    },
+    {
+      "id": "reader",
+      "type": "external",
+      "label": "Readers",
+      "sublabel": "Administrators + developers",
+      "pos": [
+        40,
+        330
+      ],
+      "size": [
+        220,
+        85
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from": "source",
+      "to": "contracts",
+      "label": "classify"
+    },
+    {
+      "from": "contracts",
+      "to": "compiler",
+      "label": "validate"
+    },
+    {
+      "from": "compiler",
+      "to": "reference",
+      "label": "compile",
+      "labelAt": [
+        850,
+        245
+      ]
+    },
+    {
+      "from": "reference",
+      "to": "help",
+      "label": "read JSON"
+    },
+    {
+      "from": "help",
+      "to": "reader",
+      "label": "HTML + downloads"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Complete inventory",
+      "items": [
+        "1,056 route identities classified",
+        "Internal, auth, public and HEAD routes stay visible"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Practical guides",
+      "items": [
+        "Versioned user and administrator manual",
+        "Extension, native widget and iframe examples"
+      ]
+    }
+  ]
+}

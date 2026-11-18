@@ -1,0 +1,12 @@
+# Read by the maintainer's `ci-verify` tool at the run's head SHA (2026-10-14).
+#
+# guard_steps: steps that decide or record whether a nightly job works, never work themselves.
+# A job whose only executed steps after the first guard match these globs was deferred by the
+# overnight window (.github/scripts/nightly_guard.py) and is reported "did not run", never pass.
+# The record/upload steps run in every job (`always()`) so the nightly-summary job can count a
+# deferral; listing them here keeps that bookkeeping from looking like executed work.
+guard_steps:
+  - "Nightly window guard*"
+  - "Record nightly totals*"
+  - "Upload nightly totals*"
+  - "Stop service containers*"

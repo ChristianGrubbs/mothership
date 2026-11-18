@@ -1,0 +1,141 @@
+name: Member Description PostgreSQL Tests
+
+# Manual only, no automatic trigger. The PostgreSQL race cases of the selected-member AI description
+# (MemberDescriptionsLockCommittedTest: a real forked second process, asset-row locks, pg_stat_activity)
+# are registered in pest_tests.yml, but that job runs nightly and on dispatch of the whole ~64 minute
+# workflow, and its PostgreSQL leg skips pull requests (operator directive 2026-10-12). This workflow runs
+# just the two member-description test files against a disposable PostgreSQL, through the same machinery and
+# in the same order as the "manual/machine write races" step there, so a merged commit can be proved in
+# minutes without touching the nightly or pull-request policy:
+#
+#   gh workflow run member_description_tests.yml --ref main
+#   ci-verify --run <id>     # must pass, with the lock cases actually executed
+#
+# A workflow_dispatch definition is only available once this file is on the default branch.
+#
+# Same contracts as pest_tests.yml: the self-hosted runner expression (vars.CI_RUNS_ON), the database service
+# started by .github/scripts/ci_service.sh (Docker-chosen host port, tmpfs data directory, labelled per job by
+# CI_SVC_TAG, removed in an always() step), and the target guard admitted by .github/scripts/ci-pg-proof.sh.
+# Nothing here bypasses the guard or supplies an identity of its own. No Node build: the installer and these
+# tests do not read built assets.
+
+run-name: "${{ github.workflow }} (${{ github.sha }})"
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_type }}-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  member_descriptions:
+    name: Member descriptions (PostgreSQL)
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","linux","x64","windows-gpu"]') }}
+    timeout-minutes: 30
+    env:
+      CI_SVC_TAG: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+      DB_NAME: mothership_test_ci
+      DB_USER: mothership
+      DB_PASS: mothership
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Start service containers
+        run: >-
+          bash .github/scripts/ci_service.sh start DB 5432
+          -e "POSTGRES_USER=${DB_USER}" -e "POSTGRES_PASSWORD=${DB_PASS}" -e "POSTGRES_DB=${DB_NAME}"
+          "--health-cmd=pg_isready -U ${DB_USER}" --health-interval=5s --health-timeout=3s --health-retries=3
+          --tmpfs /var/lib/postgresql/data:rw,noexec,nosuid,size=600m --tmpfs /tmp:rw,noexec,nosuid,size=100m
+          postgres:16
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@2.37.2
+        with:
+          php-version: '8.4'
+          # pcntl + posix: the lock test forks a real second process and ends it with SIGKILL.
+          extensions: curl, exif, fileinfo, gd, intl, mbstring, openssl, pcntl, pdo, posix, pdo_pgsql, tokenizer, zip
+          ini-values: error_reporting=E_ALL
+          tools: composer:v2
+          coverage: none
+
+      - name: Install Composer dependencies
+        uses: ramsey/composer-install@v3
+        with:
+          composer-options: "--optimize-autoloader"
+
+      - name: Setting Environment
+        run: |
+          cp .env.example .env
+          sed -i "s|^\(APP_ENV=\s*\).*$|\1testing|" .env
+          sed -i "s|^\(DB_CONNECTION=\s*\).*$|\1pgsql|" .env
+          sed -i "s|^\(DB_HOST=\s*\).*$|\1127.0.0.1|" .env
+          sed -i "s|^\(DB_PORT=\s*\).*$|\1${SVC_DB_PORT}|" .env
+          sed -i "s|^\(DB_DATABASE=\s*\).*$|\1${DB_NAME}|" .env
+          sed -i "s|^\(DB_USERNAME=\s*\).*$|\1${DB_USER}|" .env
+          sed -i "s|^\(DB_PASSWORD=\s*\).*$|\1${DB_PASS}|" .env
+          sed -i "s|^\(DB_PREFIX=\s*\).*$|\1|" .env
+
+      # Migrations, the roles and the PIM seed the tests start from.
+      - name: Running Mothership Installer
+        run: php artisan mothership:install --skip-env-check --skip-admin-creation --with-demo-data
+
+      - name: Seed the DAM Library root
+        run: php artisan db:seed --force --no-interaction --class="Mothership\\DAM\\Database\\Seeders\\DirectoryTableSeeder"
+
+      # The proof order is the one in pest_tests.yml's PostgreSQL race step: the guard's own connection-free tests,
+      # the OAuth test keys, then the proof derived from THIS job's container, then the tests with the guard required.
+      # --fail-on-skipped: a skipped lock case (no pcntl, no PostgreSQL) fails the step instead of passing.
+      - name: Check member descriptions and their PostgreSQL lock races
+        env:
+          MOTHERSHIP_CI_SERVICE_ID: ${{ env.SVC_DB_ID }}
+          MOTHERSHIP_CI_SERVICE_PORT: ${{ env.SVC_DB_PORT }}
+          MOTHERSHIP_CI_DB_USER: ${{ env.DB_USER }}
+        run: |
+          vendor/bin/phpunit --no-configuration --bootstrap vendor/autoload.php --do-not-cache-result tests/Guard
+          php tests/Guard/pure-harness.php
+          php tests/bootstrap.php
+          MOTHERSHIP_CI_PROOF_SHA256="$(bash .github/scripts/ci-pg-proof.sh)"
+          export MOTHERSHIP_CI_PROOF_SHA256
+          proof_dir="$(cd "$RUNNER_TEMP" && pwd -P)"
+          export MOTHERSHIP_CI_PROOF="$proof_dir/mothership-ci-pg-proof.json"
+          export MOTHERSHIP_REQUIRE_TARGET_GUARD=1
+          mkdir -p "$RUNNER_TEMP/junit"
+          vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/member-descriptions.xml" --colors=always --fail-on-skipped packages/Mothership/DAM/tests/Feature/AiIndex/MemberDescriptionsTest.php packages/Mothership/DAM/tests/Feature/AiIndex/MemberDescriptionsLockCommittedTest.php
+
+      # What actually ran, not what was asked for: every lock case present, none skipped, none failed.
+      - name: Assert the lock cases executed
+        run: |
+          python3 - "$RUNNER_TEMP/junit/member-descriptions.xml" <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          cases = [c for c in ET.parse(sys.argv[1]).getroot().iter('testcase')]
+          locks = [c.get('name') for c in cases if 'MemberDescriptionsLockCommittedTest' in (c.get('classname') or '') + (c.get('file') or '')]
+          skipped = [c.get('name') for c in cases if c.find('skipped') is not None]
+          bad = [c.get('name') for c in cases if c.find('failure') is not None or c.find('error') is not None]
+          print(f'testcases={len(cases)} lock_cases={len(locks)} skipped={len(skipped)} failed={len(bad)}')
+          for name in locks:
+              print('  lock case:', name)
+          if len(locks) != 4 or skipped or bad:
+              sys.exit('expected 4 executed lock cases, none skipped or failed')
+          PY
+
+      # Removes this job's service containers whatever happened.
+      - name: Stop service containers
+        if: always()
+        run: bash .github/scripts/ci_service.sh stop
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: member-descriptions-junit
+          path: ${{ runner.temp }}/junit/
+          if-no-files-found: warn
+          retention-days: 14

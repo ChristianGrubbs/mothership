@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Documentation notes</title>
+<style>body{font:16px system-ui;margin:1.5rem;background:#f4f4f5;color:#18181b}html[data-theme="dark"] body{background:#18181b;color:#fafafa}textarea{box-sizing:border-box;width:100%;min-height:12rem;padding:1rem;font:inherit}button{padding:.7rem 1rem;margin-top:1rem}</style>
+</head>
+<body>
+<h1>Documentation notes</h1>
+<label for="note">Notes for this account</label><textarea id="note" maxlength="60000"></textarea>
+<button id="download" type="button">Download text</button>
+<p>The host saves your preferences after a short pause. A browser download does not mark the host session clean.</p>
+<script>
+const note = document.querySelector('#note');
+note.value = localStorage.getItem('note') || '';
+note.addEventListener('input', () => localStorage.setItem('note', note.value));
+window.addEventListener('message', event => {
+    if (event.source !== parent || event.origin !== location.origin || event.data?.protocol !== 'mothership-widget/v1') return;
+    if (event.data.type === 'active') document.body.dataset.active = String(event.data.payload?.active === true);
+});
+document.querySelector('#download').addEventListener('click', () => {
+    const url = URL.createObjectURL(new Blob([note.value], {type: 'text/plain'}));
+    const link = document.createElement('a'); link.href = url; link.download = 'notes.txt'; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+</script>
+</body></html>

@@ -1,0 +1,104 @@
+<?php
+
+namespace Mothership\DAM\Repositories;
+
+use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
+use Mothership\Core\Eloquent\Repository;
+use Mothership\DAM\Contracts\Asset;
+use Mothership\DAM\Models\AssetResourceMapping;
+
+class AssetResourceMappingRepository extends Repository
+{
+    const CATEGORY_TYPE_MAPPING = 'category';
+
+    const PRODUCT_TYPE_MAPPING = 'product';
+
+    public function model(): string
+    {
+        return AssetResourceMapping::class;
+    }
+
+    public function createAssetMappings(
+        array|Collection $assets,
+        string|int $identifier,
+        string $relatedField,
+        bool $isCategory = true
+    ): array {
+        $createdMappings = [];
+
+        $existingMappings = $this->where($isCategory ? ['category_id' => $identifier] : ['product_id' => $identifier])
+            ->where('related_field', $relatedField)
+            ->get()
+            ->toArray();
+
+        foreach ($assets as $assetId) {
+            if ($assetId instanceof Asset) {
+                $assetId = $assetId->id;
+            }
+
+            $existing = null;
+
+            foreach ($existingMappings as $key => $mapping) {
+                if ($mapping['dam_asset_id'] === $assetId) {
+                    $existing = $mapping;
+
+                    unset($existingMappings[$key]);
+
+                    break;
+                }
+            }
+
+            if ($existing) {
+                continue;
+            }
+
+            $mapping = $this->create([
+                'type'          => $isCategory ? self::CATEGORY_TYPE_MAPPING : self::PRODUCT_TYPE_MAPPING,
+                'dam_asset_id'  => $assetId,
+                'category_id'   => $isCategory ? $identifier : null,
+                'product_id'    => $isCategory ? null : $identifier,
+                'related_field' => $relatedField,
+            ]);
+
+            $createdMappings[] = $mapping;
+        }
+
+        $this->deleteMappings($existingMappings);
+
+        return $createdMappings;
+    }
+
+    public function deleteMappings(array $mappingsToDelete): void
+    {
+        if (! empty($mappingsToDelete)) {
+            $idsToDelete = Arr::pluck($mappingsToDelete, 'id');
+
+            $this->whereIn('id', $idsToDelete)->delete();
+        }
+    }
+
+    public function createCategoryAssetMappings(array|Collection $assets, string|int $categoryId, string $relatedField): array
+    {
+        return $this->createAssetMappings($assets, $categoryId, $relatedField, true);
+    }
+
+    public function createProductAssetMappings(array|Collection $assets, string|int $productId, string $relatedField): array
+    {
+        return $this->createAssetMappings($assets, $productId, $relatedField, false);
+    }
+
+    public function deleteCategoryAssetMappings(int $categoryId, string $relatedField): void
+    {
+        $mappingsToDelete = $this->where('category_id', $categoryId)
+            ->where('related_field', $relatedField)
+            ->delete();
+    }
+
+    public function deleteProductAssetMappings(int $productId, string $relatedField): void
+    {
+        $mappingsToDelete = $this->where('product_id', $productId)
+            ->where('related_field', $relatedField)
+            ->delete();
+    }
+}

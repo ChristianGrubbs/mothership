@@ -1,0 +1,19 @@
+{
+    "name": "mothership/laravel-category",
+    "license": "MIT",
+    "require": {},
+    "autoload": {
+        "psr-4": {
+            "Mothership\\Category\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Mothership\\Category\\Providers\\CategoryServiceProvider"
+            ],
+            "aliases": { }
+        }
+    },
+    "minimum-stability": "dev"
+}

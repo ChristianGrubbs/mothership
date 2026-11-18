@@ -1,0 +1,20 @@
+{
+    "name": "mothership/laravel-installer",
+    "license": "MIT",
+    "description": "Installer package",
+    "require": {},
+    "autoload": {
+        "psr-4": {
+            "Mothership\\Installer\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Mothership\\Installer\\Providers\\InstallerServiceProvider"
+            ],
+            "aliases": {}
+        }
+    },
+    "minimum-stability": "dev"
+}

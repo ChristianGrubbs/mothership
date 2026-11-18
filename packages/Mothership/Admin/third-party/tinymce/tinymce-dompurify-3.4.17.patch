@@ -1,0 +1,45 @@
+diff --git a/NOTICES.txt b/NOTICES.txt
+index 2109267..e91a46f 100644
+--- a/NOTICES.txt
++++ b/NOTICES.txt
+@@ -4,7 +4,7 @@ Below is a list of third party libraries that this software uses:
+ dompurify
+ owner: Mario Heiderich
+ repo: https://github.com/cure53/DOMPurify
+-version: 3.2.6
++version: 3.4.17
+ license: MPL-2.0 OR Apache-2.0
+ 
+ prismjs
+diff --git a/modules/tinymce/package.json b/modules/tinymce/package.json
+index 8807aed..f08b5df 100644
+--- a/modules/tinymce/package.json
++++ b/modules/tinymce/package.json
+@@ -33,7 +33,7 @@
+     "@ephox/darwin": "^9.0.0",
+     "@tinymce/oxide": "^3.0.0",
+     "@tinymce/oxide-icons-default": "^3.0.0",
+-    "dompurify": "3.2.6"
++    "dompurify": "3.4.17"
+   },
+   "devDependencies": {
+     "@rollup/plugin-alias": "^5.1.1",
+diff --git a/yarn.lock b/yarn.lock
+index ef6ebaa..2271d9b 100644
+--- a/yarn.lock
++++ b/yarn.lock
+@@ -4744,10 +4744,10 @@ domhandler@^4.2.0, domhandler@^4.3.1:
+   dependencies:
+     domelementtype "^2.2.0"
+ 
+-dompurify@3.2.6:
+-  version "3.2.6"
+-  resolved "https://registry.yarnpkg.com/dompurify/-/dompurify-3.2.6.tgz#ca040a6ad2b88e2a92dc45f38c79f84a714a1cad"
+-  integrity sha512-/2GogDQlohXPZe6D6NOgQvXLPSYBqIWMnZ8zzOhn09REE4eyAzb+Hed3jhoM9OkuaJ8P6ZGTTVWQKAi8ieIzfQ==
++dompurify@3.4.17:
++  version "3.4.17"
++  resolved "https://registry.yarnpkg.com/dompurify/-/dompurify-3.4.17.tgz#074bbb24eaa419535ac19ffe7f663104b0e1543d"
++  integrity sha512-B/pSlYVHQ58kqISD/yDjuJ1yfzI34m1gF4lAod2bwSRhiN4K5Cl3H8Af7hqB2PmTL911tdEudnnXn5FnhRoz0w==
+   optionalDependencies:
+     "@types/trusted-types" "^2.0.7"
+ 
