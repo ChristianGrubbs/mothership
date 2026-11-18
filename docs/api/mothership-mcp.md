@@ -15,7 +15,7 @@ the database and the asset storage are, and agents run on the Mac. Skill Scope t
 stdio server, never the PHP command:
 
 ```bash
-/opt/homebrew/bin/python3 -I -S /Volumes/3M/The-Mother-Ship/live/tools/mcp-launcher/launcher.py
+/opt/homebrew/bin/python3 -I -S <deployed checkout>/tools/mcp-launcher/launcher.py
 ```
 
 Do not register `container exec ... php artisan mcp:start mothership` directly. A global MCP server runs one copy per open
