@@ -9,12 +9,61 @@ It replaced the hosted Craft MCP (`/mcp/craft`, the `craft_*` tools, upload link
 
 ## Running it
 
+The server is `php artisan mcp:start mothership`. It speaks MCP over stdin and stdout, has no web route and no sign-in,
+and every call acts as one admin account, named in `.env`. In the deployed stack it lives inside the FPM container, where
+the database and the asset storage are, and agents run on the Mac. Skill Scope therefore registers the Mac launcher as the
+stdio server, never the PHP command:
+
 ```bash
-php artisan mcp:start mothership
+/opt/homebrew/bin/python3 -I -S /Volumes/3M/The-Mother-Ship/live/tools/mcp-launcher/launcher.py
 ```
 
-The server speaks MCP over stdin and stdout, so an MCP client starts it as a local command (Skill Scope registers it as a
-stdio server). It has no web route and no sign-in: every call acts as one admin account, named in `.env`.
+Do not register `container exec ... php artisan mcp:start mothership` directly. A global MCP server runs one copy per open
+agent session. At about 100 MB of PHP per copy and more than 50 sessions, that is more memory than the 4 GB FPM container
+has, and the site goes down with it.
+
+### The Mac launcher
+
+`tools/mcp-launcher/launcher.py` uses only the Python standard library.
+
+- **No PHP until it is needed.** `initialize` and `tools/list` are answered from `tools_manifest.json`. The first
+  `tools/call` starts PHP in the container. PHP stops after 15 idle seconds, and the launcher then restarts itself in place
+  to return to its idle size.
+- **Idle cost.** One idle launcher holds 14.2 MB resident, 7.0 MB of it physical footprint (Python 3.15 on Apple Silicon).
+  It reaches about 24 MB while working.
+- **A cap across the Mac.** At most two PHP servers run at once, across every agent session. Other calls wait their turn
+  for up to two minutes, then get a "busy" refusal they can retry. A session holding a server gives it up after 60 seconds
+  of steady use, so a queued session is not starved.
+- **Worst-case memory in the container.** One server measures about 100 MB, so two typically use about 0.2 GB. The hard
+  ceiling is 1 GB: two servers at PHP's 512 MB `memory_limit`.
+- **Files cross the container boundary as checked copies.** `library_save` copies the Mac file into a private staging folder
+  in the container and `library_fetch` copies the result back, with sha256 verified after each copy. A failed copy leaves no
+  partial file. The rules below for `local_path` and `dest_dir` are enforced on the Mac as well, including `name-2` naming
+  and refusing a `dest_dir` inside The Mothership's `storage/`.
+- **The tool list cannot drift unnoticed.** `tests/Feature/MothershipMcpLibraryTest.php` compares the manifest with the
+  server's code. After a change to the tools, regenerate it from the running server with `launcher.py --write-manifest`;
+  `launcher.py --check-manifest` exits 1 when the two differ.
+
+| Launcher setting | Meaning |
+| --- | --- |
+| `MOTHERSHIP_MCP_MAX_SERVERS` | PHP servers allowed at once across the Mac (default 2). |
+| `MOTHERSHIP_MCP_IDLE_SECONDS` | Idle time before PHP stops (default 15). |
+| `MOTHERSHIP_MCP_HOLD_SECONDS` | How long a busy session keeps one server before giving its slot up (default 60). |
+| `MOTHERSHIP_MCP_QUEUE_SECONDS` | How long a call waits for a free slot (default 120). |
+| `MOTHERSHIP_MCP_START_SECONDS` | How long PHP may take to answer when it starts (default 30). |
+| `MOTHERSHIP_MCP_CALL_SECONDS` | How long one tool call may run (default 1800). |
+| `MOTHERSHIP_MCP_MAX_FILE_BYTES` | The largest file `library_save` copies in (default 2 GiB). The server applies its own limit too. |
+| `MOTHERSHIP_MCP_FETCH_DIR` | The Mac folder `library_fetch` uses when a call names no `dest_dir` (default `$TMPDIR/mothership-library`). |
+| `MOTHERSHIP_MCP_LAUNCHER_LOG` | `1` or `true` writes redacted JSONL: operation, outcome, size and timing, never a path, name, title or byte content. |
+| `MOTHERSHIP_MCP_LAUNCHER_LOG_PATH` | Where that log goes (default `~/Library/Logs/mothership-mcp-launcher.jsonl`). |
+| `MOTHERSHIP_MCP_CONTAINER_BIN`, `MOTHERSHIP_MCP_CONTAINER`, `MOTHERSHIP_MCP_CONTAINER_USER`, `MOTHERSHIP_MCP_CONTAINER_WORKDIR` | How the container is reached (defaults `/opt/homebrew/bin/container`, `mothership-private-fpm`, `www-data`, `/var/www/html`). |
+| `MOTHERSHIP_MCP_CONTAINER_STAGING` | The staging folder inside the container (default `/tmp/mothership-mcp`). |
+| `MOTHERSHIP_MCP_STATE_DIR` | Where the Mac keeps the cap's lock files (default `~/Library/Caches/mothership-mcp`). |
+
+### Server settings
+
+These belong to the PHP server. The deployed stack caches its config when the container starts, so a changed value needs a
+restart.
 
 | Setting | Meaning |
 | --- | --- |
@@ -80,6 +129,7 @@ No tool deletes or overwrites anything in the library.
 - `packages/Mothership/DAM/src/Mcp/LibraryOperations.php`: the operations.
 - `packages/Mothership/DAM/src/Providers/MothershipMcpServiceProvider.php`: `Mcp::local('mothership', ...)`.
 - `config/mothership-mcp.php`; tests in `tests/Feature/MothershipMcpLibraryTest.php`.
+- `tools/mcp-launcher/`: the Mac launcher (`launcher.py`, `bridge.py`), its manifest and its tests.
 
 The OAuth classes in `packages/Mothership/AdminApi` (`Mcp*`, [mcp-oauth.md](mcp-oauth.md)) stay registered but inactive:
 `mcp-oauth.enabled` is `false` in `config/mcp-oauth.php`, so that OAuth surface is switched off. A remote mode for this
