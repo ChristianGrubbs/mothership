@@ -41,8 +41,8 @@
 
     <div class="bridge-top-actions">
         @if (bouncer()->hasPermission('dam.asset.upload') && bouncer()->hasPermission('dam.directory.index'))
-            {{-- Only Home shows this: its stylesheet reveals the button and its script opens the upload dialog. --}}
-            <a href="{{ route('admin.dam.assets.index') }}" class="bridge-btn-card bridge-top-upload hidden" data-bridge-upload>
+            {{-- Only Home shows this. The inline style beats the button's own display rule, and Home's stylesheet overrides it. --}}
+            <a href="{{ route('admin.dam.assets.index') }}" class="bridge-btn-card bridge-top-upload" style="display:none" data-bridge-upload>
                 <x-admin::bridge.icon name="upload" :size="18" />
                 <span>@lang('admin::app.components.layouts.header.upload')</span>
             </a>

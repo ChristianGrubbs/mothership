@@ -1,5 +1,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
 const {launchBrowser}=require('../launch-browser.cjs');
 const {homeApp,homeAnswersSource,homeScripts,homeStyles}=require('./support/home-fixture.cjs');
 
@@ -17,9 +19,9 @@ async function mount(browser,{fixture={},catalog=[],summary=null,width=1280,prep
     if(clock)await page.clock.install();
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
     // The top bar's Upload as the shell draws it: hidden until Home brings it back.
-    await page.route(`${ORIGIN}/**`,route=>route.fulfill({contentType:'text/html',body:route.request().url().includes('/tools/')?'<!doctype html><p>tool</p>':`<!doctype html><a href="/admin/dam" class="bridge-top-upload hidden" data-bridge-upload><span>Upload</span></a>${homeApp(fixture)}`}));
+    await page.route(`${ORIGIN}/**`,route=>route.fulfill({contentType:'text/html',body:route.request().url().includes('/tools/')?'<!doctype html><p>tool</p>':`<!doctype html><a href="/admin/dam" class="bridge-top-upload" style="display:none" data-bridge-upload><span>Upload</span></a>${homeApp(fixture)}`}));
     await page.goto(`${ORIGIN}/admin/home`);
-    await page.addStyleTag({content:`*{box-sizing:border-box}body{margin:0}.hidden{display:none}${homeStyles}`});
+    await page.addStyleTag({content:`*{box-sizing:border-box}body{margin:0}${homeStyles}`});
     await page.addScriptTag({content:homeAnswersSource});
     await page.evaluate(({catalog,summary})=>{
         const response=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json'}});
@@ -130,6 +132,33 @@ browserTest('the top bar Upload belongs to Home and goes when Home goes',async()
     }finally{await browser.close();}
 });
 
+browserTest('the real header link stays hidden under the built shell stylesheet on every page but Home',async()=>{
+    const root=path.resolve(__dirname,'../../..');
+    const build=path.join(root,'public/themes/admin/default/build');
+    const manifest=JSON.parse(fs.readFileSync(path.join(build,'manifest.json'),'utf8'));
+    const stylesheets=[...new Set(Object.values(manifest).flatMap(entry=>[entry.file,...(entry.css||[])]).filter(file=>file.endsWith('.css')))];
+    const shell=stylesheets.map(file=>fs.readFileSync(path.join(build,file),'utf8')).join('\n');
+    const header=fs.readFileSync(path.join(root,'packages/Mothership/Admin/src/Resources/views/components/layouts/header/index.blade.php'),'utf8');
+    const link=header.match(/<a [^>]*data-bridge-upload[^>]*>/)[0].replace(/\{\{.*?\}\}/g,'/admin/dam');
+    const browser=await launchBrowser({playwrightPath});
+    try{
+        const page=await browser.newPage({viewport:{width:1440,height:900}});
+        await page.setContent(`<!doctype html><div class="bridge-top-actions">${link}<span>Upload</span></a></div><main id="page"></main>`);
+        await page.addStyleTag({content:shell});
+        // Home's stylesheet can outlive Home after in-app navigation, so the Library is tested with it loaded.
+        await page.addStyleTag({content:homeStyles});
+        const upload=page.locator('[data-bridge-upload]');
+        assert.equal(await upload.isVisible(),false,'hidden on the Library and every other page');
+        await page.evaluate(()=>document.querySelector('#page').setAttribute('data-mothership-home',''));
+        assert.equal(await upload.isVisible(),true,'shown on Home');
+        await page.setViewportSize({width:390,height:844});
+        assert.equal(await upload.isVisible(),true,'shown on Home on a phone');
+        await page.evaluate(()=>document.querySelector('#page').removeAttribute('data-mothership-home'));
+        assert.equal(await upload.isVisible(),false,'hidden again after leaving Home');
+        await page.close();
+    }finally{await browser.close();}
+});
+
 browserTest('Cargo keeps an upload under way after newer rows push it off the board',async()=>{
     const browser=await launchBrowser({playwrightPath});
     try{
@@ -159,6 +188,9 @@ browserTest('shelf tiles follow a small change of width',async()=>{
         const before=await page.locator('.hm-shelf').first().evaluate(node=>node.style.getPropertyValue('--tile'));
         await page.setViewportSize({width:380,height:900});
         await page.waitForFunction(value=>document.querySelector('.hm-shelf')?.style.getPropertyValue('--tile')!==value,before);
+        // A shelf at rest must not keep redrawing, or its pictures never get the chance to load.
+        const redraws=await page.evaluate(()=>new Promise(resolve=>{let count=0;const watcher=new MutationObserver(()=>{count++;});watcher.observe(document.querySelector('[data-cargo]'),{childList:true});setTimeout(()=>{watcher.disconnect();resolve(count);},800);}));
+        assert.equal(redraws,0);
         assert.deepEqual(errors,[]);
         await page.close();
     }finally{await browser.close();}
