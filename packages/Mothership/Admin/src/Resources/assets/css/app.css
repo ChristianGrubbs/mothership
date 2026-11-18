@@ -2088,8 +2088,10 @@ html.dark .dark\:text-slate-500:is(.dark *):where(:not([class*="hover:text-"]:ho
 
 /* Fold-aware layer. It applies only where the browser reports two viewport segments, which Safari on iPhone Duo does
    behind a preview flag. Everything above is the layout every other visitor gets. */
-@media (horizontal-viewport-segments: 2) and (min-width: 900px) {
-    /* Side-by-side segments (held like a book): the hero ends and the form starts exactly at the fold. */
+@media (horizontal-viewport-segments: 2) and (min-width: 900px),
+    (horizontal-viewport-segments: 2) and (min-width: 580px) and (max-height: 500px) {
+    /* Side-by-side segments (held like a book), wherever the hero sits beside the form: the hero ends where the first
+       segment does and the form starts with the second, so neither runs under a hinge. */
     .bridge-signin-hero {
         right: auto;
         width: env(viewport-segment-width 0 0, 50%);
@@ -2129,8 +2131,10 @@ html.dark .dark\:text-slate-500:is(.dark *):where(:not([class*="hover:text-"]:ho
         padding: 24px 0;
     }
 
+    /* The button clears any gap between the segments before it starts. The clamp keeps it in place if a browser
+       resolves only one of the two edges. */
     .bridge-pending .bridge-btn-wide {
-        margin-top: 24px;
+        margin-top: clamp(24px, calc(24px + env(viewport-segment-top 0 1, 0px) - env(viewport-segment-bottom 0 0, 0px)), 120px);
         margin-bottom: 24px;
     }
 }
