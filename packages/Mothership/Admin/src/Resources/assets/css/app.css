@@ -1613,7 +1613,9 @@ a.bridge-list-name:hover {
 /* The selection strip of a list whose rows are not columns: what is picked, and what to do with it. */
 .bridge-list-bar {
     position: sticky;
-    top: 0;
+    /* The page scroller has 12 px of top padding, and a stuck box stops at the padding's inner edge: at 0, rows
+       would pass through that strip above the bar. */
+    top: -12px;
     z-index: 1;
     display: flex;
     flex-wrap: wrap;
@@ -1650,6 +1652,12 @@ a.bridge-list-name:hover {
 .bridge-review-head .bridge-list-name {
     flex: 1 1 auto;
     min-width: 0;
+}
+
+/* A group's name that opens its file is a 24 px target: the link fills the heading. */
+.bridge-review-head .bridge-list-name > a {
+    display: block;
+    padding-block: 2px;
 }
 
 .bridge-review-head .bridge-list-note {
