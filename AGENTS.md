@@ -71,4 +71,7 @@ the maintainer's Mac. This file says where things are and what is true; the link
   one); Blade uses `v-on:` not `@` for Vue events; new strings go in all four English locales; dated TODOs
   (`TODO YYYY-MM-DD:`). Details and the rest: `docs/CODING_STANDARDS.md`.
 - No secrets in the repo and no real assets in fixtures. Merged is not deployed: the maintainer deploys.
+- Commit messages, branch names, pull request text and review comments are public, and the push checks do not read them.
+  Leave out local paths, session ids, note paths, host names and quotes from the maintainer. Name a machine or folder by
+  its role, such as "the deploy host" or "the primary clone".
 - Prefer `codegraph` or `rg` over plain `grep`/`find` for searches: older agent worktrees may be nested in a checkout.
