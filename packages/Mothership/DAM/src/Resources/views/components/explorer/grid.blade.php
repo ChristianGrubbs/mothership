@@ -10,7 +10,7 @@
 
         <template v-else>
             <template v-if="directories.length">
-                <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[repeat(auto-fill,minmax(11.5rem,1fr))] gap-3 mb-8">
+                <div class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,11.5rem),1fr))] gap-3 mb-8">
                     <v-dam-explorer-folder-card
                         v-for="dir in directories"
                         :key="dir.id"
