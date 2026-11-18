@@ -1,87 +1,106 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const fs=require('node:fs');
-const path=require('node:path');
-const {homeApp,homeAnswersSource}=require('./support/home-fixture.cjs');
+const {homeApp,homeAnswersSource,homeScripts}=require('./support/home-fixture.cjs');
 
 const playwrightPath=process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH;
 const browserTest=playwrightPath?test:test.skip;
-const root=path.resolve(__dirname,'../../..');
-const stateSource=fs.readFileSync(path.join(root,'packages/Mothership/DAM/src/Resources/assets/js/home-state.js'),'utf8');
-const homeSource=fs.readFileSync(path.join(root,'packages/Mothership/DAM/src/Resources/assets/js/home.js'),'utf8');
 
-// Signal is one of the Studio admin cards, so the fixture account has full access.
-async function fixturePage(browser){
-    const page=await browser.newPage({viewport:{width:1200,height:900}});
-    await page.setContent(homeApp({superuser:true}));
+// Signal reads the studio's own feeds, so only a full-access account has it.
+async function fixturePage(browser,{superuser=true}={}){
+    const page=await browser.newPage({viewport:{width:1280,height:900},reducedMotion:'reduce'});
+    await page.clock.install();
+    await page.setContent(homeApp({superuser}));
     await page.addScriptTag({content:homeAnswersSource});
     await page.evaluate(()=>{
         const response=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json'}});
-        const catalog=[{id:'rss',title:'Signal',description:'Feeds',icon:'rss',kind:'tool',settings:{count:5,feed_id:null}}];
-        window.__homeFixture={storyMode:'success',stories:0,releaseStory:null};
+        const story=(id,title,url=`https://example.com/${id}`)=>({id,title,url,source:'Fixture',publishedAt:Date.now()-60000});
+        window.__feed={mode:'first',story,requests:[]};
         window.fetch=async url=>{
-            const address=String(url);
-            if(address.endsWith('/layout'))return response({catalog,widgets:[{id:'rss',settings:{count:5,feed_id:null}}],links:[]});
-            if(address.includes('/v1/stories')){
-                if(window.__homeFixture.storyMode==='hold-failure')return new Promise(resolve=>window.__homeFixture.releaseStory=()=>resolve(response({message:'offline'},503)));
-                if(window.__homeFixture.storyMode==='fail')return response({message:'offline'},503);
-                // 'repeat' returns the same story id on every call, so a second refresh in this mode
-                // genuinely has nothing new — the only way to observe "No new stories" honestly.
-                if(window.__homeFixture.storyMode==='repeat')return response({stories:[{id:'pinned',title:'Pinned headline',url:'https://example.com/pinned',source:'Fixture',publishedAt:Date.now()-60000}]});
-                const number=++window.__homeFixture.stories;return response({stories:[{id:String(number),title:'Headline '+number,url:'https://example.com/'+number,source:'Fixture',publishedAt:Date.now()-60000}]});
+            const address=String(url);window.__feed.requests.push(address);
+            if(address.includes('/service/rss/v1/stories')){
+                if(window.__feed.mode==='fail')return response({message:'offline'},503);
+                if(window.__feed.mode==='unsafe')return response({stories:[story('bad','Unsafe headline','javascript:window.__owned=1')]});
+                if(window.__feed.mode==='empty')return response({stories:[]});
+                return response({stories:window.__feed.mode==='second'?[story('2','Second headline'),story('1','First headline')]:[story('1','First headline')]});
             }
+            if(address.includes('/service/trending/v1/trending'))return response({repos:[{repo:'org/project',description:'<img src=x onerror="window.__owned=1"> fast',starsToday:1234}]});
             return response(window.__homeAnswer(address)??{});
         };
     });
-    await page.addScriptTag({content:stateSource});
-    await page.addScriptTag({content:homeSource});
-    await page.getByRole('link',{name:/Headline 1/}).waitFor();
+    for(const content of homeScripts)await page.addScriptTag({content});
     return page;
 }
+const pollSignal=page=>page.clock.fastForward('05:15');
 
-browserTest('actual Home DOM keeps the Signal offline state and refresh feedback across async renders',async()=>{
+browserTest('Signal lists stories, holds new ones behind a row and shows them when asked',async()=>{
     const {chromium}=require(playwrightPath);
     const browser=await chromium.launch({headless:true,channel:process.env.MOTHERSHIP_BROWSER_CHANNEL||'chrome'});
     try{
-        const offline=await fixturePage(browser);
-        // The card is the quick feed only: the reader has no launcher on Home.
-        assert.equal(await offline.locator('[data-id="rss"] [data-open]').count(),0);
-        await offline.evaluate(()=>window.__homeFixture.storyMode='fail');
-        await offline.locator('[data-signal-refresh]').click();
-        await offline.getByText('Offline — showing last update',{exact:true}).waitFor();
-        await offline.setViewportSize({width:390,height:800});
-        await offline.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
-        assert.equal(await offline.getByText('Offline — showing last update',{exact:true}).count(),1);
-        await offline.evaluate(()=>window.__homeFixture.storyMode='success');
-        await offline.locator('[data-signal-refresh]').click();
-        // A click's own transient result (not just the poller's silent "Updated …" timestamp) must
-        // be visible right where the click happened, not hidden by display:none.
-        await offline.getByText(/new stor(y|ies)/).waitFor();
-        assert.equal(await offline.locator('[data-id="rss"] [data-refresh-status]').isHidden(),false);
-        await offline.getByText('Live feed',{exact:true}).waitFor();
-        // A refresh that genuinely returns nothing new must say so honestly, not just "N new
-        // stories" every time: two consecutive fetches of the same pinned story id.
-        await offline.evaluate(()=>window.__homeFixture.storyMode='repeat');
-        await offline.locator('[data-signal-refresh]').click();
-        await offline.getByText('Pinned headline',{exact:true}).waitFor();
-        await offline.locator('[data-signal-refresh]').click();
-        await offline.getByText('No new stories',{exact:true}).waitFor();
-        assert.equal(await offline.locator('[data-id="rss"] [data-refresh-status]').isHidden(),false);
-        await offline.evaluate(()=>window.__homeFixture.storyMode='hold-failure');
-        await offline.locator('[data-signal-refresh]').click();
-        // The button disables and announces busy for the whole in-flight request, not just a flash.
-        await offline.waitForFunction(()=>document.querySelector('[data-signal-refresh]')?.disabled===true);
-        assert.equal(await offline.locator('[data-signal-refresh]').getAttribute('aria-busy'),'true');
-        assert.equal(await offline.locator('[data-signal-refresh]').textContent(),'Refreshing…');
-        await offline.waitForFunction(()=>typeof window.__homeFixture.releaseStory==='function');
-        await offline.setViewportSize({width:800,height:800});
-        await offline.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
-        await offline.evaluate(()=>window.__homeFixture.releaseStory());
-        await offline.getByText('Offline — showing last update',{exact:true}).waitFor();
-        // The error from this click renders as the transient status too, and the button re-enables.
-        await offline.waitForFunction(()=>document.querySelector('[data-signal-refresh]')?.disabled===false);
-        assert.equal(await offline.locator('[data-id="rss"] [data-refresh-status]').textContent(),'offline');
-        assert.equal(await offline.locator('[data-id="rss"] [data-refresh-status]').isHidden(),false);
-        await offline.close();
+        const page=await fixturePage(browser);
+        const card=page.locator('[data-signal]');
+        await card.getByRole('link',{name:/First headline/}).waitFor();
+        assert.equal(await card.locator('.hm-story').first().getAttribute('target'),'_blank');
+        // Rows hold still while someone reads them.
+        await page.evaluate(()=>{window.__feed.mode='second';});
+        await pollSignal(page);
+        await card.getByRole('button',{name:/1 new story/}).waitFor();
+        assert.equal(await card.getByRole('link',{name:/Second headline/}).count(),0);
+        await card.locator('[data-signal-show]').click();
+        await card.getByRole('link',{name:/Second headline/}).waitFor();
+        assert.equal(await card.locator('[data-signal-show]').count(),0);
+        await page.close();
+    }finally{await browser.close();}
+});
+
+browserTest('Signal says when it is not answering, keeps the last stories and recovers on Try again',async()=>{
+    const {chromium}=require(playwrightPath);
+    const browser=await chromium.launch({headless:true,channel:process.env.MOTHERSHIP_BROWSER_CHANNEL||'chrome'});
+    try{
+        const page=await fixturePage(browser);
+        const card=page.locator('[data-signal]');
+        await card.getByRole('link',{name:/First headline/}).waitFor();
+        await page.evaluate(()=>{window.__feed.mode='fail';});
+        await pollSignal(page);
+        await card.getByText('Not answering',{exact:true}).waitFor();
+        assert.equal(await card.getByRole('link',{name:/First headline/}).count(),1,'the last stories stay on screen');
+        await page.evaluate(()=>{window.__feed.mode='first';});
+        await card.locator('[data-signal-retry]').click();
+        await card.locator('[data-signal-retry]').waitFor({state:'detached'});
+        assert.equal(await card.getByText('Not answering',{exact:true}).count(),0);
+        await page.close();
+    }finally{await browser.close();}
+});
+
+browserTest('a feed cannot write a script link or markup into Signal',async()=>{
+    const {chromium}=require(playwrightPath);
+    const browser=await chromium.launch({headless:true,channel:process.env.MOTHERSHIP_BROWSER_CHANNEL||'chrome'});
+    try{
+        const page=await fixturePage(browser);
+        const card=page.locator('[data-signal]');
+        await card.getByRole('link',{name:/First headline/}).waitFor();
+        await page.evaluate(()=>{window.__feed.mode='unsafe';});
+        await pollSignal(page);
+        await card.locator('[data-signal-show]').click();
+        await card.getByText('Unsafe headline').waitFor();
+        assert.equal(await card.locator('a.hm-story').count(),0,'a story without a web address is plain text');
+        assert.equal(await card.locator('.hm-repo img').count(),0);
+        assert.match(await card.locator('.hm-repo').textContent(),/<img src=x/);
+        assert.match(await card.locator('.hm-repo .hm-mono').textContent(),/^\+1\.2K$/);
+        assert.equal(await page.evaluate(()=>window.__owned),undefined);
+        await page.close();
+    }finally{await browser.close();}
+});
+
+browserTest('an account without full access never requests or sees Signal',async()=>{
+    const {chromium}=require(playwrightPath);
+    const browser=await chromium.launch({headless:true,channel:process.env.MOTHERSHIP_BROWSER_CHANNEL||'chrome'});
+    try{
+        const page=await fixturePage(browser,{superuser:false});
+        await page.locator('[data-glance-open="away"]').waitFor();
+        await pollSignal(page);
+        assert.deepEqual((await page.evaluate(()=>window.__feed.requests)).filter(address=>address.includes('/service/')),[]);
+        assert.equal(await page.locator('[data-signal]').isHidden(),true);
+        assert.equal(await page.locator('[data-glance-open="signal"]').count(),0);
+        await page.close();
     }finally{await browser.close();}
 });

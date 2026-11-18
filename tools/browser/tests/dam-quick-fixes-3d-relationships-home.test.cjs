@@ -15,11 +15,6 @@ const previewModal=read('Resources/views/asset/preview-modal.blade.php');
 const relationships=read('Resources/views/asset/relationships/index.blade.php');
 const viewerScript=read('Resources/views/asset/preview-modal/model/viewer-script.blade.php');
 const viewer=read('Resources/assets/js/model/viewer.mjs');
-const css=read('Resources/assets/css/home.css');
-const quickViewSource=read('Resources/assets/js/home-system-quickview.js');
-
-const playwrightPath=process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH;
-const browserTest=playwrightPath?test:test.skip;
 
 // Extracts one method or computed getter's body out of the preview-modal component so its
 // real logic runs, the same vm-sandbox way dam-preview-navigation.test.cjs does.
@@ -132,30 +127,3 @@ test('viewer: flip controls, build plates out of the fit box, and a forced re-ca
     assert.match(viewerScript,/if\(replace\)form\.append\('replace','1'\)/);
     assert.match(read('Http/Controllers/ModelThumbnailController.php'),/'replace'\s*=> 'sometimes\|boolean'/);
 });
-
-async function withBrowser(run){
-    const {chromium}=require(playwrightPath);
-    const browser=await chromium.launch({headless:true,channel:process.env.MOTHERSHIP_BROWSER_CHANNEL||'chrome'});
-    try{await run(browser);}finally{await browser.close();}
-}
-
-browserTest('Studio & people: GPU label never overlaps the Memory value, even in a narrow card',async()=>withBrowser(async browser=>{
-    const page=await browser.newPage({viewport:{width:1200,height:900}});
-    await page.setContent('<div style="width:300px;height:140px;display:flex"><article class="agh-card" data-id="system-quickview" style="display:flex;flex-direction:column;width:300px;height:140px"><div class="agh-card-body"></div></article></div>');
-    await page.addStyleTag({content:css});
-    await page.addScriptTag({content:quickViewSource});
-    await page.evaluate(()=>{
-        const request=()=>new Promise(()=>{});
-        const view=window.MothershipSystemQuickView.create({root:document,request,intervalMs:10000,now:()=>Date.now(),reducedMotion:true});
-        view.mount(document.querySelector('[data-id="system-quickview"]'));
-        document.querySelectorAll('[data-qv-value]').forEach(el=>{el.textContent='100%';});
-    });
-    const boxes=await page.evaluate(()=>[...document.querySelectorAll('.agh-qv-label')].map(label=>{const s=label.querySelector('span').getBoundingClientRect(),v=label.querySelector('strong').getBoundingClientRect();return {label:s,value:v};}));
-    assert.equal(boxes.length,3);
-    for(const {label,value} of boxes) assert.ok(label.right<=value.left+.5,`label (${label.right}) runs into its value (${value.left})`);
-    for(let i=1;i<boxes.length;i++){
-        const prev=boxes[i-1].value,next=boxes[i].label;
-        // Side by side (next meter starts further right): its label must begin after the previous value ends.
-        if(next.left>boxes[i-1].label.left) assert.ok(prev.right<=next.left+.5,`a value (${prev.right}) runs into the next meter's label (${next.left})`);
-    }
-}));

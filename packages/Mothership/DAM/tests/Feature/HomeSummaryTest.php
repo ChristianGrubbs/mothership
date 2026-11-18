@@ -288,7 +288,85 @@ it('counts only the files a restricted person may list', function () {
 
     expect($summary['lead']['files'])->toBe(1)
         ->and($summary['lead']['bytes'])->toBe(100)
-        ->and(collect($summary['board']['rows'])->sum('files'))->toBe(1);
+        ->and(collect($summary['board']['rows'])->sum('files'))->toBe(1)
+        ->and(collect($summary['board']['cargo'])->flatMap(fn (array $row): array => $row['previews'])->pluck('id')->all())->toBe([$visible->id]);
+});
+
+it('names a landing after the folder its files share and lists what it holds', function () {
+    homeVisitedHoursAgo($this->homeAdmin, 2);
+    $top = Directory::factory()->create(['parent_id' => null]);
+    $folder = Directory::factory()->create(['name' => 'Harbour set', 'parent_id' => $top->id]);
+    foreach (['plate-a.png' => 'png', 'plate-b.png' => 'png', 'scene.pcraft' => 'pcraft'] as $name => $extension) {
+        homeFile(now()->subMinutes(20)->toImmutable(), ['file_name' => $name, 'extension' => $extension, 'created_by' => $this->homeAdmin->id])
+            ->directories()->attach($folder->id);
+    }
+
+    $board = $this->getJson('/admin/home/summary')->assertOk()->json('board');
+    $row = $board['rows'][0];
+
+    expect($row['title'])->toBe('Harbour set')
+        ->and(collect($row['kinds'])->pluck('count', 'extension')->all())->toEqual(['png' => 2, 'pcraft' => 1])
+        ->and($row['previews'])->toHaveCount(3)
+        ->and(array_keys($row['previews'][0]))->toEqual(['id', 'name', 'type', 'url', 'thumbnail'])
+        ->and($row)->not->toHaveKey('asset_ids')
+        ->and($board['cargo'][0]['key'])->toBe($row['key']);
+});
+
+it('names a single file after itself, whatever its extension', function () {
+    homeVisitedHoursAgo($this->homeAdmin, 2);
+    $file = homeFile(now()->subMinutes(20)->toImmutable(), ['file_name' => 'archive.123', 'extension' => '123', 'created_by' => $this->homeAdmin->id]);
+
+    $row = $this->getJson('/admin/home/summary')->assertOk()->json('board.rows.0');
+
+    expect($row['title'])->toBe($file->fresh()->newQuery()->withDisplayName()->findOrFail($file->id)->display_name)
+        ->and($row['kinds'])->toBe([['extension' => '123', 'count' => 1]]);
+});
+
+it('reports each craft by its saves over the last day, newest first', function () {
+    homeCraftSave(homeFile(now()->subMinutes(30)->toImmutable(), ['created_by' => $this->homeAdmin->id]), $this->homeAdmin, 'artcraft');
+    homeCraftSave(homeFile(now()->subHours(30)->toImmutable(), ['created_by' => $this->homeAdmin->id]), $this->homeAdmin, 'artcraft');
+    homeCraftSave(homeFile(now()->subHours(2)->toImmutable(), ['created_by' => $this->homeAdmin->id]), $this->homeAdmin, 'blender');
+    homeFile(now()->subMinutes(5)->toImmutable(), ['created_by' => $this->homeAdmin->id]);
+
+    $docked = $this->getJson('/admin/home/summary')->assertOk()->json('board.docked');
+
+    expect(array_column($docked, 'producer'))->toBe(['artcraft', 'blender'])
+        ->and($docked[0]['files_24h'])->toBe(1)
+        ->and($docked[0]['hours'])->toHaveCount(24)
+        ->and($docked[0]['hours'][23])->toBe(1)
+        ->and($docked[0]['last_save_at'])->toBe(now()->subMinutes(30)->toImmutable()->toIso8601String())
+        ->and($docked[1]['hours'][21])->toBe(1);
+});
+
+it('says whose upload a landing is', function () {
+    homeVisitedHoursAgo($this->homeAdmin, 2);
+    homeFile(now()->subMinutes(20)->toImmutable(), ['created_by' => $this->homeAdmin->id]);
+    homeFile(now()->subMinutes(50)->toImmutable(), ['created_by' => Admin::factory()->create()->id]);
+
+    $rows = $this->getJson('/admin/home/summary')->assertOk()->json('board.rows');
+
+    expect(array_column($rows, 'mine'))->toBe([true, false]);
+});
+
+it('keeps uploads in flight off Cargo and limits what Cargo lists', function () {
+    config(['dam-home.summary.cargo_rows' => 1, 'dam-home.summary.cargo_pictures' => 2]);
+    homeVisitedHoursAgo($this->homeAdmin, 2);
+    foreach ([20, 21, 22] as $minutes) {
+        homeFile(now()->subMinutes($minutes)->toImmutable(), ['created_by' => $this->homeAdmin->id]);
+    }
+    homeFile(now()->subMinutes(70)->toImmutable(), ['created_by' => $this->homeAdmin->id]);
+    homeChunkUpload($this->homeAdmin, ['state' => ChunkUpload::STATE_RECEIVING, 'received_bytes' => 400]);
+
+    $board = $this->getJson('/admin/home/summary')->assertOk()->json('board');
+    $stowing = collect($board['rows'])->firstWhere('status', 'stowing');
+
+    expect($stowing['title'])->toBeNull()
+        ->and($stowing['kinds'])->toBe([])
+        ->and($stowing['previews'])->toBe([])
+        ->and($board['cargo'])->toHaveCount(1)
+        ->and($board['cargo'][0]['status'])->toBe('landed')
+        ->and($board['cargo'][0]['files'])->toBe(3)
+        ->and($board['cargo'][0]['previews'])->toHaveCount(2);
 });
 
 it('says when a section is not permitted instead of showing zero', function () {
