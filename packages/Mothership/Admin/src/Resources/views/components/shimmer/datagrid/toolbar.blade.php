@@ -1,10 +1,12 @@
-<div class="flex gap-4 mt-7 justify-between items-center max-md:flex-wrap">
+{{-- Sized like the real bar (datagrid/toolbar.blade.php): it wraps, and the search gives way first, so no block
+     runs past the edge of a narrow list. --}}
+<div class="flex gap-4 mt-7 justify-between items-center flex-wrap">
     <!-- Left Toolbar -->
-    <div class="flex gap-x-1">
+    <div class="flex flex-1 min-w-[240px] gap-x-1">
         <!-- Mass Actions Panel --><!-- Filters And Search Panel -->
         <div class="flex gap-x-1 w-full items-center">
             <!-- Search Panel -->
-            <div class="shimmer w-[302px] h-[38px] rounded-lg"></div>
+            <div class="shimmer w-full max-w-xs h-[38px] rounded-lg"></div>
 
             <!-- Information Panel -->
             <div class="ltr:pl-2.5 rtl:pr-2.5">

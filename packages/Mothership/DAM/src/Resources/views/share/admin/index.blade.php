@@ -7,11 +7,16 @@
 
     <v-dam-shares-page>
         <x-admin::layouts.page-header
+            group="away"
             :title="trans('dam::app.admin.dam.share.index.title')"
             :description="trans('dam::app.admin.dam.share.index.description')"
         />
 
-        <x-admin::shimmer.datagrid />
+        <x-admin::shimmer.datagrid.toolbar />
+
+        <div class="bridge-list mt-4" aria-busy="true">
+            <div class="bridge-list-loading"><span></span><span></span><span></span></div>
+        </div>
     </v-dam-shares-page>
 
     {!! view_render_event('mothership.dam.shares.list.after') !!}
@@ -20,133 +25,215 @@
         <script type="text/x-template" id="v-dam-shares-page-template">
             <div>
                 <x-admin::layouts.page-header
+                    group="away"
                     :title="trans('dam::app.admin.dam.share.index.title')"
                     :description="trans('dam::app.admin.dam.share.index.description')"
                 />
 
-                <x-admin::datagrid src="{{ route('admin.dam.shared-links.index') }}" ref="datagrid">
-                    <template #header="{ columns, actions, applied, sortPage, isLoading }">
-                        <template v-if="isLoading">
-                            <x-admin::shimmer.datagrid.table.head />
+                {{--
+                    One list anatomy with the other Away from ship and Sorting screens (app.css, "Lists"): a row says
+                    what is shared, its status, when it ends, how much it was used and who made it. Copy link is the
+                    row's one visible action; the rarer ones sit in a menu, as words. The grid keeps its own search,
+                    filters and pager, because this list can be long. --list-cols are the columns of the table form:
+                    link, status, expires, activity, made by, actions.
+                --}}
+                <div
+                    class="bridge-list-grid"
+                    style="--list-cols: minmax(0, 1fr) 6.5rem 8.5rem 8rem 9rem 12.5rem"
+                    data-dam-shares
+                >
+                    <x-admin::datagrid src="{{ route('admin.dam.shared-links.index') }}" ref="datagrid">
+                        <template #header="{ columns, applied, sortPage }">
+                            <div class="bridge-list-head">
+                                <span>@lang('dam::app.admin.dam.share.list.link')</span>
+                                <span>@lang('dam::app.admin.dam.share.datagrid.status')</span>
+
+                                <span v-for="sort in sorts" :key="sort.index">
+                                    <button
+                                        type="button"
+                                        class="bridge-list-sort"
+                                        :aria-label="sortLabel(sort, applied)"
+                                        :title="sortLabel(sort, applied)"
+                                        :data-dam-shares-sort="sort.index"
+                                        v-on:click="sortBy(sort.index, columns, sortPage)"
+                                    >
+                                        <span v-text="sort.label"></span>
+
+                                        <i
+                                            v-if="applied.sort.column === sort.index"
+                                            class="text-base"
+                                            :class="applied.sort.order === 'asc' ? 'icon-down-stat' : 'icon-up-stat'"
+                                            aria-hidden="true"
+                                        ></i>
+                                    </button>
+                                </span>
+
+                                <span class="sr-only">@lang('admin::app.components.datagrid.table.actions')</span>
+                            </div>
                         </template>
 
-                        <template v-else>
+                        <template #body="{ records, meta, applied, isLoading, performAction }">
+                            {{-- Three quiet rows until the first answer; a list that has not answered never shows its empty words. --}}
                             <div
-                                class="row grid gap-2.5 min-h-[47px] px-4 py-2.5 border-b dark:border-cherry-800 text-gray-600 dark:text-gray-300 bg-primary-50 dark:bg-cherry-900 font-semibold items-center"
-                                :style="`grid-template-columns: ${gridTemplate}`"
+                                v-if="isLoading || meta.total === undefined"
+                                class="bridge-list-loading"
+                                aria-busy="true"
+                                data-list-loading
                             >
-                                <p
-                                    v-for="column in columns.filter(c => c.visible !== false)"
-                                    class="flex gap-1.5 items-center min-w-0"
-                                    :class="{'cursor-pointer select-none hover:text-gray-800 dark:hover:text-white': column.sortable}"
-                                    @click="sortPage(column)"
+                                <span v-for="n in 3" :key="n"></span>
+                            </div>
+
+                            <template v-else-if="! records.length">
+                                <div
+                                    v-if="isNarrowed(applied)"
+                                    class="bridge-list-empty"
+                                    data-dam-shares-no-match
                                 >
-                                    <span
-                                        class="block overflow-hidden text-ellipsis text-nowrap"
-                                        :title="column.label"
-                                        v-text="column.label"
-                                    ></span>
+                                    <p class="bridge-list-empty-title">@lang('dam::app.admin.dam.share.list.no-match-title')</p>
+                                    <p class="bridge-list-empty-text">@lang('dam::app.admin.dam.share.list.no-match-text')</p>
 
-                                    <i
-                                        class="text-base text-gray-600 dark:text-gray-300 align-text-bottom"
-                                        :class="[applied.sort.order === 'asc' ? 'icon-down-stat' : 'icon-up-stat']"
-                                        v-if="column.index == applied.sort.column"
-                                    ></i>
-                                </p>
-
-                                <div v-if="actions.length" class="flex gap-2.5 items-center justify-end select-none max-[639px]:sticky max-[639px]:right-0 max-[639px]:justify-self-end max-[639px]:pl-2 max-[639px]:z-[1] max-[639px]:whitespace-nowrap max-[639px]:bg-primary-50 dark:max-[639px]:bg-cherry-800">
-                                    <p class="text-gray-600 dark:text-gray-300">
-                                        @lang('admin::app.components.datagrid.table.actions')
-                                    </p>
+                                    <div v-if="hasFilters(applied)" class="bridge-list-empty-action">
+                                        <button
+                                            type="button"
+                                            class="secondary-button"
+                                            data-clear-filters-empty-state
+                                            v-on:click="$refs.datagrid.clearAllFilters()"
+                                        >
+                                            @lang('admin::app.components.datagrid.filters.custom-filters.clear-all')
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
+
+                                <template v-else>
+                                    <x-admin::list.empty-state
+                                        :framed="false"
+                                        icon="icon-dam-link"
+                                        :title="trans('dam::app.admin.dam.share.list.empty-title')"
+                                        :description="trans('dam::app.admin.dam.share.list.empty-text')"
+                                        data-dam-shares-empty="1"
+                                    >
+                                        <a href="{{ route('admin.dam.index') }}" class="primary-button">@lang('dam::app.admin.dam.share.list.empty-action')</a>
+                                    </x-admin::list.empty-state>
+                                </template>
+                            </template>
+
+                            <template v-else>
+                                <div
+                                    v-for="record in records"
+                                    :key="record.id"
+                                    class="bridge-list-row"
+                                    :data-dam-share-row="record.id"
+                                >
+                                    <div class="bridge-list-main">
+                                        <span
+                                            class="bridge-list-tile"
+                                            :class="isFolder(record) ? 'icon-folder' : 'icon-file'"
+                                            aria-hidden="true"
+                                        ></span>
+
+                                        <div class="bridge-list-text">
+                                            <p class="bridge-list-name" :title="record.target_name" v-text="record.target_name || record.share_name || '—'"></p>
+
+                                            <p class="bridge-list-sub" :title="record.share_name">
+                                                <template v-if="record.share_name && record.target_name"><span v-text="record.share_name"></span> · </template><span v-text="typeLabel(record)"></span>
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div class="bridge-list-status">
+                                        <span class="bridge-status" :class="statusClass(record.status)" :data-dam-share-status="record.status">
+                                            <span class="bridge-status-mark" aria-hidden="true"></span>
+                                            <span v-text="statusLabel(record.status)"></span>
+                                        </span>
+                                    </div>
+
+                                    <div class="bridge-list-meta">
+                                        <div class="bridge-list-cell">
+                                            <span class="bridge-list-label">@lang('dam::app.admin.dam.share.datagrid.expires-at')</span>
+                                            <span class="bridge-list-value" v-text="expiryDate(record)"></span>
+                                            <span v-if="expiryNote(record)" class="bridge-list-note" v-text="expiryNote(record)"></span>
+                                        </div>
+
+                                        <div class="bridge-list-cell">
+                                            <span class="bridge-list-label">@lang('dam::app.admin.dam.share.list.activity')</span>
+                                            <span class="bridge-list-value" v-text="viewsLabel(record)"></span>
+                                            <span v-if="downloadsLabel(record)" class="bridge-list-note" v-text="downloadsLabel(record)"></span>
+                                        </div>
+
+                                        <div class="bridge-list-cell">
+                                            <span class="bridge-list-label">@lang('dam::app.admin.dam.share.datagrid.created-by')</span>
+                                            <span class="bridge-list-value truncate" :title="record.created_by_name" v-text="record.created_by_name || '—'"></span>
+                                            <span class="bridge-list-note" v-text="dateLabel(record.created_at)"></span>
+                                        </div>
+                                    </div>
+
+                                    {{-- Only the link's creator, its target's owner or a full admin gets the URL or any action (#126, R14): the server sends no action otherwise. --}}
+                                    <div class="bridge-list-actions">
+                                        <button
+                                            type="button"
+                                            v-if="action(record, 'copy_link')"
+                                            class="secondary-button"
+                                            data-row-action="copy_link"
+                                            v-on:click="copyShareLink(action(record, 'copy_link').url)"
+                                        >
+                                            @lang('dam::app.admin.dam.share.datagrid.copy-link')
+                                        </button>
+
+                                        <x-admin::dropdown v-if="menuActions(record).length" position="bottom-right" :teleport="true">
+                                            <x-slot:toggle>
+                                                <button
+                                                    type="button"
+                                                    class="transparent-button"
+                                                    :aria-label="moreLabel(record)"
+                                                    data-dam-share-more
+                                                >
+                                                    @lang('dam::app.admin.dam.share.list.more')
+                                                    <span class="icon-chevron-down text-xl" aria-hidden="true"></span>
+                                                </button>
+                                            </x-slot:toggle>
+
+                                            <x-slot:menu class="!py-2 min-w-[190px]">
+                                                <x-admin::dropdown.menu.item
+                                                    v-if="action(record, 'edit')"
+                                                    data-row-action="edit"
+                                                    v-on:click="editShare(record)"
+                                                >
+                                                    @lang('dam::app.admin.dam.share.datagrid.edit')
+                                                </x-admin::dropdown.menu.item>
+
+                                                {{-- Reissue (P2 S5a): a new URL for the same link. --}}
+                                                <x-admin::dropdown.menu.item
+                                                    v-if="action(record, 'reissue')"
+                                                    data-dam-share-reissue="1"
+                                                    data-row-action="reissue"
+                                                    v-on:click="reissueShare(record, action(record, 'reissue').url)"
+                                                >
+                                                    @lang('dam::app.admin.dam.share.datagrid.reissue')
+                                                </x-admin::dropdown.menu.item>
+
+                                                <x-admin::dropdown.menu.item
+                                                    v-if="action(record, 'revoke')"
+                                                    data-row-action="revoke"
+                                                    v-on:click="revokeShare(action(record, 'revoke').url)"
+                                                >
+                                                    @lang('dam::app.admin.dam.share.datagrid.revoke')
+                                                </x-admin::dropdown.menu.item>
+
+                                                <x-admin::dropdown.menu.item
+                                                    v-if="action(record, 'delete')"
+                                                    data-row-action="delete"
+                                                    v-on:click="performAction(action(record, 'delete'))"
+                                                >
+                                                    @lang('dam::app.admin.dam.share.datagrid.delete')
+                                                </x-admin::dropdown.menu.item>
+                                            </x-slot:menu>
+                                        </x-admin::dropdown>
+                                    </div>
+                                </div>
+                            </template>
                         </template>
-                    </template>
-
-                    <template #body="{ columns, records, performAction }">
-                        <div
-                            v-for="record in records"
-                            :key="record.id"
-                            class="row grid gap-2.5 items-center px-4 py-4 border-b dark:border-cherry-800 text-gray-600 dark:text-gray-300 transition-all hover:bg-primary-50 hover:bg-opacity-30 dark:hover:bg-cherry-800"
-                            :style="`grid-template-columns: ${gridTemplate}`"
-                        >
-                            <p class="truncate" :title="record.share_type">@{{ record.share_type }}</p>
-                            <p class="truncate" :title="record.target_name">@{{ record.target_name }}</p>
-                            <p class="truncate" :title="record.share_name">@{{ record.share_name }}</p>
-                            <p class="truncate" :title="record.created_by_name">@{{ record.created_by_name }}</p>
-                            <p v-html="record.status"></p>
-                            <p class="break-words">@{{ record.expires_at }}</p>
-                            <p>@{{ record.view_count }}</p>
-                            <p>@{{ record.download_count }}</p>
-                            <p class="break-words">@{{ record.created_at }}</p>
-
-                            <div class="flex justify-end max-[639px]:sticky max-[639px]:right-0 max-[639px]:justify-self-end max-[639px]:pl-2 max-[639px]:z-[1] max-[639px]:whitespace-nowrap max-[639px]:bg-white dark:max-[639px]:bg-cherry-900" @click.stop>
-                                {{-- Real buttons, so the keyboard and screen readers reach each action. The negative vertical margin keeps the row height and icon position the old link-wrapped icons had. --}}
-                                <button
-                                    type="button"
-                                    v-if="record.actions.find(a => a.index === 'edit')"
-                                    class="cursor-pointer rounded-md p-1.5 -mt-1.5 -mb-px text-2xl transition-all hover:bg-primary-100 dark:hover:bg-gray-800 max-sm:place-self-center"
-                                    :class="record.actions.find(a => a.index === 'edit')?.icon"
-                                    :title="record.actions.find(a => a.index === 'edit')?.title"
-                                    :aria-label="record.actions.find(a => a.index === 'edit')?.title"
-                                    data-row-action="edit"
-                                    @click="editShare(record)"
-                                ></button>
-                                <span v-else class="inline-block w-9 shrink-0" aria-hidden="true"></span>
-
-                                {{-- Only the link's creator, its target's owner or a full admin gets the URL (#126). --}}
-                                <button
-                                    type="button"
-                                    v-if="record.actions.find(a => a.index === 'copy_link')"
-                                    class="cursor-pointer rounded-md p-1.5 -mt-1.5 -mb-px text-2xl transition-all hover:bg-primary-100 dark:hover:bg-gray-800 max-sm:place-self-center"
-                                    :class="record.actions.find(a => a.index === 'copy_link')?.icon"
-                                    :title="record.actions.find(a => a.index === 'copy_link')?.title"
-                                    :aria-label="record.actions.find(a => a.index === 'copy_link')?.title"
-                                    data-row-action="copy_link"
-                                    @click="copyShareLink(record.actions.find(a => a.index === 'copy_link')?.url)"
-                                ></button>
-                                <span v-else class="inline-block w-9 shrink-0" aria-hidden="true"></span>
-
-                                {{-- Reissue (P2 S5a): a new URL for the same link. No glyph in the admin icon font fits, so an inline one. --}}
-                                <button
-                                    type="button"
-                                    v-if="record.actions.find(a => a.index === 'reissue')"
-                                    class="cursor-pointer rounded-md p-1.5 -mt-1.5 -mb-px text-2xl transition-all hover:bg-primary-100 dark:hover:bg-gray-800 max-sm:place-self-center"
-                                    :title="record.actions.find(a => a.index === 'reissue')?.title"
-                                    :aria-label="record.actions.find(a => a.index === 'reissue')?.title"
-                                    data-dam-share-reissue
-                                    data-row-action="reissue"
-                                    @click="reissueShare(record, record.actions.find(a => a.index === 'reissue')?.url)"
-                                ><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: -0.125em" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 21v-5h-5"/></svg></button>
-                                <span v-else class="inline-block w-9 shrink-0" aria-hidden="true"></span>
-
-                                <button
-                                    type="button"
-                                    v-if="record.actions.find(a => a.index === 'revoke')"
-                                    class="cursor-pointer rounded-md p-1.5 -mt-1.5 -mb-px text-2xl transition-all hover:bg-primary-100 dark:hover:bg-gray-800 max-sm:place-self-center"
-                                    :class="record.actions.find(a => a.index === 'revoke')?.icon"
-                                    :title="record.actions.find(a => a.index === 'revoke')?.title"
-                                    :aria-label="record.actions.find(a => a.index === 'revoke')?.title"
-                                    data-row-action="revoke"
-                                    @click="revokeShare(record.actions.find(a => a.index === 'revoke')?.url)"
-                                ></button>
-                                <span v-else class="inline-block w-9 shrink-0" aria-hidden="true"></span>
-
-                                <button
-                                    type="button"
-                                    v-if="record.actions.find(a => a.index === 'delete')"
-                                    class="cursor-pointer rounded-md p-1.5 -mt-1.5 -mb-px text-2xl transition-all hover:bg-primary-100 dark:hover:bg-gray-800 max-sm:place-self-center"
-                                    :class="record.actions.find(a => a.index === 'delete')?.icon"
-                                    :title="record.actions.find(a => a.index === 'delete')?.title"
-                                    :aria-label="record.actions.find(a => a.index === 'delete')?.title"
-                                    data-row-action="delete"
-                                    @click="performAction(record.actions.find(a => a.index === 'delete'))"
-                                ></button>
-                                <span v-else class="inline-block w-9 shrink-0" aria-hidden="true"></span>
-                            </div>
-                        </div>
-                    </template>
-                </x-admin::datagrid>
+                    </x-admin::datagrid>
+                </div>
 
                 <x-admin::modal ref="shareModal">
                     <x-slot:header>
@@ -354,22 +441,21 @@
                         expiryOption: null,
                         expiryTouched: false,
                         pendingPublic: null,
+
+                        // The column names that sort the list, in the order the table form shows them.
+                        sorts: [
+                            { index: 'expires_at', label: @js(trans('dam::app.admin.dam.share.datagrid.expires-at')) },
+                            { index: 'view_count', label: @js(trans('dam::app.admin.dam.share.list.activity')) },
+                            { index: 'created_at', label: @js(trans('dam::app.admin.dam.share.datagrid.created-by')) },
+                        ],
+
+                        // The server's clock when the page was built, in the zone the rows' dates are stored in:
+                        // "in 6 days" is counted against it, so it cannot disagree with the row's status.
+                        serverNow: @js(now()->toDateTimeString()),
                     };
                 },
 
                 computed: {
-                    {{-- Type, target, name, created by, status, expires, views, downloads, created, actions. The two counters take a fixed narrow track and the dates may wrap, so the text columns keep the room. --}}
-                    gridTemplate() {
-                        return 'minmax(60px, .8fr) minmax(120px, 2fr) minmax(90px, 1.4fr) minmax(90px, 1.2fr) minmax(80px, 1fr) minmax(96px, 1.2fr) 56px 92px minmax(96px, 1.2fr) 190px';
-                    },
-
-                    gridsCount() {
-                        const cols = this.$refs.datagrid?.available?.columns?.length ?? 0;
-                        const hasActions = (this.$refs.datagrid?.available?.actions?.length ?? 0) > 0;
-
-                        return cols + (hasActions ? 1 : 0);
-                    },
-
                     headerLabel() {
                         return this.targetType === 'directory'
                             ? @js(trans('dam::app.admin.dam.share.modal.title-directory'))
@@ -382,6 +468,119 @@
                 },
 
                 methods: {
+                    /** One of the row's server-sent actions, or undefined when this viewer may not take it. */
+                    action(record, index) {
+                        return (record.actions ?? []).find(action => action.index === index);
+                    },
+
+                    /** The actions behind the row's More menu: everything but Copy link. */
+                    menuActions(record) {
+                        return (record.actions ?? []).filter(action => action.index !== 'copy_link');
+                    },
+
+                    moreLabel(record) {
+                        return @js(trans('dam::app.admin.dam.share.list.more-for')).replace(':name', record.target_name || record.share_name || '');
+                    },
+
+                    isFolder(record) {
+                        return (record.share_type || '').toLowerCase() === 'directory';
+                    },
+
+                    typeLabel(record) {
+                        return this.isFolder(record)
+                            ? @js(trans('dam::app.admin.dam.share.datagrid.directory'))
+                            : @js(trans('dam::app.admin.dam.share.datagrid.asset'));
+                    },
+
+                    statusLabel(status) {
+                        return @js([
+                            'active'  => trans('dam::app.admin.dam.share.datagrid.status-active'),
+                            'expired' => trans('dam::app.admin.dam.share.datagrid.status-expired'),
+                            'revoked' => trans('dam::app.admin.dam.share.datagrid.status-revoked'),
+                        ])[status] ?? status;
+                    },
+
+                    /** The shape that goes with the word: a filled dot while it opens, a ring once time ended it, a bar once a person stopped it. */
+                    statusClass(status) {
+                        return { active: 'is-live', expired: 'is-ended', revoked: 'is-stopped' }[status] ?? 'is-live';
+                    },
+
+                    /** "2026-11-24 09:30:00" as its calendar day, or null for anything else (the grid sends "Never" for no expiry). */
+                    dayOf(value) {
+                        const parts = /^(\d{4})-(\d{2})-(\d{2})/.exec(value ?? '');
+
+                        return parts ? new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3])) : null;
+                    },
+
+                    dateLabel(value) {
+                        const day = this.dayOf(value);
+
+                        return day ? day.toLocaleDateString([], { dateStyle: 'medium' }) : (value ?? '');
+                    },
+
+                    expiryDate(record) {
+                        return this.dateLabel(record.expires_at);
+                    },
+
+                    /** "in 6 days", "tomorrow", "3 days ago". A revoked link has no countdown: its date no longer decides anything. */
+                    expiryNote(record) {
+                        const day = this.dayOf(record.expires_at);
+                        const today = this.dayOf(this.serverNow);
+
+                        if (! day || ! today || record.status === 'revoked') return '';
+
+                        const days = Math.round((day - today) / 86400000);
+
+                        // Counted in whole calendar days, so a link that ends or ended today reads "today" either way;
+                        // the status beside it says which.
+                        return new Intl.RelativeTimeFormat([], { numeric: 'auto' }).format(days, 'day');
+                    },
+
+                    countLabel(count, one, many) {
+                        const number = Number(count) || 0;
+
+                        return (number === 1 ? one : many).replace(':count', number.toLocaleString());
+                    },
+
+                    viewsLabel(record) {
+                        if (! Number(record.view_count) && ! Number(record.download_count)) {
+                            return @js(trans('dam::app.admin.dam.share.list.not-opened'));
+                        }
+
+                        return this.countLabel(record.view_count, @js(trans('dam::app.admin.dam.share.list.view-one')), @js(trans('dam::app.admin.dam.share.list.view-many')));
+                    },
+
+                    downloadsLabel(record) {
+                        if (! Number(record.view_count) && ! Number(record.download_count)) return '';
+
+                        return this.countLabel(record.download_count, @js(trans('dam::app.admin.dam.share.list.download-one')), @js(trans('dam::app.admin.dam.share.list.download-many')));
+                    },
+
+                    /** Filters narrow the list (the search box is the 'all' column and has its own field above the list). */
+                    hasFilters(applied) {
+                        return (applied?.filters?.columns ?? []).some(column => column.index !== 'all' && (column.value?.length ?? 0) > 0);
+                    },
+
+                    isNarrowed(applied) {
+                        return (applied?.filters?.columns ?? []).some(column => (column.value?.length ?? 0) > 0);
+                    },
+
+                    sortBy(index, columns, sortPage) {
+                        const column = (columns ?? []).find(column => column.index === index);
+
+                        if (column) sortPage(column);
+                    },
+
+                    sortLabel(sort, applied) {
+                        if (applied?.sort?.column !== sort.index) {
+                            return @js(trans('dam::app.admin.dam.share.list.sort-by')).replace(':column', sort.label);
+                        }
+
+                        return (applied.sort.order === 'asc'
+                            ? @js(trans('dam::app.admin.dam.share.list.sorted-asc'))
+                            : @js(trans('dam::app.admin.dam.share.list.sorted-desc'))).replace(':column', sort.label);
+                    },
+
                     editShare(record) {
                         this.targetType = (record.share_type || '').toLowerCase();
                         this.targetId = Number(record.target_id);

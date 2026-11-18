@@ -3,10 +3,11 @@
     'description' => null,
     'breadcrumb'  => true,
     'parents'     => [],
+    'group'       => null,
 ])
 
 <div {{ $attributes->merge(['class' => 'flex min-h-10 items-center justify-between gap-4 max-sm:flex-wrap']) }}>
-    <x-admin::page-title :title="$title" :subtitle="$description" :breadcrumb="$breadcrumb" :parents="$parents">
+    <x-admin::page-title :title="$title" :subtitle="$description" :breadcrumb="$breadcrumb" :parents="$parents" :group="$group">
         {{ $content ?? '' }}
     </x-admin::page-title>
 
