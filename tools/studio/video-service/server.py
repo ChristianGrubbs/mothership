@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Private native video download sidecar for the Home "Video Downloader" tool.
 
-Runs yt-dlp (the engine the Studio's `yoinks` terminal app drives) with ffmpeg
-and keeps a durable, per-person queue, so a download asked for on one device
-can be collected on another. Contract (docs/ops/studio-video.md):
+Downloads with the `downie` command, looks videos up with yt-dlp, and keeps a
+durable, per-person queue, so a download asked for on one device can be
+collected on another. Contract (docs/ops/studio-video.md):
 
     GET    /health
     POST   /probe                 {"url"}
@@ -13,9 +13,13 @@ can be collected on another. Contract (docs/ops/studio-video.md):
     DELETE /jobs/<id>?owner=ID
     GET    /files/<id>?owner=ID   (Range supported)
 
-The format list and the yt-dlp arguments follow yoinks' recipe
-(https://github.com/pablostanley/yoinks, MIT). yoinks itself is a full-screen
-terminal app with no scriptable mode, so it cannot be driven from here.
+`downie` has no look-up, single-video switch, size limit or title limit, and
+its exit code is 0 even when a download fails. The service supplies those
+itself: see run_job and "What the downie command leaves to the service" in the
+runbook.
+
+The format list follows yoinks' recipe
+(https://github.com/pablostanley/yoinks, MIT).
 
 Deployed standalone by tools/studio/video_service.py and run with the system
 python3 (3.9+ compatible); standard library only.
@@ -42,9 +46,10 @@ import uuid
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Dict, List, Mapping, Optional, Tuple
+from typing import Dict, Iterator, List, Mapping, NamedTuple, Optional, Tuple
 from urllib.parse import parse_qs, quote, urlparse
 
+DEFAULT_DOWNIE = str(pathlib.Path.home() / ".local" / "bin" / "downie")
 DEFAULT_YTDLP = "/opt/homebrew/bin/yt-dlp"
 DEFAULT_FFMPEG_DIR = "/opt/homebrew/bin"
 DEFAULT_MAX_BYTES = 2 * 1024 * 1024 * 1024  # 2 GiB per file
@@ -58,21 +63,25 @@ MAX_PROBES = 4
 MAX_VIDEO_CHOICES = 4
 COMMON_HEIGHTS = {1080, 720, 480}
 MAX_BODY = 8192
-PROGRESS_PREFIX = "MSVID|"
-PROGRESS_TEMPLATE = (
-    "download:" + PROGRESS_PREFIX
-    + "%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s"
-    + "|%(progress.speed)s|%(progress.eta)s|%(info.format_id)s"  # the format id names the stream in hand
-)
-# Printed once before the first byte: the size of every stream yt-dlp is about to fetch (a video and its sound
-# are usually two), so progress can be measured against the whole file instead of the stream in hand. One record
-# per stream: yt-dlp drops a missing value from a plain list, which would lose which stream a size belongs to and
-# how many streams there are; the format id is always there, so every stream keeps its place.
-PLAN_PREFIX = "MSPLAN|"
-PLAN_TEMPLATE = (
-    "before_dl:" + PLAN_PREFIX
-    + "%(requested_formats.:.{format_id,filesize,filesize_approx})j|%(filesize,filesize_approx)s"
-)
+# What the downie command prints. Its exit code is 0 even when a download fails, so these lines are the result.
+DOWNIE_SAVED = "Download successful:"
+DOWNIE_FAILED = ("Download failed:", "Unsupported platform:", "Error:")
+DOWNIE_RETRY = "Download attempt "
+PLAYLIST_SIGNS = ("[download] Downloading playlist", "[download] Downloading item")
+FINISHING_SIGNS = ("[Merger]", "[ExtractAudio]", "[VideoRemuxer]", "[VideoConvertor]", "[FixupM")
+TOO_LARGE_SIGN = "[download] File is larger than max-filesize"
+ANSI_CODE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+BYTE_UNITS = {"B": 1, "KiB": 1024, "MiB": 1024 ** 2, "GiB": 1024 ** 3, "TiB": 1024 ** 4,
+              "KB": 1000, "MB": 1000 ** 2, "GB": 1000 ** 3, "TB": 1000 ** 4}
+PROGRESS_LINE = re.compile(r"^\[download\]\s+([0-9.]+)%\s+of\s+~?\s*([0-9.]+)\s*([KMGT]?i?B)\b(.*)$")
+UNSIZED_LINE = re.compile(r"^\[download\]\s+([0-9.]+)\s*([KMGT]?i?B)\s+at\b(.*)$")
+SPEED_TEXT = re.compile(r"\bat\s+([0-9.]+)\s*([KMGT]?i?B)/s")
+ETA_TEXT = re.compile(r"\bETA\s+((?:[0-9]+:)*[0-9]+)")
+SIZE_WATCH_SECONDS = 2.0
+# downie names a file after the whole title, and a file name stops at 255 bytes. A title near that is sent to yt-dlp
+# directly, which can shorten it. The margin covers the ".f137.mp4.part" endings of the working files.
+LONG_TITLE_BYTES = 200
+LONG_TITLE_WIDE = '/\\:*?"<>|'  # yt-dlp swaps each for a three-byte lookalike in a file name
 ACTIVE = ("queued", "running", "processing", "optimizing")
 DEFAULT_OPTIMIZER_PORT = 18766  # the Studio's Clop bridge (docs/ops/studio-clop.md), on this service's own address
 OPTIMIZE_TIMEOUT = 60 * 60  # Clop runs one file at a time, so a request can wait behind others
@@ -106,6 +115,7 @@ class ServerConfig:
         self.port = int(env.get("VIDEO_PORT", "18769"))
         default_data = pathlib.Path(__file__).resolve().parent / "data"
         self.data = pathlib.Path(env.get("VIDEO_DATA", str(default_data)))
+        self.downie = env.get("VIDEO_DOWNIE", DEFAULT_DOWNIE)
         self.ytdlp = env.get("VIDEO_YTDLP", DEFAULT_YTDLP)
         self.ffmpeg_dir = env.get("VIDEO_FFMPEG_DIR", DEFAULT_FFMPEG_DIR)
         self.max_bytes = int(env.get("VIDEO_MAX_BYTES", str(DEFAULT_MAX_BYTES)))
@@ -209,7 +219,7 @@ def public_addresses(host: str, port: int, *, allow_private: bool = False, resol
 
 
 class EgressProxy(socketserver.ThreadingTCPServer):
-    """The only way out for yt-dlp and ffmpeg: a loopback forward proxy that refuses private destinations.
+    """The only way out for downie, yt-dlp and ffmpeg: a loopback forward proxy that refuses private destinations.
 
     Checking the pasted link is not enough: a public page can redirect to a private address, name one as its
     media or manifest URL, or change its DNS answer between the check and the download. Every connection the
@@ -348,7 +358,7 @@ os.execv(REAL, [REAL] + arguments)
 
 
 def install_ffmpeg_wrappers(config: ServerConfig) -> str:
-    """Write ffmpeg/ffprobe stand-ins that only open local files; returns their folder for --ffmpeg-location."""
+    """Write ffmpeg/ffprobe stand-ins that only open local files; returns their folder, which goes first on PATH."""
     folder = config.data / "bin"
     folder.mkdir(parents=True, exist_ok=True)
     for name in ("ffmpeg", "ffprobe"):
@@ -368,8 +378,12 @@ def proxy_arguments(config: ServerConfig) -> List[str]:
 
 
 def downloader_environment(config: ServerConfig) -> Dict[str, str]:
-    """The environment for yt-dlp and the ffmpeg it starts: both leave through the egress proxy."""
+    """The environment for downie, yt-dlp and the ffmpeg they start: all leave through the egress proxy."""
     environment = dict(os.environ)
+    environment["PYTHONUNBUFFERED"] = "1"  # without it downie's progress arrives in blocks, long after the fact
+    if config.ffmpeg_tools:
+        # downie has no ffmpeg option: it runs the first ffmpeg on PATH, so the local-only stand-ins go first.
+        environment["PATH"] = os.pathsep.join([config.ffmpeg_tools, environment.get("PATH", os.defpath)])
     if config.proxy:
         for name in ("http_proxy", "https_proxy", "all_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"):
             environment[name] = config.proxy
@@ -518,16 +532,21 @@ def offered_heights(available: set) -> List[int]:
     return sorted(picked, reverse=True)[:MAX_VIDEO_CHOICES]
 
 
-def choice_args(choice: str) -> List[str]:
+def choice_format(choice: str) -> str:
+    """The format selector for a listed choice.
+
+    downie cannot be given yt-dlp's sort order, so the order is spelled out: H.264 with AAC first, because it plays on
+    every device, then anything but AV1, then whatever the site has."""
     if not CHOICE.match(choice or ""):
         raise BadRequest("Choose one of the listed formats.")
     if choice == "mp3":
-        return ["-f", "ba/b", "-x", "--audio-format", "mp3", "--audio-quality", "0"]
-    prefer = ["-S", "res,vcodec:h264,acodec:aac", "--merge-output-format", "mp4"]
-    if choice == "best":
-        return ["-f", "bv*+ba/b"] + prefer
-    height = int(choice[1:])
-    return ["-f", "bv*[height={h}]+ba/b[height={h}]/bv*[height<={h}]+ba/b".format(h=height)] + prefer
+        return "ba/b"
+    exact, closest = "", []
+    if choice != "best":
+        height = int(choice[1:])
+        exact, closest = "[height={}]".format(height), ["b[height={}]".format(height), "bv*[height<={}]+ba".format(height)]
+    preferred = ["bv*{}[vcodec^=avc]+ba[ext=m4a]", "bv*{}[vcodec^=avc]+ba", "b{}[vcodec^=avc]", "bv*{}[vcodec!^=av01]+ba", "bv*{}+ba"]
+    return "/".join([step.format(exact) for step in preferred] + closest + ["b"])
 
 
 def choice_label(choice: str) -> str:
@@ -902,133 +921,315 @@ def start_optimize(store: JobStore, job_id: str) -> None:
     threading.Thread(target=run_optimize, args=(store, job_id), name="video-optimize", daemon=True).start()
 
 
-def download_command(config: ServerConfig, job: Mapping[str, object], folder: pathlib.Path) -> List[str]:
+def download_command(config: ServerConfig, job: Mapping[str, object], folder: pathlib.Path, url: Optional[str] = None) -> List[str]:
     return [
-        config.ytdlp, "--ignore-config", *choice_args(str(job["choice"])),
-        "--no-playlist", "--no-warnings", "--newline", "--no-quiet", "--progress",
-        "--progress-template", PROGRESS_TEMPLATE, "--print", PLAN_TEMPLATE, "--print", "after_move:filepath", "--no-simulate",
-        "--max-filesize", str(config.max_bytes), "--socket-timeout", "30", "--retries", "5",
-        "--ffmpeg-location", config.ffmpeg_tools or config.ffmpeg_dir, *proxy_arguments(config),
-        "-o", str(folder / "%(title).100s.%(ext)s"), "--", str(job["url"]),
+        config.downie, "video", "download", "-f", choice_format(str(job["choice"])), "-o", str(folder),
+        *proxy_arguments(config), "--", url or str(job["url"]),
     ]
 
 
-def _number(value: str) -> Optional[float]:
-    try:
-        return float(value)
-    except ValueError:
-        return None
+def long_title_command(config: ServerConfig, job: Mapping[str, object], folder: pathlib.Path, url: str) -> List[str]:
+    """yt-dlp itself, for the one thing downie cannot do: save a video whose title is too long for a file name."""
+    return [
+        config.ytdlp, "--ignore-config", "-f", choice_format(str(job["choice"])), "--merge-output-format", "mp4",
+        "--no-playlist", "--no-warnings", "--newline", "--no-quiet", "--progress",
+        "--max-filesize", str(config.max_bytes), "--socket-timeout", "30", "--retries", "5",
+        "--ffmpeg-location", config.ffmpeg_tools or config.ffmpeg_dir, *proxy_arguments(config),
+        "-o", str(folder / "%(title).100s.%(ext)s"), "--", url,
+    ]
+
+
+def lookup_command(config: ServerConfig, job: Mapping[str, object]) -> List[str]:
+    return [
+        config.ytdlp, "--ignore-config", "-J", "--no-playlist", "--no-warnings", "--socket-timeout", "20",
+        "-f", choice_format(str(job["choice"])), *proxy_arguments(config), "--", str(job["url"]),
+    ]
 
 
 def _size(value: object) -> Optional[int]:
     return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0 else None
 
 
-def parse_plan(line: str) -> List[Optional[int]]:
-    """The size of each stream yt-dlp is about to fetch, in order; None for a stream the site gave no size for.
+def plan_sizes(info: Mapping[str, object]) -> List[Optional[int]]:
+    """The size of each stream the look-up chose, in order; None for a stream the site gave no size for.
 
-    An empty list means the plan said nothing: one stream of unknown size."""
-    # The last field is a bare number or NA, so the split is safe whatever a format id holds.
-    streams, _, whole = line[len(PLAN_PREFIX):].rpartition("|")
-    try:
-        records = json.loads(streams)
-    except ValueError:
-        records = None
-    if isinstance(records, list) and records:
+    An empty list means the look-up said nothing: one stream of unknown size."""
+    streams = info.get("requested_formats")
+    if isinstance(streams, list) and streams:
         return [
-            (_size(record.get("filesize")) or _size(record.get("filesize_approx"))) if isinstance(record, dict) else None
-            for record in records
+            (_size(stream.get("filesize")) or _size(stream.get("filesize_approx"))) if isinstance(stream, dict) else None
+            for stream in streams
         ]
-    size = _number(whole)
-    return [int(size)] if size and size > 0 else []
+    size = _size(info.get("filesize")) or _size(info.get("filesize_approx"))
+    return [size] if size else []
 
 
-def run_job(store: JobStore, job: dict) -> None:
-    """Run one yt-dlp download to the end and record how it finished."""
-    config, job_id = store.config, job["id"]
-    folder = config.files / job_id
-    shutil.rmtree(folder, ignore_errors=True)
-    folder.mkdir(parents=True, exist_ok=True)
+def single_video_url(config: ServerConfig, job: Mapping[str, object], info: Mapping[str, object]) -> str:
+    """The address to hand downie. It has no single-video switch, so a video link that also names a playlist is
+    replaced by the one video's own page. Any other link is kept as pasted: it may carry a private share token."""
+    url = str(job["url"])
+    page = info.get("webpage_url")
+    if "list" not in parse_qs(urlparse(url).query) or not isinstance(page, str):
+        return url
     try:
-        process = subprocess.Popen(
-            download_command(config, job, folder), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, text=True, errors="replace", start_new_session=True,
-            env=downloader_environment(config),
-        )
-    except OSError as error:
-        store.finish(job_id, status="failed", error="The downloader could not start ({}).".format(error.strerror or "error"))
-        return
+        return validate_url(page, allow_private=config.allow_private)
+    except BadRequest:
+        return url
+
+
+def title_too_long(info: Mapping[str, object]) -> bool:
+    title = info.get("title")
+    if not isinstance(title, str):
+        return False
+    return len(title.encode("utf-8")) + 2 * sum(title.count(mark) for mark in LONG_TITLE_WIDE) > LONG_TITLE_BYTES
+
+
+def output_lines(stream) -> Iterator[str]:
+    """A program's output as it arrives, line by line. A carriage return ends a line too: progress rewrites its own."""
+    held = b""
+    while True:
+        chunk = os.read(stream.fileno(), 65536)
+        if not chunk:
+            break
+        pieces = re.split(rb"[\r\n]", held + chunk)
+        held = pieces.pop()
+        for piece in pieces:
+            line = ANSI_CODE.sub("", piece.decode("utf-8", "replace")).strip()
+            if line:
+                yield line
+    line = ANSI_CODE.sub("", held.decode("utf-8", "replace")).strip()
+    if line:
+        yield line
+
+
+def _bytes(amount: str, unit: str) -> float:
+    return float(amount) * BYTE_UNITS.get(unit, 1)
+
+
+def _clock_seconds(text: str) -> float:
+    seconds = 0.0
+    for part in text.split(":"):
+        seconds = seconds * 60 + int(part)
+    return seconds
+
+
+def parse_progress(line: str) -> Optional[Tuple[float, Optional[float], Optional[float], Optional[float]]]:
+    """(bytes so far, size of the stream, bytes a second, seconds left) from one progress line, None for any other."""
+    sized = PROGRESS_LINE.match(line)
+    if sized:
+        total: Optional[float] = _bytes(sized.group(2), sized.group(3))
+        downloaded, rest = total * min(float(sized.group(1)), 100.0) / 100, sized.group(4)
+    else:
+        unsized = UNSIZED_LINE.match(line)
+        if not unsized:
+            return None
+        downloaded, total, rest = _bytes(unsized.group(1), unsized.group(2)), None, " at" + unsized.group(3)
+    speed, eta = SPEED_TEXT.search(rest), ETA_TEXT.search(rest)
+    return downloaded, total, _bytes(*speed.groups()) if speed else None, _clock_seconds(eta.group(1)) if eta else None
+
+
+class StreamTracker:
+    """Turns the stream-by-stream progress of a download into progress for the whole file.
+
+    A video and its sound are usually two streams, fetched one after the other. Each announces itself with a
+    "Destination" line; the look-up said how large each one is."""
+
+    def __init__(self, sizes: List[Optional[int]]) -> None:
+        self.sizes = sizes
+        self.restart()
+
+    def restart(self) -> None:
+        """downie has begun the whole download again."""
+        self.part, self.before, self.last, self.started = 1, 0.0, 0.0, False  # before: bytes of the finished streams
+
+    def next_stream(self) -> None:
+        if self.started:
+            self.before += self.last
+            self.part += 1
+            self.last = 0.0
+        self.started = True
+
+    def stream_already_there(self) -> None:
+        """A retry found this stream complete on disk, so it reports no progress of its own."""
+        self.next_stream()
+        if len(self.sizes) >= self.part:
+            self.last = float(self.sizes[self.part - 1] or 0)
+
+    def measure(self, downloaded: float, total: Optional[float], speed: Optional[float], eta: Optional[float]) -> Tuple[dict, Optional[float]]:
+        """The job fields for one progress line, and the size being measured against."""
+        self.last = downloaded
+        sizes = self.sizes
+        if len(sizes) >= self.part and all(sizes):
+            # Every stream's size is known: measure against the whole file, not the stream in hand.
+            total = self.before + (total or sizes[self.part - 1]) + sum(sizes[self.part:])
+            downloaded = min(self.before + downloaded, total)
+            eta = (total - downloaded) / speed if speed else None
+            shown_part = shown_parts = None
+        else:
+            # Sizes are not all known, so the measure is the stream in hand; say which one it is.
+            shown_parts = len(sizes) if len(sizes) > 1 else None
+            shown_part = self.part if shown_parts or self.part > 1 else None
+        percent = min(99, int(downloaded * 100 / total)) if total else 0
+        return {"percent": percent, "downloaded": int(downloaded), "total": int(total) if total else None,
+                "speed": speed, "eta": eta, "part": shown_part, "parts": shown_parts}, total
+
+
+class Followed(NamedTuple):
+    """What a download's output said by the time it ended."""
+
+    saved: Optional[str]  # the path downie reported
+    failure: str
+    over_limit: bool
+    playlist: bool
+
+
+def start_step(store: JobStore, job_id: str, command: List[str], **options: object) -> Optional[subprocess.Popen]:
+    """Start one program for a job, where cancelling the job or stopping the service can reach it.
+
+    None means the job was removed or the service began stopping while the program was starting. The job keeps its
+    "running" status in the stopping case, so the next start queues it again."""
+    process = subprocess.Popen(command, stdin=subprocess.DEVNULL, start_new_session=True, **options)
     with store.lock:
         registered = job_id in store.jobs and not store.stopping
         if registered:
             store.processes[job_id] = process
-    if not registered:
-        # Removed, or the service began stopping while the downloader was starting. The job keeps its "running"
-        # status in the stopping case, so the next start queues it again.
-        JobStore._kill(process)
-        process.wait()
-        for pipe in (process.stdout, process.stderr):
+    if registered:
+        return process
+    JobStore._kill(process)
+    process.wait()
+    for pipe in (process.stdout, process.stderr):
+        if pipe is not None:
             pipe.close()
-        return
-    stderr_lines: List[str] = []
-    reader = threading.Thread(target=lambda: stderr_lines.extend(process.stderr), daemon=True)
-    reader.start()
-    timer = threading.Timer(config.job_timeout, lambda: JobStore._kill(process))
+    return None
+
+
+def end_step(store: JobStore, job_id: str) -> bool:
+    """Forget a finished program; False when the job should go no further (removed, or the service is stopping)."""
+    with store.lock:
+        store.processes.pop(job_id, None)
+        return job_id in store.jobs and not store.stopping
+
+
+def fail_job(store: JobStore, job_id: str, folder: pathlib.Path, message: str) -> None:
+    shutil.rmtree(folder, ignore_errors=True)
+    store.finish(job_id, status="failed", error=message)
+
+
+def too_large_message(config: ServerConfig) -> str:
+    return "That video is larger than {}. Pick a smaller size.".format(format_bytes(config.max_bytes))
+
+
+def look_up(store: JobStore, job: dict, folder: pathlib.Path, deadline: float) -> Optional[dict]:
+    """Ask yt-dlp what this download will fetch. None means the job has ended, or is no longer this worker's."""
+    config, job_id = store.config, job["id"]
+    try:
+        process = start_step(store, job_id, lookup_command(config, job), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             text=True, errors="replace", env=downloader_environment(config))
+    except OSError as error:
+        fail_job(store, job_id, folder, "The downloader could not start ({}).".format(error.strerror or "error"))
+        return None
+    if process is None:
+        return None
+    timed_out = False
+    try:
+        output, errors = process.communicate(timeout=max(1.0, min(PROBE_TIMEOUT, deadline - time.monotonic())))
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        JobStore._kill(process)
+        output, errors = process.communicate()
+    if not end_step(store, job_id):
+        return None
+    if timed_out:
+        fail_job(store, job_id, folder, "That site took too long to answer. Try again.")
+        return None
+    if process.returncode != 0:
+        fail_job(store, job_id, folder, clean_error(errors))
+        return None
+    try:
+        info = json.loads(output)
+    except ValueError:
+        info = None
+    if not isinstance(info, dict):
+        fail_job(store, job_id, folder, "That page did not give back a video.")
+        return None
+    if info.get("_type") == "playlist":
+        fail_job(store, job_id, folder, "That link is a list of videos. Paste the link to one video.")
+        return None
+    return info
+
+
+def folder_bytes(folder: pathlib.Path) -> int:
+    total = 0
+    try:
+        with os.scandir(str(folder)) as entries:
+            for entry in entries:
+                if entry.is_file(follow_symlinks=False):
+                    total += entry.stat(follow_symlinks=False).st_size
+    except OSError:
+        pass  # the folder went away with a cancelled job, or a file was renamed while being counted
+    return total
+
+
+def watch_folder_size(folder: pathlib.Path, limit: int, joining: threading.Event, over: threading.Event, process: subprocess.Popen) -> None:
+    """Stop a download whose bytes on disk pass the limit: downie has no size limit and a site need not declare one.
+
+    Only while downloading: joining the streams briefly holds the file twice, and the joined file is measured after."""
+    while not joining.wait(SIZE_WATCH_SECONDS):
+        if folder_bytes(folder) > limit:
+            over.set()
+            JobStore._kill(process)
+            return
+
+
+def follow_download(store: JobStore, job_id: str, process: subprocess.Popen, folder: pathlib.Path, sizes: List[Optional[int]], deadline: float) -> Followed:
+    """Read a running download's output to its end, keeping the job's progress current."""
+    config = store.config
+    tracker = StreamTracker(sizes)
+    joining, over = threading.Event(), threading.Event()
+    threading.Thread(target=watch_folder_size, args=(folder, config.max_bytes, joining, over, process), daemon=True).start()
+    timer = threading.Timer(max(1.0, deadline - time.monotonic()), lambda: JobStore._kill(process))
     timer.daemon = True
     timer.start()
-    printed = ""
-    plan: Optional[List[Optional[int]]] = None  # the size of each stream, in download order (parse_plan)
-    part, last, before = 1, 0.0, 0.0  # before: the bytes of the streams already fetched
-    stream: Optional[str] = None  # the format id of the stream in hand, when yt-dlp names one
+    saved: Optional[str] = None
+    failure, playlist = "", False
     try:
-        for line in process.stdout:
-            line = line.strip()
-            if line.startswith(PLAN_PREFIX):
-                if plan is None:
-                    plan = parse_plan(line)
-            elif line.startswith(PROGRESS_PREFIX):
-                fields = line[len(PROGRESS_PREFIX):].split("|", 5)
-                if len(fields) != 6:
-                    continue
-                downloaded = _number(fields[0]) or 0.0
-                total = _number(fields[1]) or _number(fields[2])
-                named = fields[5] if fields[5] not in ("", "NA") else None
-                # The next stream has begun when yt-dlp names another format. A count that starts over inside one
-                # stream is a retry, not a new stream; it is the only sign there is when no format is named.
-                if (named != stream) if (named and stream) else (not named and downloaded < last):
-                    before += last
-                    part += 1
-                stream = named or stream
-                last = downloaded
-                speed, eta = _number(fields[3]), _number(fields[4])
-                sizes = plan or []
-                if len(sizes) >= part and all(sizes):
-                    # Every stream's size is known: measure against the whole file, not the stream in hand.
-                    total = before + (total or sizes[part - 1]) + sum(sizes[part:])
-                    downloaded = min(before + downloaded, total)
-                    eta = (total - downloaded) / speed if speed else None
-                    shown_part = shown_parts = None
-                else:
-                    # Sizes are not all known, so the measure is the stream in hand; say which one it is.
-                    shown_parts = len(sizes) if len(sizes) > 1 else None
-                    shown_part = part if shown_parts or part > 1 else None
-                percent = min(99, int(downloaded * 100 / total)) if total else 0
-                if total and total > config.max_bytes:
-                    JobStore._kill(process)
-                    stderr_lines.append("ERROR: too-large")
-                    break
-                alive = store.progress(job_id, status="running", percent=percent, downloaded=int(downloaded),
-                                       total=int(total) if total else None, speed=speed, eta=eta,
-                                       part=shown_part, parts=shown_parts)
-                if not alive:
-                    JobStore._kill(process)
-                    break
-            elif line.startswith(("[Merger]", "[ExtractAudio]", "[VideoRemuxer]", "[VideoConvertor]", "[FixupM")):
+        for line in output_lines(process.stdout):
+            if line.startswith(PLAYLIST_SIGNS):
+                playlist = True
+                JobStore._kill(process)
+                break
+            if line.startswith(DOWNIE_SAVED):
+                saved = line[len(DOWNIE_SAVED):].strip()
+            elif line.startswith(DOWNIE_FAILED):
+                failure = line.split(":", 1)[1].strip()
+            elif line.startswith("ERROR:"):
+                failure = line
+            elif line.startswith(DOWNIE_RETRY):
+                tracker.restart()
+            elif line.startswith(TOO_LARGE_SIGN):
+                over.set()
+            elif line.startswith(FINISHING_SIGNS):
+                joining.set()
                 store.progress(job_id, status="processing", percent=99, speed=None, eta=None)
-            elif line and not line.startswith("["):
-                printed = line
+            elif line.startswith("[download] Destination:"):
+                tracker.next_stream()
+            elif line.startswith("[download]") and line.endswith("has already been downloaded"):
+                tracker.stream_already_there()
+            else:
+                reading = parse_progress(line)
+                if reading is None:
+                    continue
+                fields, total = tracker.measure(*reading)
+                if total and total > config.max_bytes:
+                    over.set()
+                    JobStore._kill(process)
+                    break
+                if not store.progress(job_id, status="running", **fields):
+                    JobStore._kill(process)
+                    break
         process.wait()
     finally:
+        joining.set()
         timer.cancel()
         if process.poll() is None:
             # The loop was left early (cancelled, or over the size limit) with the process already told to stop.
@@ -1036,42 +1237,113 @@ def run_job(store: JobStore, job: dict) -> None:
                 process.wait(timeout=15)
             except subprocess.TimeoutExpired:
                 JobStore._kill(process)
-        reader.join(timeout=5)
         process.stdout.close()
-        process.stderr.close()
-    if store.stopping:
-        # The service is shutting down: leave the job marked running so the next start queues it again.
-        return
-    produced = pathlib.Path(printed) if printed else None
-    if produced is None or not produced.is_file() or produced.parent != folder:
-        candidates = [p for p in folder.iterdir() if p.is_file() and p.suffix not in (".part", ".ytdl", ".json")]
-        produced = max(candidates, key=lambda p: p.stat().st_size) if process.returncode == 0 and candidates else None
-    stderr = "".join(stderr_lines)
-    if process.returncode == 0 and produced is not None:
-        size = produced.stat().st_size
-        if size > config.max_bytes:
-            shutil.rmtree(folder, ignore_errors=True)
-            store.finish(job_id, status="failed", error="That video is larger than {}. Pick a smaller size.".format(format_bytes(config.max_bytes)))
-            return
-        wanted = bool(job.get("optimize")) and produced.suffix.lower() in OPTIMIZABLE
-        too_large = wanted and config.too_large_to_optimize(size)
-        smaller = wanted and not too_large and config.optimizer_ready
-        store.finish(job_id, status="optimizing" if smaller else "done", percent=100, stored=produced.name,
-                     filename=safe_filename(produced.name), size=size, downloaded=size, total=size, part=None, parts=None,
-                     optimize_started_at=None, **({"optimized": "too_large"} if too_large else {}))
-        if too_large:
-            store.log.write("job.optimize_skipped", {"job": job_id, "size": size, "limit": config.optimize_max_bytes})
-        if smaller:
-            start_optimize(store, job_id)
-        return
+    return Followed(saved=saved, failure=failure, over_limit=over.is_set(), playlist=playlist)
+
+
+def finished_file(folder: pathlib.Path, reported: Optional[str]) -> Optional[pathlib.Path]:
+    """The finished download in the job's folder, which has to hold something; None when there is no such file.
+
+    When downie names the file, only that file counts: a stream left beside it must not pass for the result."""
+    if reported:
+        named = folder / pathlib.Path(reported).name
+        return named if named.is_file() and named.stat().st_size > 0 else None
+    candidates = [p for p in folder.iterdir() if p.is_file() and p.suffix not in (".part", ".ytdl", ".json") and p.stat().st_size > 0]
+    return max(candidates, key=lambda p: p.stat().st_size, default=None)
+
+
+def convert_to_mp3(store: JobStore, job_id: str, source: pathlib.Path, deadline: float) -> Optional[pathlib.Path]:
+    """Turn downloaded sound into an MP3 through the local-only ffmpeg stand-in; None means the job has ended."""
+    config = store.config
+    working = source.with_name(".converting.mp3")
+    command = [str(pathlib.Path(config.ffmpeg_tools or config.ffmpeg_dir, "ffmpeg")), "-nostdin", "-y", "-i", str(source),
+               "-vn", "-codec:a", "libmp3lame", "-q:a", "0", str(working)]
+    store.progress(job_id, status="processing", percent=99, speed=None, eta=None)
+    try:
+        process = start_step(store, job_id, command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             env=downloader_environment(config))
+    except OSError as error:
+        fail_job(store, job_id, source.parent, "The sound could not be converted to MP3 ({}).".format(error.strerror or "error"))
+        return None
+    if process is None:
+        return None
+    try:
+        process.wait(timeout=max(1.0, deadline - time.monotonic()))
+    except subprocess.TimeoutExpired:
+        JobStore._kill(process)
+        process.wait()
+    if not end_step(store, job_id):
+        return None
+    if process.returncode != 0 or not working.is_file():
+        store.log.write("job.convert_failed", {"job": job_id, "code": process.returncode}, level="warning")
+        fail_job(store, job_id, source.parent, "The sound could not be converted to MP3.")
+        return None
+    target = source.with_suffix(".mp3")
+    working.replace(target)
+    source.unlink()
+    return target
+
+
+def run_job(store: JobStore, job: dict) -> None:
+    """Run one download to the end and record how it finished: look it up, fetch it with downie, finish the file."""
+    config, job_id = store.config, job["id"]
+    folder = config.files / job_id
     shutil.rmtree(folder, ignore_errors=True)
-    if "too-large" in stderr or (process.returncode == 0 and produced is None):
-        message = "That video is larger than {}. Pick a smaller size.".format(format_bytes(config.max_bytes))
-    elif process.returncode in (-signal.SIGTERM, -signal.SIGKILL):
-        message = "The download was stopped before it finished. Add it again to retry."
-    else:
-        message = clean_error(stderr)
-    store.finish(job_id, status="failed", error=message)
+    folder.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + config.job_timeout
+    info = look_up(store, job, folder, deadline)
+    if info is None:
+        return
+    sizes = plan_sizes(info)
+    if sizes and all(sizes) and sum(sizes) > config.max_bytes:
+        fail_job(store, job_id, folder, too_large_message(config))
+        return
+    url = single_video_url(config, job, info)
+    direct = title_too_long(info)
+    command = long_title_command(config, job, folder, url) if direct else download_command(config, job, folder, url)
+    store.log.write("job.fetching", {"job": job_id, "engine": "yt-dlp" if direct else "downie", "streams": len(sizes)})
+    try:
+        process = start_step(store, job_id, command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                             env=downloader_environment(config))
+    except OSError as error:
+        fail_job(store, job_id, folder, "The downloader could not start ({}).".format(error.strerror or "error"))
+        return
+    if process is None:
+        return
+    followed = follow_download(store, job_id, process, folder, sizes, deadline)
+    if not end_step(store, job_id):
+        # Removed, or the service is shutting down: a stopping job stays marked running so the next start queues it.
+        return
+    finished = followed.saved is not None or (direct and process.returncode == 0)
+    produced = finished_file(folder, followed.saved) if finished else None
+    if followed.over_limit:
+        fail_job(store, job_id, folder, too_large_message(config))
+        return
+    if followed.playlist:
+        fail_job(store, job_id, folder, "That link is a list of videos. Paste the link to one video.")
+        return
+    if produced is None:
+        stopped = process.returncode in (-signal.SIGTERM, -signal.SIGKILL)
+        fail_job(store, job_id, folder, "The download was stopped before it finished. Add it again to retry." if stopped else clean_error(followed.failure))
+        return
+    if job["choice"] == "mp3" and produced.suffix.lower() != ".mp3":
+        produced = convert_to_mp3(store, job_id, produced, deadline)
+        if produced is None:
+            return
+    size = produced.stat().st_size
+    if size > config.max_bytes:
+        fail_job(store, job_id, folder, too_large_message(config))
+        return
+    wanted = bool(job.get("optimize")) and produced.suffix.lower() in OPTIMIZABLE
+    too_large = wanted and config.too_large_to_optimize(size)
+    smaller = wanted and not too_large and config.optimizer_ready
+    store.finish(job_id, status="optimizing" if smaller else "done", percent=100, stored=produced.name,
+                 filename=safe_filename(produced.name), size=size, downloaded=size, total=size, part=None, parts=None,
+                 optimize_started_at=None, **({"optimized": "too_large"} if too_large else {}))
+    if too_large:
+        store.log.write("job.optimize_skipped", {"job": job_id, "size": size, "limit": config.optimize_max_bytes})
+    if smaller:
+        start_optimize(store, job_id)
 
 
 def worker(store: JobStore) -> None:
@@ -1142,6 +1414,15 @@ def ytdlp_version(config: ServerConfig) -> Optional[str]:
     return result.stdout.strip() or None if result.returncode == 0 else None
 
 
+def downie_usable(config: ServerConfig) -> bool:
+    """Whether the downie command runs here. It has no version option, so its help screen is the check."""
+    try:
+        return subprocess.run([config.downie, "video", "download", "--help"], stdin=subprocess.DEVNULL, capture_output=True,
+                              timeout=30).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
 def parse_range(header: Optional[str], size: int) -> Optional[Tuple[int, int]]:
     """A single `bytes=a-b` range as inclusive offsets, None for the whole file; raises on an unusable one."""
     if not header:
@@ -1161,7 +1442,7 @@ def parse_range(header: Optional[str], size: int) -> Optional[Tuple[int, int]]:
     return start, end
 
 
-def make_handler(config: ServerConfig, store: JobStore, log: EventLog, version: Optional[str]):
+def make_handler(config: ServerConfig, store: JobStore, log: EventLog, version: Optional[str], downie_ready: bool):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
         server_version = "MothershipVideo/1"
@@ -1207,9 +1488,9 @@ def make_handler(config: ServerConfig, store: JobStore, log: EventLog, version: 
                 parts, query = self._route()
                 owner = lambda: self._owner((query.get("owner") or [""])[0])  # noqa: E731
                 if method == "GET" and parts == ["health"]:
-                    usable = version is not None
+                    usable = version is not None and downie_ready
                     self._json(200 if usable else 503, {
-                        "ok": usable, "ytdlp": version, "workers": config.workers,
+                        "ok": usable, "downie": downie_ready, "ytdlp": version, "workers": config.workers,
                         "ffmpeg": pathlib.Path(config.ffmpeg_dir, "ffmpeg").is_file(),
                         "optimizer": config.optimizer_ready, "optimize_max": config.optimize_max_bytes or None,
                         **store.stats(),
@@ -1225,7 +1506,7 @@ def make_handler(config: ServerConfig, store: JobStore, log: EventLog, version: 
                     body = self._body()
                     url = validate_url(body.get("url"), allow_private=config.allow_private)
                     choice = body.get("choice")
-                    choice_args(choice if isinstance(choice, str) else "")
+                    choice_format(choice if isinstance(choice, str) else "")
                     title = body.get("title") if isinstance(body.get("title"), str) else None
                     job, created = store.add(self._owner(body.get("owner")), url, choice, title,
                                              optimize=body.get("optimize") is True)
@@ -1300,6 +1581,7 @@ def serve(config: ServerConfig) -> Tuple[ThreadingHTTPServer, JobStore]:
     log = EventLog(config)
     store = JobStore(config, log)
     version = ytdlp_version(config)
+    downie_ready = downie_usable(config)
     proxy = EgressProxy(config, log)
     threading.Thread(target=proxy.serve_forever, name="video-egress", daemon=True).start()
     config.proxy = proxy.url
@@ -1311,9 +1593,9 @@ def serve(config: ServerConfig) -> Tuple[ThreadingHTTPServer, JobStore]:
     threading.Thread(target=janitor, args=(store,), name="video-janitor", daemon=True).start()
     config.optimizer_ready = optimizer_health(config)
     threading.Thread(target=optimizer_watch, args=(config, store), name="video-optimizer-watch", daemon=True).start()
-    server = ThreadingHTTPServer((config.host, config.port), make_handler(config, store, log, version))
+    server = ThreadingHTTPServer((config.host, config.port), make_handler(config, store, log, version, downie_ready))
     server.daemon_threads = True
-    log.write("service.listening", {"host": config.host, "port": config.port, "ytdlp": version, "workers": config.workers, "egress": config.proxy, "optimizer": config.optimizer_ready})
+    log.write("service.listening", {"host": config.host, "port": config.port, "downie": downie_ready, "ytdlp": version, "workers": config.workers, "egress": config.proxy, "optimizer": config.optimizer_ready})
     return server, store
 
 
