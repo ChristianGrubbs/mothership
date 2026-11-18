@@ -116,7 +116,8 @@
                     @endif
 
                     <main id="main-content" class="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-4 pt-3 pb-6 bg-transparent transition-all duration-300 focus:outline-none" tabindex="-1">
-                        @if (! request()->routeIs('admin.configuration.index'))
+                        {{-- The Library carries no section tabs: every child of its menu item (configuration, reports, analytics, feedback) is placed in the account menu. --}}
+                        @if (! request()->routeIs('admin.configuration.index', 'admin.dam.index', 'admin.dam.assets.index'))
                             <x-admin::layouts.tabs />
                         @endif
 

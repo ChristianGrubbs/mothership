@@ -68,7 +68,7 @@ const damCss = builtStylesheet('dam');
 const THUMBNAILS = 'Generate missing 3D thumbnails'; // literal text in the template, not a translation
 const A = 'admin.dam.index.directory.actions.';
 const directoryLabels = (lang) => [
-    lang['admin.explorer.context.open'], lang['admin.explorer.context.open-new-tab'],
+    lang['admin.explorer.context.open'],
     lang[A + 'upload-files'], lang['admin.explorer.context.folder-upload'], lang['admin.templates.use-page.title'],
     lang[A + 'add-directory'], lang[A + 'rename'], lang[A + 'copy-directory-structured'], THUMBNAILS,
     lang[A + 'download-zip'], lang[A + 'share'], lang['admin.upload-requests.request-uploads'],

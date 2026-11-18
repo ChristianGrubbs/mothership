@@ -2,7 +2,7 @@
 @push('scripts')
 <script type="text/x-template" id="v-dam-explorer-folder-card-template">
     <div
-        class="relative flex flex-col items-center gap-1.5 px-2 py-3 rounded-xl text-center cursor-pointer transition-colors select-none min-w-0"
+        class="relative flex min-h-16 min-w-0 items-center gap-2.5 rounded-xl border border-gray-200 px-2.5 py-2.5 text-left cursor-pointer transition-colors select-none dark:border-cherry-700"
         :class="isDropTarget
             ? 'bg-primary-200 dark:bg-primary-900/60 ring-2 ring-inset ring-primary-400'
             : 'hover:bg-primary-100 dark:hover:bg-primary-800/50'"
@@ -26,7 +26,7 @@
         ></button>
         <button
             type="button"
-            class="dam-ctx-trigger absolute top-1 right-1 z-[1] w-6 h-6 flex items-center justify-center rounded-md text-gray-500 dark:text-gray-300 bg-white/80 dark:bg-cherry-900/80 hover:bg-white dark:hover:bg-cherry-900 hover:text-primary-700 dark:hover:text-primary-400 shadow-sm transition-opacity"
+            class="dam-ctx-trigger absolute right-1.5 top-1/2 -translate-y-1/2 z-[1] w-8 h-8 flex items-center justify-center rounded-md text-gray-500 dark:text-gray-300 bg-white/80 dark:bg-cherry-900/80 hover:bg-white dark:hover:bg-cherry-900 hover:text-primary-700 dark:hover:text-primary-400 shadow-sm transition-opacity"
             :class="(hovered || anySelected) ? 'opacity-100' : 'opacity-0 focus-visible:opacity-100'"
             :title="'@lang('dam::app.admin.explorer.list.header.actions')'"
             :aria-label="@js(trans('dam::app.admin.explorer.a11y.actions-for')).replace(':name', () => dir.name)"
@@ -41,7 +41,7 @@
         </button>
 
         <div
-            class="absolute top-1 left-1 z-[1] transition-opacity"
+            class="absolute left-2.5 top-1/2 -translate-y-1/2 z-[1] rounded-md bg-white transition-opacity dark:bg-cherry-900"
             :class="(hovered || anySelected) ? 'opacity-100' : 'opacity-0 focus-within:opacity-100'"
             @click.stop
         >
@@ -57,9 +57,9 @@
                 <span class="icon-checkbox-normal peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary-600 dark:peer-focus-visible:outline-primary-400 peer-checked:icon-checkbox-check peer-checked:text-primary-700 rounded-md text-2xl bg-white/80 dark:bg-cherry-900/80"></span>
             </label>
         </div>
-        <i class="icon-dam-folder text-6xl text-primary-400 dark:text-primary-500 shrink-0 leading-none"></i>
-        <div class="flex items-center justify-center gap-1 w-full min-w-0">
-            <div class="text-xs text-gray-700 dark:text-gray-300 line-clamp-2 break-words hyphens-auto min-w-0 leading-tight" :title="dir.name">@{{ dir.name }}</div>
+        <i class="icon-dam-folder text-3xl text-primary-400 dark:text-primary-500 shrink-0 leading-none transition-opacity" :class="{ 'opacity-0': hovered || anySelected }" aria-hidden="true"></i>
+        <div class="flex flex-1 items-center gap-1 min-w-0" :class="{ 'pr-7': hovered || anySelected }">
+            <div class="text-sm font-medium text-gray-800 dark:text-gray-100 line-clamp-2 break-words min-w-0 leading-snug" :title="dir.name">@{{ dir.name }}</div>
             @include('dam::components.explorer.access-indicator', ['expression' => 'dir.access_mode'])
         </div>
     </div>
