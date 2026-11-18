@@ -72,6 +72,9 @@ return [
         // How many of the newest files the board groups. Past this, `truncated` tells Home the board is partial.
         'landing_scan_limit'  => 1000,
         'board_rows'          => 5,
+        // Cargo: how many landings Home lists, and how many pictures each one shows.
+        'cargo_rows'          => 8,
+        'cargo_pictures'      => 6,
         // A share link counts as needing attention this many days before it expires.
         'share_warning_days'  => 7,
         // Failures and expired requests stay on Needs you for this long.

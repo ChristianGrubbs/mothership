@@ -10,10 +10,12 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Mothership\DAM\Models\Asset;
 use Mothership\DAM\Models\ChunkUpload;
+use Mothership\DAM\Models\Directory;
 use Mothership\DAM\Models\UploadBatch;
 use Mothership\DAM\Models\UploadTracker;
 use Mothership\DAM\Services\Access\AccessContext;
 use Mothership\DAM\Services\Access\AssetAccessDecision;
+use Mothership\DAM\Services\DirectoryPermissionService;
 
 /**
  * The arrivals board: saved files grouped into landings, plus the uploads still on their way and the ones that failed.
@@ -31,13 +33,19 @@ class HomeLandings
 
     public const STATUS_FAILED = 'failed';
 
+    private const DOCKED_HOURS = 24;
+
     private const IN_FLIGHT_UPLOADS = [ChunkUpload::STATE_RECEIVING, ChunkUpload::STATE_QUEUED, ChunkUpload::STATE_ASSEMBLING];
 
     private const IN_FLIGHT_TRACKERS = [UploadTracker::STATE_PENDING, UploadTracker::STATE_PROCESSING, UploadTracker::STATE_PAUSED];
 
     public function __construct(private readonly AssetAccessDecision $access) {}
 
-    /** The files this person may list. Every count on Home starts here, so Home never reveals a hidden file. */
+    /**
+     * The files this person may list. Every count on Home starts here, so Home never reveals a hidden file.
+     *
+     * @return Builder<Asset>
+     */
     public function visibleAssets(): Builder
     {
         $query = Asset::query()->visibleCaptures();
@@ -47,7 +55,7 @@ class HomeLandings
     }
 
     /**
-     * @return array{rows: list<array<string, mixed>>, more: int, truncated: bool, holding: array{available: false, reason: string}}
+     * @return array{rows: list<array<string, mixed>>, cargo: list<array<string, mixed>>, moving: list<array<string, mixed>>, docked: list<array<string, mixed>>, more: int, truncated: bool, holding: array{available: false, reason: string}}
      */
     public function board(HomeSummaryContext $context): array
     {
@@ -60,21 +68,38 @@ class HomeLandings
             ->toBase()
             ->get(['dam_assets.id', 'dam_assets.created_at', 'dam_assets.created_by', 'dam_assets.file_size']);
 
+        $scanned = $files->take($scanLimit);
+        $producers = $this->producers($scanned->map(fn (object $file): int => (int) $file->id)->all());
         $rows = [
-            ...$this->landings(files: $files->take($scanLimit), context: $context),
+            ...$this->landings(files: $scanned, producers: $producers, context: $context),
             ...$this->stowing($context),
             ...$this->failed($context),
         ];
         usort($rows, fn (array $a, array $b): int => $b['at'] <=> $a['at']);
 
         $boardRows = (int) config('dam-home.summary.board_rows');
+        $shown = array_slice($rows, 0, $boardRows);
+        $cargo = array_slice(
+            array_values(array_filter($rows, fn (array $row): bool => ($row['asset_ids'] ?? []) !== [])),
+            0,
+            (int) config('dam-home.summary.cargo_rows'),
+        );
+        // Uploads under way or failed stay in Cargo even when newer rows push them off the board.
+        $moving = array_slice(
+            array_values(array_filter($rows, fn (array $row): bool => in_array($row['status'], [self::STATUS_STOWING, self::STATUS_FAILED], true))),
+            0,
+            (int) config('dam-home.summary.cargo_rows'),
+        );
+        $details = $this->assetDetails(assetIds: array_merge(...array_map(
+            fn (array $row): array => $row['asset_ids'] ?? [],
+            [...$shown, ...$cargo],
+        )));
 
         return [
-            'rows'      => array_map(function (array $row): array {
-                $row['at'] = $row['at']->toIso8601String();
-
-                return $row;
-            }, array_slice($rows, 0, $boardRows)),
+            'rows'      => array_map(fn (array $row): array => $this->present(row: $row, details: $details), $shown),
+            'cargo'     => array_map(fn (array $row): array => $this->present(row: $row, details: $details), $cargo),
+            'moving'    => array_map(fn (array $row): array => $this->present(row: $row, details: $details), $moving),
+            'docked'    => $this->docked(files: $scanned, producers: $producers, now: $context->now),
             'more'      => max(0, count($rows) - $boardRows),
             'truncated' => $files->count() > $scanLimit,
             // Nothing reports a craft's outbox yet: the MCP rework adds those reports.
@@ -83,13 +108,126 @@ class HomeLandings
     }
 
     /**
+     * Each craft that saved one of the files the board read, most recent first. A save is the only record of a craft's
+     * activity, so this reports saves and never says a craft is connected right now.
+     *
      * @param  Collection<int, \stdClass>  $files  newest first
+     * @param  array<int, string>  $producers
+     * @return list<array{producer: string, last_save_at: string, files_24h: int, hours: list<int>}>
+     */
+    private function docked(Collection $files, array $producers, CarbonImmutable $now): array
+    {
+        $docked = [];
+        foreach ($files as $file) {
+            $producer = $producers[(int) $file->id] ?? null;
+            if ($producer === null) {
+                continue;
+            }
+
+            $at = CarbonImmutable::parse($file->created_at);
+            $docked[$producer] ??= ['producer' => $producer, 'last_save_at' => $at->toIso8601String(), 'files_24h' => 0, 'hours' => array_fill(0, self::DOCKED_HOURS, 0)];
+            $hoursAgo = (int) floor(($now->getTimestamp() - $at->getTimestamp()) / 3600);
+            if ($hoursAgo >= 0 && $hoursAgo < self::DOCKED_HOURS) {
+                $docked[$producer]['files_24h']++;
+                $docked[$producer]['hours'][self::DOCKED_HOURS - 1 - $hoursAgo]++;
+            }
+        }
+
+        return array_values($docked);
+    }
+
+    /**
+     * A row as Home receives it: what the landing is called, what kinds of file it holds and its first pictures.
+     *
+     * @param  array<string, mixed>  $row
+     * @param  Collection<int, Asset>  $details
+     * @return array<string, mixed>
+     */
+    private function present(array $row, Collection $details): array
+    {
+        $assets = collect($row['asset_ids'] ?? [])->map(fn (int $assetId): ?Asset => $details->get($assetId))->filter()->values();
+        unset($row['asset_ids']);
+        $row['at'] = $row['at']->toIso8601String();
+        $row['title'] = $this->landingTitle(assets: $assets);
+        $row['kinds'] = $assets
+            ->countBy(fn (Asset $asset): string => strtolower((string) $asset->extension))
+            // PHP turns an all-digit extension such as "123" into an integer array key.
+            ->map(fn (int $count, int|string $extension): array => ['extension' => (string) $extension, 'count' => $count])
+            ->values()
+            ->all();
+        $row['previews'] = $assets
+            ->take((int) config('dam-home.summary.cargo_pictures'))
+            ->map(fn (Asset $asset): array => [
+                'id'        => (int) $asset->id,
+                'name'      => $asset->display_name,
+                'type'      => (string) $asset->file_type,
+                'extension' => strtolower((string) $asset->extension),
+                'url'       => route('admin.dam.assets.edit', $asset->id),
+                'thumbnail' => route('admin.dam.file.thumbnail', ['path' => urlencode((string) $asset->path)]),
+            ])
+            ->all();
+
+        return $row;
+    }
+
+    /**
+     * One file is called by its own name. Several are called by the folder they share, when they share one that is not
+     * the library's top folder.
+     *
+     * @param  Collection<int, Asset>  $assets  newest first
+     */
+    private function landingTitle(Collection $assets): ?string
+    {
+        $newest = $assets->first();
+        if ($newest === null) {
+            return null;
+        }
+
+        // A file this person may list can also sit in a folder they may not see, and that folder's name stays hidden.
+        $permissions = app(DirectoryPermissionService::class);
+        /** @var Collection<int, Directory> $directories */
+        $directories = $newest->directories;
+        $folder = $assets->count() > 1
+            ? $directories->first(fn (Directory $directory): bool => $directory->parent_id !== null
+                && $permissions->canView(directoryId: (int) $directory->id)
+                && $assets->every(fn (Asset $asset): bool => $asset->directories->contains('id', $directory->id)))
+            : null;
+
+        return $folder !== null ? (string) $folder->name : $newest->display_name;
+    }
+
+    /**
+     * The landing's files, read through the same access check as every other count on Home.
+     *
+     * @param  list<int>  $assetIds
+     * @return Collection<int, Asset>
+     */
+    private function assetDetails(array $assetIds): Collection
+    {
+        $details = collect();
+        foreach (array_chunk(array_values(array_unique($assetIds)), 500) as $chunk) {
+            $details = $details->merge(
+                $this->visibleAssets()
+                    ->withDisplayName()
+                    ->with('directories:id,name,parent_id')
+                    ->whereIn('dam_assets.id', $chunk)
+                    ->get()
+                    ->keyBy(fn (Asset $asset): int => (int) $asset->id)
+                    ->all()
+            );
+        }
+
+        return $details->keyBy(fn (Asset $asset): int => (int) $asset->id);
+    }
+
+    /**
+     * @param  Collection<int, \stdClass>  $files  newest first
+     * @param  array<int, string>  $producers
      * @return list<array<string, mixed>>
      */
-    private function landings(Collection $files, HomeSummaryContext $context): array
+    private function landings(Collection $files, array $producers, HomeSummaryContext $context): array
     {
         $assetIds = $files->map(fn (object $file): int => (int) $file->id)->all();
-        $producers = $this->producers($assetIds);
         $trackers = $this->trackers($assetIds);
         // Failures are shown only to the person who uploaded: a failed file in someone else's session may be hidden.
         $partial = $this->failuresBySession(
@@ -121,6 +259,7 @@ class HomeLandings
             // One upload stays one landing however long it took. Other files must arrive close together.
             if ($index !== null && ($tracker !== null || $landings[$index]['oldest']->subMinutes($gapMinutes)->lessThanOrEqualTo($at))) {
                 $landings[$index]['files']++;
+                $landings[$index]['asset_ids'][] = $assetId;
                 $landings[$index]['bytes'] += (int) $file->file_size;
                 $landings[$index]['oldest'] = $at;
 
@@ -139,7 +278,9 @@ class HomeLandings
                 'phase'        => null,
                 'source'       => $producer !== null ? 'craft' : 'upload',
                 'producer'     => $producer,
+                'mine'         => (int) $file->created_by === $context->adminId,
                 'asset_id'     => $assetId,
+                'asset_ids'    => [$assetId],
                 'files'        => 1,
                 'failed_files' => $failedFiles,
                 'bytes'        => (int) $file->file_size,
@@ -240,6 +381,7 @@ class HomeLandings
             'phase'        => $phase,
             'source'       => 'upload',
             'producer'     => null,
+            'mine'         => true,
             'asset_id'     => null,
             'failed_files' => 0,
             'at'           => $at,
@@ -277,6 +419,7 @@ class HomeLandings
                 'phase'        => null,
                 'source'       => 'upload',
                 'producer'     => null,
+                'mine'         => true,
                 'asset_id'     => null,
                 'files'        => (int) $tracker->total_files,
                 'failed_files' => $failures[$tracker->id],

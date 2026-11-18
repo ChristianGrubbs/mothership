@@ -40,6 +40,14 @@
     @endif
 
     <div class="bridge-top-actions">
+        @if (bouncer()->hasPermission('dam.asset.upload') && bouncer()->hasPermission('dam.directory.index'))
+            {{-- Only Home shows this: its stylesheet reveals the button and its script opens the upload dialog. --}}
+            <a href="{{ route('admin.dam.assets.index') }}" class="bridge-btn-card bridge-top-upload hidden" data-bridge-upload>
+                <x-admin::bridge.icon name="upload" :size="18" />
+                <span>@lang('admin::app.components.layouts.header.upload')</span>
+            </a>
+        @endif
+
         @if ((bool) config('dam.feedback.enabled') && app(\Mothership\DAM\Services\Feedback\FeedbackAccess::class)->canSubmit($admin))
             {{-- Feedback & bug reports: opens the layout's report dialog (dam::components.feedback.dialog); Alt+Shift+B too. --}}
             <button
