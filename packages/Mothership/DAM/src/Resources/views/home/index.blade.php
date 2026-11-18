@@ -11,6 +11,7 @@
     <div v-pre data-mothership-home data-base="{{ url(config('app.admin_url').'/home') }}" data-csrf="{{ csrf_token() }}" data-user="{{ auth('admin')->id() }}" data-name="{{ auth('admin')->user()->name }}" data-library="{{ route('admin.dam.assets.index') }}" data-upload="{{ route('admin.dam.assets.upload') }}" data-directory-search="{{ route('admin.dam.directory.search') }}" data-directories="{{ route('admin.dam.directory.index') }}" data-library-allowed="{{ bouncer()->hasPermission('dam.assets') ? '1' : '0' }}" data-superuser="{{ auth('admin')->user()?->role?->permission_type === 'all' ? '1' : '0' }}" data-connect="{{ $homeLinks['connect'] }}" data-shares="{{ $homeLinks['shares'] }}" data-requests="{{ $homeLinks['requests'] }}" data-new-uploads="{{ $homeLinks['newUploads'] }}">
         <h1 class="hm-sr">Home</h1>
         <div role="status" aria-live="polite" class="hm-status" data-status></div>
+        <div role="status" aria-live="polite" class="hm-stale" data-stale></div>
         <div class="hm-layout" data-grid>
             <div class="hm-centre">
                 <div class="hm-object" data-board-object>

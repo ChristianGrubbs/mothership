@@ -20,8 +20,6 @@
 .agh-card-body{container:aghbody / size}
 .agh-card[data-id=storage] .agh-card-body,.agh-card[data-id=totals] .agh-card-body{display:flex;flex-direction:column;justify-content:center}
 @container aghbody (max-height:84px){.agh-caption{line-height:1.35}}
-/* The offline notice and its Retry share a row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
-/* Existing destinations look actionable;
 
 /* Home calendar (home-calendar.js). The card body is the container: the month grid drops out when the card is narrow. */
 .agh-card[data-id=calendar] .agh-card-body{container-type:inline-size}
@@ -56,8 +54,7 @@
 .agh-cal-results{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px;max-height:260px;overflow-y:auto}.agh-cal-results button{all:unset;box-sizing:border-box;position:relative;cursor:pointer;border:1px solid var(--agh-line);border-radius:8px;overflow:hidden;background:var(--agh-bg);display:flex;flex-direction:column}.agh-cal-results button:hover{border-color:var(--agh-violet)}.agh-cal-results button:focus-visible{outline:2px solid var(--agh-violet)}.agh-cal-results button:disabled{opacity:.55;cursor:default}.agh-cal-results img{width:100%;height:72px;object-fit:cover;background:var(--agh-soft)}.agh-cal-results span{font-size:10px;padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.agh-cal-results em{position:absolute;top:4px;left:4px;font-style:normal;font-size:9px;font-weight:700;background:var(--agh-text);color:var(--agh-bg);border-radius:999px;padding:1px 6px}
 @media(max-width:640px){.agh-cal-fields{grid-template-columns:1fr}.agh-cal-task.is-sub{margin-left:12px}}
 
-/* Fixed Home: one page for everyone,read top to bottom. Nothing is arranged
-   by the person{margin:4px 0 22px}
+/* The notes, upload steps and dialogs Home keeps from its earlier layout. */
 .agh-section-note{font-size:13px;line-height:1.5;color:var(--agh-muted);margin:-4px 0 10px}.agh-section-note a{color:var(--agh-violet);font-weight:600}
 .agh-empty-note{padding:12px 4px;font-size:13px;line-height:1.5}.agh-empty-note strong{display:block;font-size:15px;font-weight:650}.agh-empty-note p{margin:2px 0 10px;color:var(--agh-muted)}.agh-empty-note .agh-button{font-size:13px;padding:9px 14px;white-space:normal}
 .agh-upload{width:min(560px,92vw)}.agh-upload .agh-dialog-head h2{font-size:22px;margin:0}
@@ -69,24 +66,32 @@
 .agh-upload .agh-empty-note .agh-actions{justify-content:flex-start;flex-wrap:wrap}
 @media(max-width:640px){.agh-cal-filters{flex:1 1 100%}}
 
-/* Reimagined Home: a hero that answers "what now",one agenda,picture-led recent work{margin:0 0 6px;padding:30px 32px 26px;border:1px solid var(--agh-line);border-radius:22px;background:linear-gradient(120deg,var(--agh-tint) 0%,var(--agh-bg) 62%)}
+/* The calendar opens large, and fills a phone. */
 .agh-calendar-dialog{width:min(1180px,96vw);height:min(780px,92vh);padding:20px 22px}.agh-calendar-dialog[open]{display:flex;flex-direction:column;gap:10px}.agh-calendar-dialog .agh-dialog-head h2{font-size:22px;margin:0}
 .agh-calendar-dialog .agh-slot{flex:1;min-height:0;display:flex}.agh-calendar-dialog .agh-card{flex:1;border:0;box-shadow:none;border-radius:0}.agh-calendar-dialog .agh-card-body{padding:0}
 @media(max-width:640px){.agh-calendar-dialog{width:100vw;height:100dvh;max-width:none;max-height:none;border-radius:0;padding:12px}}
-/* Home focus (2026-11-10): day and recent uploads on the left,apps as icons on the right,then sending and the phone{grid-template-columns:minmax(0,1.25fr) minmax(340px,1fr)}
+/* The steps for adding Home to an iPhone. */
 .agh-phone{max-width:620px}.agh-phone-body{display:flex;gap:24px;align-items:center;justify-content:space-between}.agh-phone-steps{margin:0 0 12px;padding-left:22px;list-style:decimal;display:grid;gap:8px;font-size:15px;line-height:1.45}.agh-phone-steps b{font-weight:650;overflow-wrap:anywhere}.agh-phone-foot{margin:0}
 .agh-phone-share{display:inline-grid;place-items:center;width:22px;height:22px;vertical-align:-5px;border:1px solid var(--agh-line);border-radius:6px}.agh-phone-share svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .agh-phone-art{flex:0 0 112px;height:196px;padding:22px 12px 0;border:3px solid var(--agh-text);border-radius:24px;background:var(--agh-soft);display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:22px;gap:9px 8px;align-content:start}
 .agh-phone-art span{border-radius:6px;background:var(--agh-line)}.agh-phone-art .agh-phone-app{background:var(--agh-violet);box-shadow:0 0 0 3px var(--agh-tint)}
 @media(max-width:640px){.agh-phone-art{display:none}}
-@media(max-width:640px){.agh-phone-art{display:none}}
 
 /* The Bridge (redesign v2): the arrivals board and its deck, Cargo, and what is around the ship. */
-[data-mothership-home]{--hm-on-new:#141414;--hm-on-new-2:#5A4A00;--hm-bar:#141414;--hm-bar-0:rgba(0,0,0,.09);max-width:none;margin:0;padding:8px 12px 48px;color:var(--ink);font-family:var(--font-ui)}
+[data-mothership-home]{--hm-on-new:#141414;--hm-on-new-2:#5A4A00;--hm-bar:#141414;--hm-bar-0:rgba(0,0,0,.09);max-width:none;margin:0;padding:8px 12px 96px;color:var(--ink);font-family:var(--font-ui)}
 .dark [data-mothership-home]{--hm-bar:#E8E8E8;--hm-bar-0:rgba(255,255,255,.1)}
 .hm-status:empty{display:none}
 .hm-status{margin-bottom:12px;color:var(--ink-2);font-size:14px}
 .hm-status.is-error{color:var(--alert)}
+.hm-stale:empty{display:none}
+.hm-stale{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:12px;color:var(--ink-2);font-size:14px}
+/* Home's upload dialog opens from the top bar, so a phone keeps the button as an icon. The hit area reaches 44px. */
+@media(max-width:719px){
+body:has([data-mothership-home]) .bridge-top-upload{position:relative;display:inline-flex;flex:none;width:40px;height:40px;padding:0;border-radius:999px}
+body:has([data-mothership-home]) .bridge-top-upload::after{content:"";position:absolute;inset:-2px}
+body:has([data-mothership-home]) .bridge-top-upload>span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+body:has([data-mothership-home]) footer[data-fold-wrap]{margin-bottom:var(--tabbar-h)}
+}
 .hm-layout{display:grid;grid-template-columns:minmax(0,1fr) 344px;column-gap:28px;align-items:start}
 .hm-centre{min-width:0}
 .hm-side{display:flex;flex-direction:column;gap:16px;min-width:0}

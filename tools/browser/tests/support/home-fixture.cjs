@@ -30,7 +30,7 @@ function homeRoot({superuser=false,library=true,tag='div',attrs={}}={}){
     };
     const attributeText=Object.entries(rootAttributes).filter(([,value])=>value!==null).map(([name,value])=>`${name}="${attribute(value)}"`).join(' ');
     return `<${tag} data-mothership-home ${attributeText}>`
-        +'<h1 class="hm-sr">Home</h1><div role="status" aria-live="polite" class="hm-status" data-status></div>'
+        +'<h1 class="hm-sr">Home</h1><div role="status" aria-live="polite" class="hm-status" data-status></div><div role="status" aria-live="polite" class="hm-stale" data-stale></div>'
         +'<div class="hm-layout" data-grid><div class="hm-centre">'
         +'<div class="hm-object" data-board-object><section class="hm-board" data-board aria-labelledby="hm-board-title" aria-busy="true"><div class="hm-board-head hm-mono"><h2 id="hm-board-title">Arrivals board</h2><span class="hm-sp"></span><span class="hm-board-state" data-board-state></span></div><div role="list" aria-label="Arrivals since your last visit" data-board-rows></div><p class="hm-more hm-mono" data-board-more hidden></p></section><section class="hm-deck" data-deck aria-label="New since your last visit" aria-busy="true"></section></div>'
         +'<nav class="hm-card hm-glance" aria-label="Around the ship" data-glance></nav>'

@@ -307,9 +307,28 @@ it('names a landing after the folder its files share and lists what it holds', f
     expect($row['title'])->toBe('Harbour set')
         ->and(collect($row['kinds'])->pluck('count', 'extension')->all())->toEqual(['png' => 2, 'pcraft' => 1])
         ->and($row['previews'])->toHaveCount(3)
-        ->and(array_keys($row['previews'][0]))->toEqual(['id', 'name', 'type', 'url', 'thumbnail'])
+        ->and(array_keys($row['previews'][0]))->toEqual(['id', 'name', 'type', 'extension', 'url', 'thumbnail'])
         ->and($row)->not->toHaveKey('asset_ids')
         ->and($board['cargo'][0]['key'])->toBe($row['key']);
+});
+
+it('never names a landing after a folder the person cannot see', function () {
+    homeVisitedHoursAgo($this->homeAdmin, 2);
+    $top = Directory::factory()->create(['parent_id' => null]);
+    $private = Directory::factory()->create(['name' => 'Private set', 'parent_id' => $top->id]);
+    $allowed = Directory::factory()->create(['name' => 'Harbour set', 'parent_id' => $top->id]);
+    foreach (['plate-a.png', 'plate-b.png'] as $name) {
+        homeFile(now()->subMinutes(20)->toImmutable(), ['file_name' => $name, 'extension' => 'png', 'created_by' => $this->homeAdmin->id])
+            ->directories()->attach([$private->id, $allowed->id]);
+    }
+    $role = Role::factory()->create(['permission_type' => 'custom', 'permissions' => ['dam', 'dam.assets']]);
+    DB::table('dam_directory_role')->insert(['role_id' => $role->id, 'directory_id' => $allowed->id]);
+    $this->homeAdmin->update(['role_id' => $role->id]);
+    app(DirectoryPermissionService::class)->flush();
+
+    $row = $this->actingAs($this->homeAdmin->fresh(), 'admin')->getJson(route('admin.home.summary'))->assertOk()->json('board.rows.0');
+
+    expect($row['title'])->toBe('Harbour set');
 });
 
 it('names a single file after itself, whatever its extension', function () {

@@ -10,10 +10,12 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Mothership\DAM\Models\Asset;
 use Mothership\DAM\Models\ChunkUpload;
+use Mothership\DAM\Models\Directory;
 use Mothership\DAM\Models\UploadBatch;
 use Mothership\DAM\Models\UploadTracker;
 use Mothership\DAM\Services\Access\AccessContext;
 use Mothership\DAM\Services\Access\AssetAccessDecision;
+use Mothership\DAM\Services\DirectoryPermissionService;
 
 /**
  * The arrivals board: saved files grouped into landings, plus the uploads still on their way and the ones that failed.
@@ -152,6 +154,7 @@ class HomeLandings
                 'id'        => (int) $asset->id,
                 'name'      => $asset->display_name,
                 'type'      => (string) $asset->file_type,
+                'extension' => strtolower((string) $asset->extension),
                 'url'       => route('admin.dam.assets.edit', $asset->id),
                 'thumbnail' => route('admin.dam.file.thumbnail', ['path' => urlencode((string) $asset->path)]),
             ])
@@ -173,12 +176,15 @@ class HomeLandings
             return null;
         }
 
-        $folder = $newest->directories->first();
-        $shared = $assets->count() > 1
-            && $folder?->parent_id !== null
-            && $assets->every(fn (Asset $asset): bool => $asset->directories->contains('id', $folder->id));
+        // A file this person may list can also sit in a folder they may not see, and that folder's name stays hidden.
+        $permissions = app(DirectoryPermissionService::class);
+        $folder = $assets->count() > 1
+            ? $newest->directories->first(fn (Directory $directory): bool => $directory->parent_id !== null
+                && $permissions->canView(directoryId: (int) $directory->id)
+                && $assets->every(fn (Asset $asset): bool => $asset->directories->contains('id', $directory->id)))
+            : null;
 
-        return $shared ? (string) $folder->name : $newest->display_name;
+        return $folder !== null ? (string) $folder->name : $newest->display_name;
     }
 
     /**

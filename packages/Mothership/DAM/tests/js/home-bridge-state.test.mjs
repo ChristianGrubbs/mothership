@@ -9,6 +9,13 @@ vm.runInNewContext(readFileSync(new URL('../../src/Resources/assets/js/home-stat
 const state = context.window.MothershipHomeState;
 const plain = value => JSON.parse(JSON.stringify(value));
 
+test('no stylesheet comment swallows the dialog rules Home still needs', () => {
+    const css = readFileSync(new URL('../../src/Resources/assets/css/home.css', import.meta.url), 'utf8');
+    for (const comment of css.match(/\/\*[\s\S]*?\*\//g)) assert.doesNotMatch(comment, /[{}]/, comment.slice(0, 60));
+    const live = css.replace(/\/\*[\s\S]*?\*\//g, '');
+    for (const selector of ['.agh-calendar-dialog[open]', '.agh-upload{', '.agh-upload-folders{', '.agh-phone-steps{']) assert.ok(live.includes(selector), selector);
+});
+
 test('a board field always fills its width with one cell per character', () => {
     assert.deepEqual(plain(state.boardCells({ text: 'You', width: 5 })), ['Y', 'O', 'U', ' ', ' ']);
     assert.deepEqual(plain(state.boardCells({ text: '14', width: 3, align: 'right' })), [' ', '1', '4']);

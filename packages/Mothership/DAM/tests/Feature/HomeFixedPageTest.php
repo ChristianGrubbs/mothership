@@ -74,7 +74,7 @@ it('survives a stored layout that is not valid JSON', function () {
 
 it('offers only the links and upload a role can use', function () {
     $this->get('/admin/home')->assertOk()
-        ->assertSee('bridge-top-upload', false)
+        ->assertSee('class="bridge-btn-card bridge-top-upload', false)
         ->assertSee('data-library-allowed="1"', false)
         ->assertSee('data-shares="'.route('admin.dam.shared-links.index').'"', false)
         ->assertSee('data-requests="'.route('admin.dam.upload-requests.index').'"', false);
@@ -83,7 +83,7 @@ it('offers only the links and upload a role can use', function () {
     $this->actingAs(Admin::factory()->create(['role_id' => $role->id]), 'admin');
 
     $this->get('/admin/home')->assertOk()
-        ->assertDontSee('bridge-top-upload', false)
+        ->assertDontSee('class="bridge-btn-card bridge-top-upload', false)
         ->assertSee('data-library-allowed="0"', false)
         ->assertSee('data-shares=""', false)
         ->assertSee('data-requests=""', false)

@@ -12,12 +12,14 @@ const ORIGIN='https://home.test';
 const tool=(id,title)=>({id,title,description:`${title} description`,icon:id,kind:'tool',settings:{},url:`${ORIGIN}/tools/${id}/index.html`});
 
 // `summary` is the page script that answers /summary: a function of the page's __homeSummary helper.
-async function mount(browser,{fixture={},catalog=[],summary=null,width=1280,prepare=null}={}){
+async function mount(browser,{fixture={},catalog=[],summary=null,width=1280,prepare=null,clock=false}={}){
     const page=await browser.newPage({viewport:{width,height:900},reducedMotion:'reduce'});
+    if(clock)await page.clock.install();
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
-    await page.route(`${ORIGIN}/**`,route=>route.fulfill({contentType:'text/html',body:route.request().url().includes('/tools/')?'<!doctype html><p>tool</p>':`<!doctype html><a href="/admin/dam" data-bridge-upload>Upload</a>${homeApp(fixture)}`}));
+    // The top bar's Upload as the shell draws it, hidden below 720px unless the page brings it back.
+    await page.route(`${ORIGIN}/**`,route=>route.fulfill({contentType:'text/html',body:route.request().url().includes('/tools/')?'<!doctype html><p>tool</p>':`<!doctype html><a href="/admin/dam" class="bridge-top-upload shell-phone-hidden" data-bridge-upload><span>Upload</span></a>${homeApp(fixture)}`}));
     await page.goto(`${ORIGIN}/admin/home`);
-    await page.addStyleTag({content:`*{box-sizing:border-box}body{margin:0}${homeStyles}`});
+    await page.addStyleTag({content:`*{box-sizing:border-box}body{margin:0}@media(max-width:719px){.shell-phone-hidden{display:none}}${homeStyles}`});
     await page.addScriptTag({content:homeAnswersSource});
     await page.evaluate(({catalog,summary})=>{
         const response=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json'}});
@@ -69,6 +71,60 @@ browserTest('a board that cannot answer says so, never shows zero, and recovers 
         assert.equal((await deck.locator('.hm-fig').textContent()).trim(),'–');
         await deck.locator('[data-summary-retry]').click();
         await deck.getByRole('heading',{name:'nothing new came aboard'}).waitFor();
+        assert.deepEqual(errors,[]);
+        await page.close();
+    }finally{await browser.close();}
+});
+
+browserTest('a refresh that fails keeps the last board, says so, and clears on recovery',async()=>{
+    const browser=await launchBrowser({playwrightPath});
+    try{
+        const {page,errors}=await mount(browser,{clock:true,summary:call=>call===2||call===3?null:window.__homeSummary()});
+        const stale=page.locator('[data-stale]'),deck=page.locator('[data-deck]');
+        await deck.getByRole('heading',{name:'nothing new came aboard'}).waitFor();
+        assert.equal(await stale.isHidden(),true);
+
+        await page.clock.fastForward('02:00');
+        await stale.getByRole('button',{name:'Try again'}).waitFor();
+        assert.match(await stale.textContent(),/could not refresh/);
+        assert.equal(await deck.getByRole('heading',{name:'nothing new came aboard'}).isVisible(),true,'the last answer stays on screen');
+
+        await stale.getByRole('button',{name:'Try again'}).click();
+        await page.waitForFunction(()=>window.__summaryCalls===3);
+        assert.equal(await stale.getByRole('button',{name:'Try again'}).isVisible(),true,'a second failure keeps the notice');
+        await stale.getByRole('button',{name:'Try again'}).click();
+        await page.waitForFunction(()=>!document.querySelector('[data-stale]').firstChild);
+        assert.deepEqual(errors,[]);
+        await page.close();
+    }finally{await browser.close();}
+});
+
+browserTest('a phone keeps Upload on Home as a named icon button that opens the dialog',async()=>{
+    const browser=await launchBrowser({playwrightPath});
+    try{
+        const {page,errors}=await mount(browser,{width:390});
+        const upload=page.getByRole('link',{name:'Upload'});
+        assert.equal(await upload.isVisible(),true);
+        const box=await upload.boundingBox();
+        assert.deepEqual([box.width,box.height],[40,40]);
+        await upload.click();
+        assert.equal(await page.locator('[data-upload-dialog]').evaluate(node=>node.matches(':modal')),true);
+        assert.equal(new URL(page.url()).pathname,'/admin/home');
+        assert.deepEqual(errors,[]);
+        await page.close();
+    }finally{await browser.close();}
+});
+
+browserTest('a broken picture shows its file type, and Docked says when it read only the newest files',async()=>{
+    const browser=await launchBrowser({playwrightPath});
+    try{
+        const {page,errors}=await mount(browser,{summary:()=>{
+            const row={key:'asset:1',status:'landed',source:'craft',producer:'claude-code',title:'Harbour study',files:1,bytes:2048,failed_files:0,at:new Date().toISOString(),kinds:[{extension:'png',count:1}],previews:[{id:1,name:'Harbour study',type:'image',extension:'png',url:'/admin/dam/1',thumbnail:'/missing-thumbnail'}]};
+            return window.__homeSummary({lead:{available:true,state:'new',files:1,bytes:2048,since:null},board:{rows:[row],cargo:[row],more:0,truncated:true,docked:[{producer:'claude-code',last_save_at:row.at,files_24h:1,hours:Array(24).fill(0)}]}});
+        }});
+        await page.locator('.hm-pic-kind').waitFor();
+        assert.equal(await page.locator('.hm-pic-kind').textContent(),'.png');
+        assert.equal((await page.locator('[data-docked] .hm-axis').textContent()).trim(),'Saves among the newest files');
         assert.deepEqual(errors,[]);
         await page.close();
     }finally{await browser.close();}

@@ -179,7 +179,7 @@
             if (!previews.length) return '';
             const size = shelfSize(seen);
             const plan = state.shelfPlan({files: row.files, previews: previews.length, ...state.shelfFit(size)});
-            const pictures = previews.slice(0, plan.pictures).map(picture => `<a class="hm-pic" href="${esc(picture.url)}" title="${esc(picture.name)}"><img src="${esc(picture.thumbnail)}" alt="${esc(picture.name)}" loading="lazy" data-kind="${esc(String(picture.name).split('.').pop())}"></a>`).join('');
+            const pictures = previews.slice(0, plan.pictures).map(picture => `<a class="hm-pic" href="${esc(picture.url)}" title="${esc(picture.name)}"><img src="${esc(picture.thumbnail)}" alt="${esc(picture.name)}" loading="lazy" data-kind="${esc(picture.extension || '')}"></a>`).join('');
             const tile = plan.more > 0 ? `<a class="hm-pic hm-pic-more" href="${esc(data.library)}" aria-label="${esc(`${plural(plan.more, 'more file')} in this landing. Open the Library`)}"><span>+${plan.more.toLocaleString()}</span></a>` : '';
             const room = state.shelfFit(size).withMore;
             const width = Math.floor(Math.min(size.tile, (size.room - size.moreTile - size.gap * room) / room));
@@ -237,7 +237,7 @@
                 const bars = craft.hours.map(hours => `<i${hours ? ' class="on"' : ''} style="--h:${hours ? Math.max(4, Math.round((hours / peak) * 28)) : 2}px"></i>`).join('');
                 return `<li><span class="hm-key">${esc(keycap(name))}</span><div><div class="hm-nm">${esc(name)}</div><div class="hm-st">Last save · ${esc(shortTime(craft.last_save_at, now))}</div></div><div class="hm-trace" role="img" aria-label="${esc(`${name} saved ${plural(craft.files_24h, 'file')} in the last 24 hours`)}">${bars}</div></li>`;
             }).join('');
-            card.innerHTML = `<div class="hm-ch"><h2>Docked</h2><span class="hm-mono hm-r">${esc(plural(docked.length, 'craft', 'craft'))}</span></div><ul>${rows}</ul><p class="hm-axis">Saves, last 24 hours</p>`;
+            card.innerHTML = `<div class="hm-ch"><h2>Docked</h2><span class="hm-mono hm-r">${esc(plural(docked.length, 'craft', 'craft'))}</span></div><ul>${rows}</ul><p class="hm-axis">${summary.board.truncated ? 'Saves among the newest files' : 'Saves, last 24 hours'}</p>`;
         }
 
         function paintAway() {
@@ -280,6 +280,13 @@
             deck.removeAttribute('aria-busy');
             deck.classList.add('is-calm');
             deck.innerHTML = `<div class="hm-fig" aria-hidden="true">–</div><div><h2>the board did not load</h2><p role="alert">${esc(error?.message || 'The ship did not answer.')}</p></div><button type="button" class="hm-btn" data-summary-retry>Try again</button>`;
+        }
+
+        // A refresh that fails after a good answer keeps the page and says it is out of date.
+        function paintStale(stale) {
+            const note = $('[data-stale]');
+            if (stale === Boolean(note.firstChild)) return;
+            note.innerHTML = stale ? '<span>Home could not refresh. This is the last update.</span><button type="button" class="hm-btn" data-summary-recheck>Try again</button>' : '';
         }
 
         // A feed writes its own links, so only a web address becomes one.
@@ -330,11 +337,12 @@
             const result = await request('/summary');
             if (signal.aborted || !root.isConnected) return result;
             summary = result;
+            paintStale(false);
             paintSummary();
             return result;
         }
         const poller = state.poller({interval: SUMMARY_INTERVAL_MS, visible: () => document.visibilityState !== 'hidden', request: loadSummary});
-        const refresh = () => poller.refresh().catch(error => { if (!summary) paintFailure(error); });
+        const refresh = () => poller.refresh().catch(error => { if (summary) paintStale(true); else paintFailure(error); });
         const signalPoller = state.poller({interval: SIGNAL_INTERVAL_MS, visible: () => document.visibilityState !== 'hidden', request: () => loadSignal()});
 
         // On a phone the right column lives in a sheet, opened from the glance rows.
@@ -354,6 +362,7 @@
             if (glance) openGlance(glance.dataset.glanceOpen);
             if (event.target.closest('[data-sheet-close]')) sheet.close();
             if (event.target.closest('[data-summary-retry]')) { paintLoading(); refresh(); }
+            if (event.target.closest('[data-summary-recheck]')) refresh();
             if (event.target.closest('[data-signal-retry]')) loadSignal({reveal: true});
             if (event.target.closest('[data-signal-show]')) loadSignal({reveal: true});
         }, {signal});
@@ -368,7 +377,7 @@
         observer?.observe($('[data-cargo]'));
 
         const ticker = setInterval(() => {
-            poller.tick().catch(() => {});
+            poller.tick().catch(() => { if (summary) paintStale(true); });
             if (admin) signalPoller.tick().catch(() => {});
         }, TICK_MS);
         signal.addEventListener('abort', () => { clearInterval(ticker); observer?.disconnect(); }, {once: true});
