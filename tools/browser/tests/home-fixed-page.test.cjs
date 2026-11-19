@@ -277,7 +277,8 @@ browserTest('closing the calendar gives the focus to Calendar, though the tap th
         const {page,errors}=await mount(browser,{catalog:[calendar],prepare:()=>{window.MothershipHomeCalendar={create:()=>({mount(){},show(){}})};}});
         const opener=page.locator('#hm-cargo [data-calendar-open]'),dialog=page.locator('[data-calendar-dialog]');
         await opener.waitFor();
-        const onCalendar=()=>page.evaluate(()=>document.activeElement?.hasAttribute('data-calendar-open')===true);
+        // Home hands the focus back from the dialog's close event, which fires in a later task than the one that closed it.
+        const onCalendar=()=>page.waitForFunction(()=>document.activeElement?.hasAttribute('data-calendar-open')===true,null,{timeout:2000}).then(()=>true,()=>false);
         // A click event with no focus first: what a tap in Safari on iPhone gives.
         await opener.dispatchEvent('click');
         assert.equal(await dialog.evaluate(node=>node.open),true);
