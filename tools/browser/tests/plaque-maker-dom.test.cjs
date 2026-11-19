@@ -204,7 +204,7 @@ browserTest('on a touch screen no field is under 16 px, where Safari would zoom 
             const { page, errors } = await open(browser, { touch, width: 1024, height: 768 });
             assert.equal(await page.evaluate(() => matchMedia('(pointer: coarse)').matches), touch);
             await addBlank(page);
-            await page.locator('.plq-edit .field input[type="text"]').first().waitFor({ state: 'attached' });
+            await page.locator('.plq-edit .field textarea[data-k="subtitle"]').waitFor({ state: 'attached' });
             seen[touch ? 'touch' : 'mouse'] = await page.evaluate(() => {
                 const skip = ['checkbox', 'radio', 'range', 'color', 'file', 'hidden'];
                 const fields = [...document.querySelectorAll('input, select, textarea')].filter(node => !skip.includes(node.type));
