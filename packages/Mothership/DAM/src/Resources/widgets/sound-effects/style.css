@@ -467,6 +467,29 @@
     outline-offset: 2px;
 }
 
+/* A touch screen gets 44 px targets (Apple's HIG), as the kit gives its glyph buttons: the segment, Simple and
+   Advanced, the selected sound's buttons, and the pane's own way to its sheets. */
+@media (pointer: coarse) {
+    .sfx-seg .tk-seg-opt,
+    .sfx-mode .tk-seg-opt,
+    .sfx-tools .tk-btn.is-small,
+    .sfx-own .tk-btn.is-small {
+        height: 44px;
+    }
+}
+
+/* A short window (a phone on its side, an iPhone Duo's outer display held sideways): a list that scrolls by itself
+   would keep a single row between the sheet's head, toolbar and foot, so the whole body scrolls as one instead. */
+@media (max-height: 520px) {
+    .sfx-saved .tk-sheet-body {
+        display: grid;
+    }
+
+    .sfx-list {
+        overflow: visible;
+    }
+}
+
 /* Three buttons share this foot with the status line, so the line takes only the room they leave and the buttons
    stay on one row. Under 720 px the kit gives the line a row of its own. */
 @media (min-width: 720px) {
