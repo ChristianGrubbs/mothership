@@ -86,6 +86,10 @@ social click effects at set times inside the plaque's local time.
   name carries the account: another person signing in on the same browser starts clean. Undo snapshots keep the asset
   map they refer to, so undoing an import brings back the earlier set's images and sounds. The frame's `localStorage` is the host's per-account preference store (64 KB per key), too small for
   images, so it holds only small preferences (last export format, panel state).
+- Work reported to the host: typing in the editor is not reported as work (`data-agh-ephemeral`), because every change
+  is kept. While a change waits to be kept, or after the browser refused to keep one, the tool sends `ready` with
+  `holdsWork: true` and `dirty`, so the host asks before closing it; once the set is kept it sends `holdsWork: false`
+  (see `docs/manual/developer/iframe-tools.md`).
 - Undo and redo: snapshots of the set (assets are shared by reference), 100 deep. Bulk edits, AI append or replace,
   and imports are one step each.
 - User presets live in IndexedDB (`presets`), so they survive a new set; a preset is a plaque with a name and no set around it.

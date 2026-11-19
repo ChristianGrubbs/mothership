@@ -44,22 +44,43 @@
             del: (store, key) => run(store, 'readwrite', s => s.delete(key)),
         };
     })();
-    let saveTimer;
+    let saveTimer = null, keeps = 0;
     function kept(text, error = false) {
         const line = $('[data-save-state]');
         line.textContent = text;
         line.dataset.state = error ? 'error' : '';
     }
+    // ---- what the page around the tool is told about work --------------------------------------------------------------
+    // The editor is marked data-agh-ephemeral, so typing in it reports no work by itself: every change is kept on this
+    // device shortly after. Closing the tool loses work only while a change waits to be kept, or after this browser
+    // refused to keep one. The tool says it holds work while either is true (ready with holdsWork: true, and dirty, as
+    // the Video Downloader does), and holdsWork: false once the set is kept. It speaks only when that changes.
+    let toldHost = null;
+    function tellHost(holdsWork) {
+        if (window.parent === window || holdsWork === toldHost) return;
+        toldHost = holdsWork;
+        const tell = (type, payload = {}) => window.parent.postMessage({ protocol: 'mothership-widget/v1', type, payload }, location.origin);
+        tell('ready', { holdsWork });
+        if (holdsWork) tell('dirty');
+    }
     function autosave() {
         clearTimeout(saveTimer);
         kept('Keeping…');
+        tellHost(true);
         saveTimer = setTimeout(async () => {
+            saveTimer = null;
+            const attempt = ++keeps;
             try {
                 await db.put('sets', { set: C.exportSet(state.set), current: state.current }, 'current');
+                // A later change may be waiting, or already being kept: only the latest attempt speaks.
+                if (attempt !== keeps || saveTimer) return;
                 kept('Kept on this device');
+                tellHost(false);
             } catch (error) {
                 log('autosave.failed', { message: String(error) });
+                if (attempt !== keeps) return;
                 kept('Not kept: this browser refused to store the set. Export it to keep it.', true);
+                tellHost(true);
             }
         }, 600);
     }
@@ -675,6 +696,9 @@
     }
     async function openExport() {
         const scope = $('[data-export-scope]');
+        // A choice set aside for the set file at the last opening belongs to that opening: start from this one's.
+        scope.disabled = false;
+        delete scope.dataset.before;
         scope.value = state.selected.size > 1 ? 'selected' : state.scope;
         const formats = FORMATS.slice();
         if (await probeAlphaWebm()) formats.splice(5, 0, ['webm-alpha', 'WebM, transparent', 'VP9 or VP8 with an alpha channel, recorded in real time. Plays transparent in browsers and editors that read WebM alpha.']);
