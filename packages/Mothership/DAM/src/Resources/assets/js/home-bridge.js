@@ -14,7 +14,8 @@
     const FLAP_STEP_MS = 55;
     const FLAP_COLUMN_MS = 6;
     const GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    const PHONE = '(max-width: 720px)';
+    // The phone layout. home.css switches at the same width.
+    const PHONE = '(max-width: 640px)';
     const ICONS = {
         arrow: 'M5 12h14M12 5l7 7-7 7',
         chevron: 'm9 18 6-6-6-6',
@@ -300,15 +301,46 @@
         // On a phone the right column lives in a sheet, opened from the glance rows.
         const side = $('[data-side]'), layout = side.parentElement, sheet = $('[data-side-sheet]'), sheetBody = $('[data-sheet-body]');
         const sections = {docked: '[data-docked]', signal: '[data-signal]', away: '[data-away]'};
+        const phoneLayout = window.matchMedia?.(PHONE);
         function openGlance(name) {
             const target = $(sections[name]);
-            if (window.matchMedia?.(PHONE).matches) {
-                sheetBody.append(side);
-                sheet.showModal();
+            if (!target) return;
+            if (!phoneLayout?.matches) {
+                target.scrollIntoView({block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth'});
+                return;
             }
-            target?.scrollIntoView({block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth'});
+            sheetBody.append(side);
+            sheet.showModal();
+            // Only the sheet's body scrolls. The tapped card is placed at its top once the sheet is laid out, and again
+            // on the next frame, since Safari can reset a dialog's scroll as it opens.
+            const place = () => { sheetBody.scrollTop = target.offsetTop - side.offsetTop; };
+            place();
+            requestAnimationFrame(place);
         }
         sheet.addEventListener('close', () => layout.append(side), {signal});
+        // Opening a folding phone ends the phone layout: the sheet closes and its cards go back to the page.
+        phoneLayout?.addEventListener?.('change', event => { if (!event.matches && sheet.open) sheet.close(); }, {signal});
+
+        // Folded like a laptop, the deck starts below the fold (home.css). The stylesheet needs to know where the board
+        // rests with the page at the top, which a measurement taken after the page has scrolled cannot say.
+        const boardObject = $('[data-board-object]');
+        function measureRest() {
+            if (document.documentElement.dataset.fold !== 'rows') { boardObject.style.removeProperty('--hm-rest-top'); return; }
+            let scroller = boardObject.parentElement;
+            while (scroller && scroller !== document.body && !/auto|scroll/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+            const scrolled = scroller && scroller !== document.body ? scroller.scrollTop : window.scrollY;
+            boardObject.style.setProperty('--hm-rest-top', `${Math.round(boardObject.getBoundingClientRect().top + scrolled)}px`);
+        }
+        // The fold layer announces a pose before it marks the page, so the measurement waits a frame.
+        const measureRestSoon = () => requestAnimationFrame(measureRest);
+        window.addEventListener('mothership:fold', measureRestSoon, {signal});
+        window.addEventListener('resize', measureRestSoon, {signal});
+        // A status line that appears or goes above the board moves where it rests, and changes Home's height with it.
+        if (window.ResizeObserver) {
+            const heights = new ResizeObserver(measureRestSoon);
+            heights.observe(root);
+            signal.addEventListener('abort', () => heights.disconnect(), {once: true});
+        }
         root.addEventListener('click', event => {
             const glance = event.target.closest('[data-glance-open]');
             if (glance) openGlance(glance.dataset.glanceOpen);
@@ -335,6 +367,7 @@
         return {
             start() {
                 paintLoading();
+                measureRest();
                 signalCard.start();
                 refresh();
             },
