@@ -490,6 +490,59 @@
                         overflowY: 'auto',
                         left: `${Math.max(margin, Math.min(left, window.innerWidth - width - margin))}px`,
                         top: `${Math.max(margin, Math.min(top, window.innerHeight - height - margin))}px`,
+                        ...this.placementClearOfFold({
+                            anchor,
+                            fullHeight: panel.scrollHeight + panel.offsetHeight - panel.clientHeight,
+                            gap,
+                            margin,
+                        }),
+                    };
+                },
+
+                /**
+                 * A folding phone in its laptop pose: the open menu stays on one half and never covers its toggle. It
+                 * takes the first space that fits, in the order the menu normally tries them, or else the roomiest
+                 * space, where it scrolls. In every other pose this returns nothing, so the placement above stands.
+                 */
+                placementClearOfFold({ anchor, fullHeight, gap, margin }) {
+                    const root = document.documentElement;
+
+                    if (root.dataset.fold !== 'rows') {
+                        return {};
+                    }
+
+                    const styles    = getComputedStyle(root);
+                    const foldStart = parseFloat(styles.getPropertyValue('--seg-a-bottom'));
+                    const foldEnd   = parseFloat(styles.getPropertyValue('--seg-b-top'));
+
+                    if (Number.isNaN(foldStart) || Number.isNaN(foldEnd)) {
+                        return {};
+                    }
+
+                    const onUpperHalf = (anchor.top + anchor.bottom) / 2 < foldStart;
+                    const bottomEdge  = window.innerHeight - margin;
+                    const half        = onUpperHalf ? { start: margin, end: foldStart } : { start: foldEnd, end: bottomEdge };
+
+                    const aboveToggle = { start: half.start, end: Math.min(anchor.top - gap, half.end), hugsToggle: true };
+                    const belowToggle = { start: Math.max(anchor.bottom + gap, half.start), end: half.end };
+
+                    const spaces = this.position?.startsWith('top') ? [aboveToggle, belowToggle] : [belowToggle, aboveToggle];
+
+                    if (onUpperHalf) {
+                        spaces.push({ start: Math.max(foldEnd + margin, anchor.bottom + gap), end: bottomEdge });
+                    }
+
+                    const room  = ({ start, end }) => end - start;
+                    const space = spaces.find(candidate => room(candidate) >= fullHeight)
+                        ?? spaces.reduce((roomiest, candidate) => (room(candidate) > room(roomiest) ? candidate : roomiest));
+
+                    if (room(space) <= 0) {
+                        return {};
+                    }
+
+                    return {
+                        top: `${space.hugsToggle ? space.end - Math.min(fullHeight, room(space)) : space.start}px`,
+                        maxHeight: `${room(space)}px`,
                     };
                 },
 
