@@ -19,12 +19,12 @@ const job = (id, status, extra = {}) => ({
 // Serves the tool from disk at the path Home serves it from, and answers its API from `studio`, a made-up job list.
 // `app` makes the page look like the installed iPhone or iPad app, with a share sheet that only records what it is given.
 // `framed` puts the tool inside a page that stands in for Home and keeps what the tool tells it about holding work.
-async function openTool(browser, { app = false, framed = false, jobs = [] } = {}) {
+async function openTool(browser, { app = false, framed = false, jobs = [], touch = false } = {}) {
     const studio = { jobs, held: null, next: null };
     // A file kept back until the test lets it through stands in for a slow connection.
     studio.hold = id => { let open; const gate = new Promise(resolve => { open = resolve; }); studio.held = { id, gate, open }; };
     studio.letThrough = () => { studio.held.open(); studio.held = null; };
-    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: touch });
     page.setDefaultTimeout(5000);
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
@@ -45,6 +45,9 @@ async function openTool(browser, { app = false, framed = false, jobs = [] } = {}
                     : { contentType: 'application/json', body: '{"ok":true}' });
             }
             if (at === 'jobs') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ jobs: studio.jobs, optimize: true, optimize_max: LIMIT, now: Date.now() / 1000 }) });
+            if (at === 'probe') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ title: 'A found clip', site: 'Example', duration: 95, choices: [
+                { id: 'v720', label: '720p video (MP4)', size: 50 * 1048576, default: true }, { id: 'mp3', label: 'Audio only (MP3)', size: 3 * 1048576 },
+            ] }) });
             return route.fulfill({ status: 404, body: '' });
         }
         if (url.pathname === '/home.html') {
@@ -67,9 +70,11 @@ async function openTool(browser, { app = false, framed = false, jobs = [] } = {}
                 });
             </script><iframe src="/admin/home/tools/video-downloader/index.html" style="width:100%;height:700px;border:0"></iframe>` });
         }
-        const file = path.join(widget, path.basename(url.pathname));
+        // The tool kit is served beside the tool, as the server serves it, so the layout under test is the real one.
+        const kit = url.pathname === '/admin/home/tools/_kit/tool-kit.css';
+        const file = kit ? path.join(widget, '../_kit/tool-kit.css') : path.join(widget, path.basename(url.pathname));
         const type = { '.html': 'text/html', '.css': 'text/css', '.js': 'application/javascript' }[path.extname(file)];
-        return url.pathname.startsWith('/admin/home/tools/video-downloader/') && type && fs.existsSync(file)
+        return (kit || url.pathname.startsWith('/admin/home/tools/video-downloader/')) && type && fs.existsSync(file)
             ? route.fulfill({ contentType: `${type}; charset=utf-8`, body: fs.readFileSync(file) }) : route.fulfill({ status: 404, body: '' });
     });
     if (app) {
@@ -259,7 +264,7 @@ run('Video Downloader says what happens over the limit, and a browser or a Mac D
         assert.match(await said('going'), /Downloading, 33% · 100 MB of 300 MB · over 250 MB, so it will be saved as it is$/);
         assert.match(await said('over'), /Ready · 300 MB · too large to make smaller \(over 250 MB\) · kept until /);
         assert.match(await said('earlier'), /Ready · 57 MB · too large to make smaller · kept until /);
-        const link = row('over').locator('a.outline');
+        const link = row('over').locator('a[download]');
         assert.equal(await link.innerText(), 'Save to this device');
         assert.equal(await link.getAttribute('href'), origin + '/admin/home/video/jobs/over/file');
         assert.equal(await link.getAttribute('download'), 'over.mp4');
@@ -268,8 +273,132 @@ run('Video Downloader says what happens over the limit, and a browser or a Mac D
 
         // The site in the Mac Dock is installed too, but it downloads as a browser does: the link, not the share sheet.
         const dock = await openTool(browser, { app: 'dock', jobs: [job('done', 'done')] });
-        assert.equal(await dock.row('done').locator('a.outline').getAttribute('download'), 'done.mp4');
+        assert.equal(await dock.row('done').locator('a[download]').getAttribute('download'), 'done.mp4');
         assert.equal(await dock.row('done').locator('button[data-act="save"]').count(), 0);
         assert.deepEqual(dock.errors, []);
+    } finally { await browser.close(); }
+});
+
+run('Video Downloader fills one control, the next step: Find video, Download while a video is found, then a file waiting for the share sheet', async () => {
+    const browser = await launch();
+    try {
+        const { page, errors, row } = await openTool(browser, { app: true, jobs: [job('a', 'done')] });
+        // Filled is the accent's ground, or its hover ground under the pointer; every other control is a card or plain words.
+        const filled = () => page.evaluate(() => {
+            const grounds = ['--act', '--act-hover'].map(name => {
+                const probe = Object.assign(document.createElement('i'), { style: `color:${getComputedStyle(document.documentElement).getPropertyValue(name).trim()}` });
+                document.body.append(probe);
+                const ground = getComputedStyle(probe).color;
+                probe.remove();
+                return ground;
+            });
+            return [...document.querySelectorAll('button, a')].filter(node => node.checkVisibility() && grounds.includes(getComputedStyle(node).backgroundColor)).map(node => node.textContent.trim());
+        });
+        assert.deepEqual(await filled(), ['Find video']);
+
+        await page.locator('[data-url]').fill('https://example.test/clip');
+        await page.locator('[data-find]').click();
+        await page.locator('[data-found]').waitFor();
+        assert.deepEqual(await filled(), ['Download']);
+        await page.locator('[data-dismiss]').click();
+        assert.deepEqual(await filled(), ['Find video']);
+
+        // Brought onto this device, the share sheet closed without saving: saving it is the next step, until it is saved.
+        await page.evaluate(() => { window.__sheetClosedUnsaved = true; });
+        await row('a').locator('button[data-act="save"]').click();
+        await row('a', '.is-save-ready').waitFor();
+        assert.deepEqual(await filled(), ['Save video']);
+        await page.evaluate(() => { window.__sheetClosedUnsaved = false; });
+        await row('a').locator('button[data-act="share"]').click();
+        await page.waitForFunction(() => document.querySelector('[data-vd]').dataset.next === 'find');
+        assert.deepEqual(await filled(), ['Find video']);
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); }
+});
+
+run('Video Downloader on a folded screen keeps both panes off the fold, the downloads above a tabletop fold, and each pane scrolling by itself', async () => {
+    const browser = await launch();
+    try {
+        const many = Array.from({ length: 14 }, (_, index) => job('j' + index, index % 3 ? 'done' : 'running', { can_optimize: index % 3 === 1 }));
+        const { page, errors } = await openTool(browser, { jobs: many });
+        // What the page that frames the tool says about the fold (home-frame.js), with a hinge strip of 19 px.
+        const fold = (mode, start, end) => page.evaluate(([mode, start, end]) => {
+            const root = document.documentElement;
+            root.dataset.fold = mode;
+            root.style.setProperty('--fold-start', start + 'px');
+            root.style.setProperty('--fold-end', end + 'px');
+        }, [mode, start, end]);
+        const panes = () => page.evaluate(() => Object.fromEntries(['.vd-find', '.vd-list'].map(selector => {
+            const pane = document.querySelector(selector), box = pane.getBoundingClientRect();
+            return [selector, { left: box.left, right: box.right, top: box.top, bottom: box.bottom, scrolls: pane.scrollHeight > pane.clientHeight && getComputedStyle(pane).overflowY === 'auto' }];
+        })));
+
+        await page.setViewportSize({ width: 951, height: 585 });
+        await fold('columns', 466, 485);
+        let at = await panes();
+        assert.ok(at['.vd-find'].right <= 466, 'Find ends before the fold');
+        assert.ok(at['.vd-list'].left >= 485, 'the downloads start after it');
+        assert.equal(at['.vd-list'].scrolls, true, 'the long list scrolls inside its own pane');
+        // The downloads pane is narrow on a wide page: a row with buttons puts them under its title.
+        const row = page.locator('[data-jobs] li[data-id="j1"]');
+        const [title, actions] = await Promise.all([row.locator('.job-title').boundingBox(), row.locator('.job-actions').boundingBox()]);
+        assert.ok(actions.y >= title.y + title.height, 'the buttons sit under the title');
+
+        await page.setViewportSize({ width: 669, height: 867 });
+        await fold('rows', 418, 449);
+        at = await panes();
+        assert.ok(at['.vd-list'].bottom <= 418, 'the downloads end above the fold');
+        assert.ok(at['.vd-find'].top >= 449, 'Find starts below it');
+        assert.equal(at['.vd-list'].scrolls, true);
+        assert.equal(await page.evaluate(() => document.documentElement.scrollHeight - document.documentElement.clientHeight), 0, 'the page itself does not scroll');
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); }
+});
+
+// The iPhone Duo's inner screen held like a laptop: the tool is 951 x 479 and the fold crosses it at 286 to 305, so
+// the Find pane under it is 174 px tall and the card for a found video is taller than that.
+run('Video Downloader under a tabletop fold brings the video it found to the top of its pane, with no line cut by the pane\'s top edge', async () => {
+    const browser = await launch();
+    try {
+        const { page, errors } = await openTool(browser, { jobs: [job('a', 'done')] });
+        await page.setViewportSize({ width: 951, height: 479 });
+        await page.evaluate(() => {
+            const root = document.documentElement;
+            root.dataset.fold = 'rows';
+            root.style.setProperty('--fold-start', '286px');
+            root.style.setProperty('--fold-end', '305px');
+        });
+        await page.locator('[data-url]').fill('https://example.test/clip');
+        await page.locator('[data-find]').click();
+        await page.locator('[data-found]').waitFor();
+        const at = await page.evaluate(() => {
+            const pane = document.querySelector('.vd-find').getBoundingClientRect(), card = document.querySelector('[data-found]').getBoundingClientRect();
+            return { pane: pane.top, card: card.top, taller: card.height > pane.height, focused: document.activeElement.matches('[data-add]') };
+        });
+        assert.equal(at.taller, true, 'the card is taller than its pane');
+        assert.equal(at.focused, true, 'Download has the focus');
+        assert.ok(Math.abs(at.card - at.pane) < 1, `the card starts at the pane's top edge (card ${at.card}, pane ${at.pane})`);
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); }
+});
+
+// Safari on iPhone and iPad zooms into a field whose text is under 16 px when it takes the focus, and stays zoomed.
+run('The tool kit\'s fields and lists, and Video Downloader\'s link field, are 16 px text on a touch screen, where Safari would zoom into smaller ones', async () => {
+    const browser = await launch();
+    try {
+        for (const touch of [true, false]) {
+            const { page, errors } = await openTool(browser, { touch });
+            assert.equal(await page.evaluate(() => matchMedia('(pointer: coarse)').matches), touch);
+            const sizes = await page.evaluate(() => {
+                const list = Object.assign(document.createElement('select'), { className: 'tk-select' });
+                list.append(new Option('One'));
+                document.querySelector('.vd-find').append(list);
+                return [document.querySelector('[data-url]'), list].map(node => getComputedStyle(node).fontSize);
+            });
+            // With a mouse the link field keeps the tool's own 15 px and the kit's list its 14.5 px.
+            assert.deepEqual(sizes, touch ? ['16px', '16px'] : ['15px', '14.5px'], touch ? 'touch' : 'mouse');
+            assert.deepEqual(errors, []);
+            await page.close();
+        }
     } finally { await browser.close(); }
 });

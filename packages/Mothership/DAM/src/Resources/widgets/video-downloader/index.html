@@ -2,65 +2,58 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#f6f7f8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Video Downloader · The Mothership</title>
+    <link rel="stylesheet" href="../_kit/tool-kit.css">
     <link rel="stylesheet" href="style.css">
     <script src="app.js" defer></script>
 </head>
 <body>
-    <main class="shell">
-        <header class="page-head">
-            <p class="eyebrow">THE MOTHERSHIP · VIDEO</p>
-            <h1>Video Downloader</h1>
-            <p>Paste the link to a video and save it to this device. Works with YouTube, Instagram, TikTok, X, Facebook, Vimeo and most other sites.</p>
-        </header>
+    <!-- The frame's bar names the tool and offers nothing more: the tool keeps no saved sets, and its files go to this
+         device rather than the Library. data-next names the one next step, which alone is filled (app.js keeps it). -->
+    <main class="vd" data-vd data-next="find">
+        <section class="tk-pane vd-find" aria-label="Find a video">
+            <!-- data-agh-ephemeral: typing a link is not unsaved work, so it must not arm the frame's leave question. -->
+            <form class="vd-finder" data-finder data-agh-ephemeral novalidate>
+                <label class="tk-head" for="vd-url">Video link</label>
+                <div class="vd-field">
+                    <input class="tk-input" id="vd-url" name="url" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="2048" placeholder="https://" required aria-describedby="vd-help" data-url>
+                    <button class="tk-btn vd-go" type="submit" data-find>Find video</button>
+                </div>
+                <p class="tk-note vd-help" id="vd-help" data-help>Copy the link from the address bar or the Share button, then paste it here. Works with YouTube, Instagram, TikTok, X, Facebook, Vimeo and most other sites.</p>
+                <p class="vd-error" role="alert" data-error hidden></p>
+            </form>
 
-        <!-- data-agh-ephemeral: typing a link is not unsaved work, so it must not arm Home's leave-page prompt. -->
-        <form class="finder" data-finder data-agh-ephemeral novalidate>
-            <label class="finder-label" for="vd-url">Video link</label>
-            <div class="finder-field">
-                <input id="vd-url" name="url" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="2048" placeholder="https://" required data-url>
-                <button class="primary" type="submit" data-find>Find video</button>
-            </div>
-            <p class="finder-help" data-help>Copy the link from the address bar or the Share button, then paste it here.</p>
-            <p class="finder-error" role="alert" data-error hidden></p>
-        </form>
-
-        <section class="found" aria-labelledby="vd-found-title" data-found hidden>
-            <div class="found-head">
+            <section class="vd-found" aria-labelledby="vd-found-title" data-found hidden>
                 <h2 id="vd-found-title" data-found-title></h2>
-                <p data-found-meta></p>
-            </div>
-            <fieldset class="choices">
-                <legend>Choose a size</legend>
-                <div data-choices></div>
-            </fieldset>
-            <label class="smaller" data-smaller-option hidden>
-                <input type="checkbox" data-smaller>
-                <span>
-                    <b>Make the file smaller</b>
-                    <small data-smaller-help>Same picture size, takes a little longer.</small>
-                </span>
-            </label>
-            <p class="smaller-note" role="status" data-smaller-note hidden></p>
-            <div class="found-actions">
-                <button class="primary" type="button" data-add>Download</button>
-                <button class="quiet" type="button" data-dismiss>Not this one</button>
-                <p class="finder-error" role="alert" data-add-error hidden></p>
-            </div>
+                <p class="tk-note vd-found-meta" data-found-meta></p>
+                <fieldset class="vd-choices">
+                    <legend class="tk-head">Choose a size</legend>
+                    <div data-choices></div>
+                </fieldset>
+                <label class="tk-check vd-smaller" data-smaller-option hidden>
+                    <input type="checkbox" data-smaller>
+                    <span>
+                        <b>Make the file smaller</b>
+                        <small data-smaller-help>Same picture size, takes a little longer.</small>
+                    </span>
+                </label>
+                <p class="vd-smaller-note" role="status" data-smaller-note hidden></p>
+                <div class="vd-found-actions">
+                    <button class="tk-btn vd-go" type="button" data-add>Download</button>
+                    <button class="tk-btn" type="button" data-dismiss>Not this one</button>
+                </div>
+                <p class="vd-error" role="alert" data-add-error hidden></p>
+            </section>
         </section>
 
-        <section class="downloads" aria-labelledby="vd-list-title">
-            <div class="section-head">
-                <h2 id="vd-list-title">Your downloads</h2>
-                <p data-list-note>Finished files are kept for a day, and this list is the same on every device you sign in from.</p>
-            </div>
-            <p class="list-error" role="status" data-list-error hidden></p>
-            <p class="empty" data-empty hidden>Nothing here yet. Paste a link above to start.</p>
-            <ul class="jobs" data-jobs aria-live="polite"></ul>
+        <section class="tk-pane vd-list" aria-labelledby="vd-list-title">
+            <h2 class="tk-head" id="vd-list-title">Your downloads</h2>
+            <p class="tk-note vd-list-note" data-list-note>Finished files are kept for a day, and this list is the same on every device you sign in from.</p>
+            <p class="vd-error" role="status" data-list-error hidden></p>
+            <p class="tk-empty" data-empty hidden>Nothing here yet. Paste a video's link to start.</p>
+            <ul class="vd-jobs" data-jobs aria-live="polite"></ul>
         </section>
-
     </main>
 </body>
 </html>

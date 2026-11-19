@@ -1,113 +1,400 @@
-:root {
-    color-scheme: light;
-    --paper: #fff;
-    --wash: #f6f7f8;
-    --ink: #101114;
-    --soft: #5b5f66;
-    --line: #c9cdd0;
-    --hair: rgba(16, 17, 20, .12);
-    --crimson: #bc232c;
-    --crimson-dark: #a51d25;
-    --crimson-soft: #f8e4e5;
-    --shadow: 0 18px 48px -40px rgba(16, 17, 20, .55);
-    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: var(--wash);
+/* Video Downloader, on the tool kit (../_kit/tool-kit.css). From 860 px of the tool's own width: two panes, the link
+   and the video it found on the left, the downloads on the right, each scrolling by itself. Under 860 they scroll as
+   one. Blue is focus and the one next step only (main[data-next], kept by app.js); red is an error, always with its
+   sign. The tool shows none of the person's content, so no other hue is used. */
+/* Positioned, so the kit's visually hidden labels are held inside the tool. */
+.vd {
+    position: relative;
+    display: grid;
+    grid-template-columns: 400px minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
+}
+
+.vd .tk-pane {
+    padding: 20px 20px 32px;
+}
+
+/* The one next step. */
+.vd[data-next="find"] [data-find],
+.vd[data-next="download"] [data-add],
+.vd[data-next="save"] .vd-share {
+    background: var(--act);
+    box-shadow: none;
+    color: var(--on-act);
+}
+
+.vd[data-next="find"] [data-find]:hover:not(:disabled),
+.vd[data-next="download"] [data-add]:hover:not(:disabled),
+.vd[data-next="save"] .vd-share:hover {
+    background: var(--act-hover);
+}
+
+.vd .tk-btn:disabled {
+    cursor: progress;
+}
+
+/* A lesser action in a row: words with no ground until pointed at. */
+.vd .vd-plain {
+    background: none;
+    box-shadow: none;
+    color: var(--ink-2);
+}
+
+.vd .vd-plain:hover:not(:disabled) {
+    background: var(--ctl);
     color: var(--ink);
 }
 
-* { box-sizing: border-box; }
-[hidden] { display: none !important; }
-body { margin: 0; background: var(--wash); }
-button, input { font: inherit; }
-button, label { -webkit-tap-highlight-color: transparent; }
-.shell { width: min(100%, 880px); margin: auto; padding: clamp(28px, 4vw, 52px) clamp(20px, 4vw, 42px) 80px; }
-.page-head { margin-bottom: 30px; }
-.eyebrow { margin: 0; color: var(--crimson); font-size: 11px; font-weight: 750; letter-spacing: .14em; }
-.page-head h1 { margin: 6px 0 10px; font-family: "Inter", -apple-system, sans-serif; font-size: clamp(34px, 5vw, 48px); letter-spacing: -.04em; line-height: 1; }
-.page-head > p:not(.eyebrow) { max-width: 62ch; margin: 0; color: var(--soft); font-size: clamp(15px, 2vw, 17px); line-height: 1.5; text-wrap: pretty; }
+/* Find a video. */
+.vd-field {
+    display: flex;
+    gap: 8px;
+}
 
-/* The link field is the page: the largest control, with its one filled button inside the right end. */
-.finder-label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 700; }
-.finder-field { display: flex; align-items: center; gap: 8px; min-height: 64px; padding: 7px 7px 7px 20px; border: 1.5px solid var(--line); border-radius: 999px; background: var(--paper); box-shadow: var(--shadow); }
-.finder-field:focus-within { border-color: var(--crimson); outline: 3px solid rgba(188, 35, 44, .2); outline-offset: 2px; }
-.finder-field input { flex: 1; min-width: 0; height: 48px; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 17px; }
-.finder-field input::placeholder { color: var(--soft); opacity: .7; }
-.finder-help, .finder-error { margin: 10px 4px 0 20px; font-size: 13px; line-height: 1.45; }
-.finder-help { color: var(--soft); }
-.finder-error, .list-error { color: var(--crimson); font-weight: 600; }
+.vd-field .tk-input {
+    flex: 1;
+    height: 44px;
+    font-size: 15px;
+}
 
-button { cursor: pointer; }
-.primary, .outline, .quiet { display: inline-grid; place-items: center; min-height: 44px; border-radius: 999px; padding: 0 20px; font-weight: 700; white-space: nowrap; text-decoration: none; }
-.primary { min-height: 50px; padding: 0 26px; border: 1.5px solid var(--crimson); background: var(--crimson); color: #fff; }
-.primary:hover { background: var(--crimson-dark); border-color: var(--crimson-dark); }
-.outline { border: 1.5px solid var(--ink); background: transparent; color: var(--ink); }
-.outline:hover { background: var(--ink); color: var(--paper); }
-.quiet { border: 0; background: transparent; color: var(--soft); padding: 0 12px; }
-.quiet:hover { color: var(--ink); }
-button:disabled { cursor: progress; opacity: .62; }
-:focus-visible { outline: 3px solid rgba(188, 35, 44, .28); outline-offset: 3px; }
+.vd-field .tk-btn {
+    height: 44px;
+}
 
-.found { margin-top: 22px; padding: clamp(18px, 3vw, 26px); border: 1px solid var(--hair); border-radius: 16px; background: var(--paper); box-shadow: var(--shadow); }
-.found-head h2 { display: -webkit-box; margin: 0; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: clamp(20px, 3vw, 24px); letter-spacing: -.02em; line-height: 1.2; overflow-wrap: anywhere; }
-.found-head p { margin: 6px 0 0; color: var(--soft); font-size: 14px; }
-.choices { margin: 20px 0 0; padding: 0; border: 0; }
-.choices legend { padding: 0; margin-bottom: 4px; font-size: 13px; font-weight: 700; }
-.choice { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 4px 2px; border-bottom: 1px solid var(--hair); cursor: pointer; }
-.choice:last-child { border-bottom: 0; }
-.choice input { width: 20px; height: 20px; margin: 0; flex: none; accent-color: var(--crimson); }
-.choice span { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; }
-.smaller { display: flex; align-items: center; gap: 12px; min-height: 48px; margin-top: 8px; padding: 4px 2px; border-top: 1px solid var(--hair); cursor: pointer; }
-.smaller[hidden] { display: none; }
-.smaller input { width: 20px; height: 20px; margin: 0; flex: none; accent-color: var(--crimson); }
-.smaller > span { display: grid; gap: 2px; flex: 1; min-width: 0; padding: 6px 0; }
-.smaller b { font-size: 15px; font-weight: 600; }
-.smaller small { color: var(--soft); font-size: 13px; line-height: 1.45; text-wrap: pretty; }
-.smaller-note { margin: 2px 2px 0 34px; font-size: 13px; font-weight: 600; line-height: 1.45; text-wrap: pretty; }
-.choice small { color: var(--soft); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.found-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 18px; }
-.found-actions .finder-error { flex-basis: 100%; margin: 4px 0 0; }
+.vd-help {
+    margin: 8px 4px 0;
+    text-wrap: pretty;
+}
 
-.downloads { margin-top: 44px; }
-.section-head { padding-bottom: 14px; border-bottom: 1px solid var(--hair); }
-.section-head h2 { margin: 0; font-size: 20px; letter-spacing: -.02em; }
-.section-head p { max-width: 66ch; margin: 4px 0 0; color: var(--soft); font-size: 13px; line-height: 1.45; }
-.list-error { margin: 14px 0 0; font-size: 13px; }
-.empty { max-width: 52ch; margin: 22px 0 0; color: var(--soft); font-size: 15px; line-height: 1.5; text-wrap: pretty; }
-.jobs { margin: 0; padding: 0; list-style: none; }
-.job { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 20px; padding: 16px 0; border-bottom: 1px solid var(--hair); }
-.job-title { display: -webkit-box; margin: 0; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: 16px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
-.job-status { margin: 3px 0 0; color: var(--soft); font-size: 13px; line-height: 1.45; font-variant-numeric: tabular-nums; }
-.job.is-failed .job-status, .job.is-save-error .job-status { color: var(--crimson); }
-.job.is-done .job-status b { color: var(--ink); }
-.job-bar { grid-column: 1 / -1; height: 4px; overflow: hidden; border-radius: 4px; background: var(--hair); }
-.job-bar i { display: block; width: 0; height: 100%; border-radius: 4px; background: var(--crimson); transition: width .4s ease; }
+.vd-error {
+    margin: 8px 4px 0;
+    color: var(--alert-text);
+    font-size: 13.5px;
+    font-weight: 500;
+    text-wrap: pretty;
+}
+
+.vd-error::before {
+    content: "✕ ";
+}
+
+/* The video the link found: a card of its own on the well, with the one choice to make and its commit. */
+.vd-found {
+    margin-top: 20px;
+    padding: 16px 16px 14px;
+    border-radius: 14px;
+    background: var(--well);
+}
+
+.vd-found h2 {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+}
+
+.vd-found-meta {
+    margin-top: 4px;
+}
+
+.vd-choices {
+    min-width: 0;
+    margin: 14px 0 0;
+    padding: 0;
+    border: 0;
+}
+
+.vd-choices legend {
+    margin: 0 0 2px;
+    padding: 0;
+}
+
+.vd-choice {
+    min-height: 44px;
+    border-top: 1px solid var(--line);
+    cursor: pointer;
+}
+
+.vd-choice span {
+    flex: 1;
+    min-width: 0;
+}
+
+/* The chosen size: the native mark, and the weight of its words. */
+.vd-choice:has(input:checked) span {
+    font-weight: 600;
+}
+
+.vd-choice small {
+    color: var(--ink-2);
+    white-space: nowrap;
+}
+
+.vd-smaller {
+    align-items: flex-start;
+    padding: 12px 0;
+    border-top: 1px solid var(--line);
+    cursor: pointer;
+}
+
+.vd-smaller input {
+    margin-top: 2px;
+}
+
+.vd-smaller > span {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.vd-smaller b {
+    font-weight: 500;
+}
+
+.vd-smaller small {
+    line-height: 1.45;
+    text-wrap: pretty;
+}
+
+.vd-smaller-note {
+    margin: 0 0 4px 28px;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.45;
+    text-wrap: pretty;
+}
+
+.vd-found-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+/* Your downloads. Its rows are laid out by the pane's own width, which a folded screen makes narrow on a wide page. */
+.vd-list {
+    container-type: inline-size;
+}
+
+.vd-list-note {
+    max-width: 62ch;
+    margin: 0 4px 14px;
+    text-wrap: pretty;
+}
+
+.vd-list > .vd-error {
+    margin: 0 4px 14px;
+}
+
+.vd-jobs {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.job {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px 16px;
+    padding: 14px 4px;
+    border-top: 1px solid var(--line);
+}
+
+.job-title {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-weight: 600;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.job-status {
+    margin-top: 2px;
+    color: var(--ink-2);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    text-wrap: pretty;
+}
+
+.job.is-failed .job-status,
+.job.is-save-error .job-status {
+    color: var(--alert-text);
+    font-weight: 500;
+}
+
+.job.is-failed .job-status::before,
+.job.is-save-error .job-status::before {
+    content: "✕ ";
+}
+
+/* How far the work has gone: ink on the control ground, never the accent. */
+.job-bar {
+    grid-column: 1 / -1;
+    height: 4px;
+    overflow: hidden;
+    border-radius: 4px;
+    background: var(--ctl);
+}
+
+.job-bar i {
+    display: block;
+    width: 0;
+    height: 100%;
+    border-radius: 4px;
+    background: var(--ink);
+    transition: width .4s ease;
+}
+
 /* No measure exists for these three states, so the bar only shows that work is going on. */
-.job.is-processing .job-bar i, .job.is-starting .job-bar i, .job.is-optimizing .job-bar i { width: 35% !important; animation: slide 1.3s ease-in-out infinite alternate; }
-@keyframes slide { from { transform: translateX(0); } to { transform: translateX(186%); } }
-.job-actions, .job-more { display: flex; align-items: center; gap: 4px; }
-/* Wraps by what fits, not by a screen size: a row with three actions is wider than a narrow phone. */
-.job-actions { flex-wrap: wrap; }
-.job-more { margin-left: auto; }
-.job-actions .primary { min-height: 44px; }
+.job.is-processing .job-bar i,
+.job.is-starting .job-bar i,
+.job.is-optimizing .job-bar i {
+    width: 35% !important;
+    animation: vd-slide 1.3s ease-in-out infinite alternate;
+}
 
-@media (max-width: 640px) {
-    .shell { padding: 26px 16px 56px; }
-    .finder-field { flex-direction: column; align-items: stretch; gap: 0; min-height: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
-    .finder-field:focus-within { outline: 0; }
-    .finder-field input { flex: none; height: 56px; padding: 0 16px; border: 1.5px solid var(--line); border-radius: 14px; background: var(--paper); }
-    .finder-field input:focus { border-color: var(--crimson); box-shadow: 0 0 0 3px rgba(188, 35, 44, .2); }
-    .finder-field .primary { margin-top: 10px; border-radius: 14px; }
-    .finder-help, .finder-error { margin-left: 2px; }
-    .found-actions .primary { flex: 1; }
-    .job { grid-template-columns: minmax(0, 1fr); }
-    .job-actions { margin-left: 0; }
-    .job-actions > .quiet:first-child { padding-left: 0; }
-    .job-actions .outline, .job-actions .primary { flex: 1; }
+@keyframes vd-slide {
+    from { transform: translateX(0); }
+    to { transform: translateX(186%); }
 }
+
+.job-actions,
+.job-more {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Wraps by what fits, not by a screen size: a row with three actions is wider than a narrow pane. */
+.job-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.job-more {
+    margin-left: auto;
+}
+
+@media (pointer: coarse) {
+    .vd .tk-btn {
+        height: 44px;
+    }
+
+    /* 16 px, as the kit's own fields under touch: Safari on iPhone zooms into a smaller one. */
+    .vd-field .tk-input {
+        font-size: 16px;
+    }
+}
+
+/* One scroller: the link, then the downloads under it. */
+@media (max-width: 859px) {
+    .vd {
+        display: block;
+        overflow-x: hidden;
+        overflow-y: auto;
+    }
+
+    .vd .tk-pane {
+        overflow: visible;
+    }
+
+    .vd .tk-pane + .tk-pane {
+        border-top: 1px solid var(--line);
+        border-left: 0;
+    }
+}
+
+/* A narrow pane: a row with a button goes under the words, after the bar. A row whose one action is a plain word
+   (Cancel, Remove, Stop) keeps it beside the title. */
+@container (max-width: 559px) {
+    .job:has(.job-actions > :not(.vd-plain)) {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .job:has(.job-actions > :not(.vd-plain)) .job-bar {
+        order: 1;
+    }
+
+    .job:has(.job-actions > :not(.vd-plain)) .job-actions {
+        order: 2;
+        justify-content: flex-start;
+    }
+}
+
+@media (max-width: 479px) {
+    .vd .tk-pane {
+        padding: 16px 16px 28px;
+    }
+
+    .vd-field {
+        flex-direction: column;
+    }
+
+    .vd-field .tk-input {
+        flex: none;
+        height: 48px;
+    }
+
+    .vd-field .tk-btn,
+    .vd-found-actions .tk-btn:first-child {
+        flex: 1 1 auto;
+        height: 48px;
+    }
+}
+
+/* A folded screen (the kit says how a tool learns of it), nothing on the fold. Open like a book: the link left of the
+   fold, the downloads right of it. Held like a laptop: the downloads above the fold, where they are watched, and the
+   link and the video it found below it, near the hand that types. */
+:root[data-fold] .vd {
+    display: grid;
+    overflow: hidden;
+}
+
+:root[data-fold="columns"] .vd {
+    grid-template-columns: var(--fold-start) minmax(0, 1fr);
+    column-gap: calc(var(--fold-end) - var(--fold-start));
+}
+
+:root[data-fold="rows"] .vd {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: var(--fold-start) minmax(0, 1fr);
+    row-gap: calc(var(--fold-end) - var(--fold-start));
+}
+
+:root[data-fold="rows"] .vd-list {
+    grid-row: 1;
+}
+
+:root[data-fold="rows"] .vd-find {
+    grid-row: 2;
+}
+
+:root[data-fold] .vd .tk-pane {
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+:root[data-fold] .vd .tk-pane + .tk-pane {
+    border: 0;
+}
+
+/* With reduced motion the three unmeasured states show still stripes the whole way along, rather than a made-up
+   amount or a bar that reads as full. */
 @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { transition-duration: .01ms !important; animation: none !important; }
-}
-@media (prefers-color-scheme: dark) {
-    :root[data-theme="dark"] { --paper: #1b1d20; --wash: #101114; --ink: #f6f7f8; --soft: #b7bcc0; --line: #4a4e54; --hair: rgba(246, 247, 248, .14); --crimson-soft: #431c21; --shadow: none; color-scheme: dark; }
-    :root[data-theme="dark"] .finder-error, :root[data-theme="dark"] .list-error, :root[data-theme="dark"] .job.is-failed .job-status, :root[data-theme="dark"] .job.is-save-error .job-status, :root[data-theme="dark"] .eyebrow { color: #f0767d; }
+    .job.is-processing .job-bar i,
+    .job.is-starting .job-bar i,
+    .job.is-optimizing .job-bar i {
+        width: 100% !important;
+        background: repeating-linear-gradient(-45deg, var(--ink) 0 5px, transparent 5px 10px);
+        opacity: .45;
+        animation: none;
+    }
 }

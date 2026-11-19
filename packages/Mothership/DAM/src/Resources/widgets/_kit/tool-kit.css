@@ -517,9 +517,12 @@ kbd {
         height: 44px;
     }
 
+    /* Safari on iPhone and iPad zooms the page into a field whose text is under 16 px when it takes the focus, and
+       stays zoomed after it. */
     .tk-input,
     .tk-select {
         height: 44px;
+        font-size: 16px;
     }
 }
 
