@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#f6f7f8">
-    <title>Plaque Maker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Plaque Maker · The Mothership</title>
+    <link rel="stylesheet" href="../_kit/tool-kit.css">
     <link rel="stylesheet" href="style.css">
     <script src="plaque-core.js"></script>
     <script src="plaque-encode.js"></script>
@@ -12,176 +12,194 @@
     <script src="app.js" defer></script>
 </head>
 <body>
-    <main class="shell">
-        <header class="page-head">
-            <div>
-                <p class="eyebrow">VIDEO OVERLAYS</p>
-                <h1>Plaque Maker</h1>
-                <p>Animated plaques with an icon or image, a title, a subtitle, an optional amount and a sound. Everything runs on this device.</p>
+    <!-- The set is kept on this device as it changes, so typing here is not reported as work: data-agh-ephemeral keeps
+         the page that frames the tool from asking before it closes. While a change waits to be kept, after the
+         browser refused to keep one, or while an open preset draft has been edited, app.js reports work itself
+         (tellHost). The tool's name, "Open a set", Export and "Save to
+         Library" are drawn by that page's bar (app.js tells it what to show); [data-own-bar] stands in where no bar is
+         drawn. -->
+    <main class="plq" data-plq data-agh-ephemeral data-view="plaques">
+        <section class="plq-preview" aria-label="Preview">
+            <div class="plq-draft" data-draft-banner hidden>
+                <p><strong>Preset draft</strong> · <span data-draft-name></span>. Edit it, then add it to the set.</p>
+                <div class="plq-draft-actions">
+                    <button type="button" class="tk-btn is-small" data-action="discard-draft">Discard</button>
+                    <button type="button" class="tk-btn is-small is-act" data-action="commit-draft">Add to set</button>
+                </div>
             </div>
-        </header>
+            <div class="plq-stage" data-stage>
+                <canvas data-preview aria-label="Plaque preview"></canvas>
+                <div class="plq-start" data-empty hidden>
+                    <h2>Start your first plaque</h2>
+                    <p>Make one from scratch, start from a preset, or open a set you made before.</p>
+                    <div class="plq-start-actions">
+                        <button type="button" class="tk-btn is-act" data-action="add-blank">New plaque</button>
+                        <button type="button" class="tk-btn" data-action="open-presets">From a preset…</button>
+                        <button type="button" class="tk-btn" data-action="open-set">Open a set…</button>
+                        <button type="button" class="tk-btn" data-ai-open hidden>Generate…</button>
+                    </div>
+                </div>
+            </div>
+            <div class="plq-transport" data-transport>
+                <div class="plq-transport-row">
+                    <button type="button" class="tk-btn plq-play" data-action="play"><svg viewBox="0 0 24 24" aria-hidden="true" data-play-glyph><polygon points="6 3 20 12 6 21 6 3"/></svg><span data-play-label>Play</span> <kbd>Space</kbd></button>
+                    <button type="button" class="tk-btn is-quiet" data-action="step-back" aria-label="Previous frame" title="Previous frame (←)"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" x2="5" y1="19" y2="5"/></svg></button>
+                    <button type="button" class="tk-btn is-quiet" data-action="step-forward" aria-label="Next frame" title="Next frame (→)"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" x2="19" y1="5" y2="19"/></svg></button>
+                    <label class="plq-scope"><span class="tk-hidden">What to play</span><select class="tk-select" data-scope><option value="current">This plaque</option><option value="selected">Selected plaques</option><option value="set">Whole set</option></select></label>
+                    <label class="tk-check plq-mute"><input type="checkbox" data-mute><span>Mute</span></label>
+                    <span class="plq-clock tk-mono" data-clock>0:00.00 / 0:00.00</span>
+                </div>
+                <input type="range" class="plq-scrub" data-scrub min="0" step="0.001" value="0" aria-label="Playhead">
+            </div>
+        </section>
 
-        <div class="toolbar" role="toolbar" aria-label="Set actions">
-            <label class="set-name"><span class="sr-only">Set name</span><input data-set-name maxlength="120" aria-label="Set name" data-agh-ephemeral></label>
-            <div class="toolbar-group">
-                <button type="button" class="outline" data-action="add-blank">New plaque</button>
-                <button type="button" class="outline" data-action="open-presets">Presets</button>
-                <button type="button" class="outline" data-ai-open hidden>Generate</button>
-            </div>
-            <div class="toolbar-group">
-                <button type="button" class="icon-button" data-action="undo" aria-label="Undo" title="Undo (⌘Z)"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5 M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
-                <button type="button" class="icon-button" data-action="redo" aria-label="Redo" title="Redo (⇧⌘Z)"><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5 M20 9H10a6 6 0 0 0 0 12h3"/></svg></button>
-            </div>
-            <div class="toolbar-group end">
-                <span class="save-state" data-save-state role="status" aria-live="polite"></span>
-                <button type="button" class="outline" data-action="open-set">Open</button>
-                <button type="button" class="outline" data-action="open-handoff">Share</button>
-                <button type="button" class="primary" data-action="open-export">Export</button>
-            </div>
+        <div class="plq-seg tk-seg" role="group" aria-label="Part of the tool">
+            <button type="button" class="tk-seg-opt" aria-pressed="true" data-view-opt="plaques">Plaques</button>
+            <button type="button" class="tk-seg-opt" aria-pressed="false" data-view-opt="edit">Edit</button>
+            <button type="button" class="tk-seg-opt" aria-pressed="false" data-view-opt="output">Output</button>
         </div>
 
-        <div class="workspace">
-            <section class="panel list-panel" aria-labelledby="list-title">
-                <div class="panel-head"><h2 id="list-title">Plaques</h2><span class="count" data-count></span></div>
-                <p class="list-tools" data-list-tools hidden><button type="button" class="link" data-action="select-all">Select all</button><button type="button" class="link" data-action="select-none">Clear selection</button></p>
-                <ol class="plaque-list" data-list aria-label="Plaques in this set"></ol>
-                <p class="list-empty" data-list-empty>No plaques yet.</p>
-            </section>
+        <section class="tk-pane plq-plaques" data-pane="plaques" aria-label="Plaques in this set">
+            <div class="plq-own" data-own-bar hidden>
+                <button type="button" class="tk-btn is-small" data-action="open-set">Open a set…</button>
+                <button type="button" class="tk-btn is-small" data-action="open-export">Export…</button>
+                <button type="button" class="tk-btn is-small is-act" data-action="open-library" hidden>Save to Library…</button>
+            </div>
+            <div class="plq-set">
+                <label class="plq-set-name"><span class="tk-hidden">Set name</span><textarea class="tk-input" data-set-name rows="1" maxlength="120" aria-label="Set name" spellcheck="false"></textarea></label>
+                <button type="button" class="tk-btn is-quiet" data-action="undo" aria-label="Undo" title="Undo (⌘Z)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5 5.5 5.5 0 0 1-5.5 5.5H11"/></svg></button>
+                <button type="button" class="tk-btn is-quiet" data-action="redo" aria-label="Redo" title="Redo (⇧⌘Z)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5 5.5 5.5 0 0 0 9.5 20H13"/></svg></button>
+            </div>
+            <p class="plq-kept" data-save-state role="status" aria-live="polite"></p>
 
-            <section class="panel preview-panel" aria-label="Preview">
-                <div class="draft-banner" data-draft-banner hidden>
-                    <span><strong>Preset draft</strong> · <span data-draft-name></span>. Edit it, then add it to the set.</span>
-                    <span class="draft-actions"><button type="button" class="outline small" data-action="discard-draft">Discard</button><button type="button" class="primary small" data-action="commit-draft">Add to set</button></span>
-                </div>
-                <div class="stage" data-stage>
-                    <canvas data-preview aria-label="Plaque preview"></canvas>
-                    <div class="empty-state" data-empty hidden>
-                        <svg viewBox="0 0 120 64" aria-hidden="true"><rect x="10" y="14" width="100" height="36" rx="8"/><rect x="18" y="22" width="20" height="20" rx="5"/><path d="M46 27h44 M46 37h28"/></svg>
-                        <h2>Start your first plaque</h2>
-                        <p>Make one from scratch, pick a preset, or open a set you exported before.</p>
-                        <div class="empty-actions">
-                            <button type="button" class="primary" data-action="add-blank">Blank plaque</button>
-                            <button type="button" class="outline" data-action="open-presets">Choose a preset</button>
-                            <button type="button" class="outline" data-action="open-set">Open a set</button>
-                        </div>
-                    </div>
-                </div>
-                <div class="transport" data-transport>
-                    <div class="transport-row">
-                        <button type="button" class="primary play" data-action="play" aria-label="Play">Play</button>
-                        <button type="button" class="icon-button" data-action="step-back" aria-label="Previous frame" title="Previous frame (←)"><svg viewBox="0 0 24 24"><path d="M6 5v14"/><path d="M19 5L9 12l10 7z" fill="currentColor"/></svg></button>
-                        <button type="button" class="icon-button" data-action="step-forward" aria-label="Next frame" title="Next frame (→)"><svg viewBox="0 0 24 24"><path d="M18 5v14"/><path d="M5 5l10 7-10 7z" fill="currentColor"/></svg></button>
-                        <label class="scope"><span class="sr-only">Play</span><select data-scope aria-label="What to play"><option value="current">This plaque</option><option value="selected">Selected plaques</option><option value="set">Whole set</option></select></label>
-                        <label class="check mute"><input type="checkbox" data-mute> Mute</label>
-                        <span class="clock" data-clock>0:00.00 / 0:00.00</span>
-                    </div>
-                    <input type="range" class="scrubber" data-scrub min="0" step="0.001" value="0" aria-label="Playhead">
-                </div>
-                <details class="output-panel" data-output-panel>
-                    <summary><span>Output</span><span class="summary-value" data-output-summary></span></summary>
-                    <div class="field-grid">
-                        <label>Crop<select data-out="mode"><option value="frame">Place in a frame</option><option value="tight">Tight around the plaque</option></select></label>
-                        <label data-frame-only>Frame<select data-out="frame"><option value="landscape">Landscape 1920 × 1080</option><option value="portrait">Portrait 1080 × 1920</option><option value="square">Square 1080 × 1080</option><option value="custom">Custom size</option></select></label>
-                        <label data-custom-only>Width<input type="number" min="16" max="4096" step="2" data-out="width"></label>
-                        <label data-custom-only>Height<input type="number" min="16" max="4096" step="2" data-out="height"></label>
-                        <label>Frame rate<select data-out="fps"><option value="24">24 fps</option><option value="25">25 fps</option><option value="30">30 fps</option><option value="50">50 fps</option><option value="60">60 fps</option></select></label>
-                        <label>Scale<input type="number" min="0.25" max="4" step="0.05" data-out="scale"></label>
-                        <label data-frame-only>Margin<input type="number" min="0" max="1000" step="4" data-out="margin"></label>
-                    </div>
-                    <fieldset class="anchor-grid" data-frame-only><legend>Placement</legend><div data-anchors></div></fieldset>
-                </details>
-            </section>
+            <h2 class="tk-head"><span>Plaques</span> <span class="tk-mono" data-count></span></h2>
+            <p class="plq-list-tools" data-list-tools hidden><button type="button" class="tk-link" data-action="select-all">Select all</button><button type="button" class="tk-link" data-action="select-none">Clear selection</button></p>
+            <ol class="plq-list" data-list aria-label="Plaques in this set"></ol>
+            <p class="tk-empty" data-list-empty>No plaques yet. The preview has the ways to start one.</p>
 
-            <section class="panel inspector" data-inspector aria-label="Edit plaque"></section>
-        </div>
+            <h2 class="tk-head plq-add-head">Add</h2>
+            <div class="plq-add">
+                <button type="button" class="tk-btn is-small" data-action="add-blank"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>New plaque</button>
+                <button type="button" class="tk-btn is-small" data-action="open-presets">From a preset…</button>
+                <button type="button" class="tk-btn is-small" data-ai-open hidden>Generate…</button>
+            </div>
+            <p class="tk-note plq-keys"><kbd>Space</kbd> play · <kbd>←</kbd> <kbd>→</kbd> step a frame · <kbd>⌘Z</kbd> undo · Shift-click selects several</p>
+        </section>
+
+        <section class="tk-pane plq-output" data-pane="output" data-output-panel aria-labelledby="plq-output-title">
+            <h2 class="tk-head"><span id="plq-output-title">Output</span> <span class="tk-mono" data-output-summary></span></h2>
+            <div class="plq-grid">
+                <label class="tk-field">Crop<select class="tk-select" data-out="mode"><option value="frame">Place in a frame</option><option value="tight">Tight around the plaque</option></select></label>
+                <label class="tk-field" data-frame-only>Frame<select class="tk-select" data-out="frame"><option value="landscape">Landscape 1920 × 1080</option><option value="portrait">Portrait 1080 × 1920</option><option value="square">Square 1080 × 1080</option><option value="custom">Custom size</option></select></label>
+                <label class="tk-field" data-custom-only>Width<input class="tk-input" type="number" min="16" max="4096" step="2" data-out="width"></label>
+                <label class="tk-field" data-custom-only>Height<input class="tk-input" type="number" min="16" max="4096" step="2" data-out="height"></label>
+                <label class="tk-field">Frame rate<select class="tk-select" data-out="fps"><option value="24">24 fps</option><option value="25">25 fps</option><option value="30">30 fps</option><option value="50">50 fps</option><option value="60">60 fps</option></select></label>
+                <label class="tk-field">Scale<input class="tk-input" type="number" min="0.25" max="4" step="0.05" data-out="scale"></label>
+                <label class="tk-field" data-frame-only>Margin<input class="tk-input" type="number" min="0" max="1000" step="4" data-out="margin"></label>
+            </div>
+            <fieldset class="plq-anchors" data-frame-only><legend>Placement in the frame</legend><div data-anchors></div></fieldset>
+        </section>
+
+        <section class="tk-pane plq-edit" data-pane="edit" data-inspector aria-label="Edit plaque"></section>
+
+        <dialog class="tk-sheet plq-presets" data-sheet="presets" aria-labelledby="plq-presets-title">
+            <div class="tk-sheet-head"><h2 id="plq-presets-title">Presets</h2></div>
+            <div class="tk-sheet-body">
+                <label class="tk-field">Describe your video<input class="tk-input" data-topic-input placeholder="For example: a weekly podcast"></label>
+                <div class="plq-topics" data-topic-results></div>
+                <div class="tk-seg plq-tabs" role="tablist" aria-label="Preset groups" data-preset-tabs></div>
+                <div class="plq-preset-grid" data-preset-grid></div>
+            </div>
+            <div class="tk-sheet-foot">
+                <p class="tk-status" role="status">A preset opens as a draft. Nothing joins the set until you add it.</p>
+                <button type="button" class="tk-btn" data-sheet-close>Close</button>
+            </div>
+        </dialog>
+
+        <dialog class="tk-sheet" data-sheet="export" aria-labelledby="plq-export-title">
+            <div class="tk-sheet-head"><h2 id="plq-export-title">Export</h2></div>
+            <div class="tk-sheet-body">
+                <div class="plq-pair">
+                    <label class="tk-field">Plaques<select class="tk-select" data-export-scope><option value="current">This plaque</option><option value="selected">Selected plaques</option><option value="set">Whole set</option></select></label>
+                    <label class="tk-field">Format<select class="tk-select" data-export-format></select></label>
+                </div>
+                <p class="tk-note plq-hint" data-export-hint></p>
+                <div class="plq-pair" data-export-options></div>
+                <div class="plq-progress" data-export-progress hidden><span data-export-bar></span></div>
+            </div>
+            <div class="tk-sheet-foot">
+                <p class="tk-status" role="status" aria-live="polite" data-export-status></p>
+                <button type="button" class="tk-btn" data-sheet-close data-export-close>Close</button>
+                <button type="button" class="tk-btn" data-action="cancel-export" hidden>Cancel</button>
+                <button type="button" class="tk-btn" data-action="copy-agent" hidden>Copy for an agent</button>
+                <button type="button" class="tk-btn is-act" data-action="run-export">Download</button>
+            </div>
+        </dialog>
+
+        <dialog class="tk-sheet" data-sheet="library" aria-labelledby="plq-library-title">
+            <div class="tk-sheet-head"><h2 id="plq-library-title">Save to Library</h2></div>
+            <div class="tk-sheet-body">
+                <fieldset class="plq-choices">
+                    <legend class="tk-head">What is saved</legend>
+                    <label class="tk-field">Render<select class="tk-select" data-library-format><option value="png">PNG still, one per plaque</option><option value="apng">APNG animation</option><option value="gif">GIF animation</option><option value="webm-key">WebM, chroma key</option><option value="none">No render</option></select></label>
+                    <label class="tk-check"><input type="checkbox" data-library-wav checked><span>Its sound <small data-library-wav-name></small></span></label>
+                    <p class="tk-check plq-always"><span class="plq-tick" aria-hidden="true">✓</span><span>The set file <small data-library-set-name></small></span></p>
+                </fieldset>
+                <label class="tk-field">Plaques<select class="tk-select" data-library-scope><option value="set">Whole set</option><option value="selected">Selected plaques</option><option value="current">This plaque</option></select></label>
+                <label class="tk-field" data-folder-field>Folder<select class="tk-select" data-library-folder></select></label>
+                <p class="tk-empty" data-folder-empty hidden>There is no folder you can save into. Ask an administrator for a folder you may upload to.</p>
+            </div>
+            <div class="tk-sheet-foot">
+                <p class="tk-status" role="status" aria-live="polite" data-library-status></p>
+                <button type="button" class="tk-btn" data-sheet-close>Cancel</button>
+                <button type="button" class="tk-btn is-act" data-action="save-library">Save</button>
+            </div>
+        </dialog>
+
+        <dialog class="tk-sheet" data-sheet="open" aria-labelledby="plq-open-title">
+            <div class="tk-sheet-head"><h2 id="plq-open-title">Open a set</h2></div>
+            <div class="tk-sheet-body">
+                <p class="tk-note">A set replaces the one you are editing. Undo brings it back.</p>
+                <div class="plq-open">
+                    <label class="tk-btn plq-file">Open a file…<input type="file" class="tk-hidden" accept=".json,application/json" data-open-file></label>
+                    <button type="button" class="tk-btn" data-action="paste-set">Paste from the clipboard</button>
+                </div>
+                <label class="tk-field">Or paste set JSON here<textarea class="tk-input plq-paste" rows="4" data-paste-text spellcheck="false"></textarea></label>
+                <div><button type="button" class="tk-btn is-small" data-action="import-text">Open the pasted text</button></div>
+                <h3 class="tk-head">From the Library</h3>
+                <div class="plq-library-sets" data-library-sets><p class="tk-note">Finding sets…</p></div>
+                <ul class="plq-errors" data-open-errors></ul>
+            </div>
+            <div class="tk-sheet-foot">
+                <p class="tk-status" role="status"></p>
+                <button type="button" class="tk-btn" data-sheet-close>Close</button>
+            </div>
+        </dialog>
+
+        <dialog class="tk-sheet" data-sheet="ai" aria-labelledby="plq-ai-title">
+            <div class="tk-sheet-head"><h2 id="plq-ai-title">Generate a set</h2></div>
+            <div class="tk-sheet-body">
+                <label class="tk-field">What is the video about?<textarea class="tk-input plq-paste" rows="3" data-ai="description" placeholder="A weekly cooking show: new episode, a sponsor thank-you, and a follow reminder"></textarea></label>
+                <div class="plq-triple">
+                    <label class="tk-field">Themed plaques<input class="tk-input" type="number" min="0" max="20" value="3" data-ai="themed"></label>
+                    <label class="tk-field">Social plaques<input class="tk-input" type="number" min="0" max="10" value="1" data-ai="social"></label>
+                    <label class="tk-field">Donation plaques<input class="tk-input" type="number" min="0" max="10" value="0" data-ai="donation"></label>
+                    <label class="tk-field">Video length<input class="tk-input" data-ai="length" placeholder="10 minutes"></label>
+                    <label class="tk-field">Destination<select class="tk-select" data-ai="destination"><option>Long video</option><option>Short vertical video</option><option>Livestream</option><option>Presentation</option></select></label>
+                    <label class="tk-field">Tone<select class="tk-select" data-ai="tone"><option>Friendly</option><option>Bold</option><option>Professional</option><option>Playful</option><option>Calm</option></select></label>
+                </div>
+                <div class="plq-ai-preview" data-ai-preview hidden></div>
+            </div>
+            <div class="tk-sheet-foot">
+                <p class="tk-status" role="status" aria-live="polite" data-ai-status></p>
+                <button type="button" class="tk-btn" data-sheet-close>Close</button>
+                <button type="button" class="tk-btn" data-action="ai-replace" hidden>Replace the set</button>
+                <button type="button" class="tk-btn" data-action="ai-append" hidden>Append to the set</button>
+                <button type="button" class="tk-btn is-act" data-action="ai-generate">Generate</button>
+            </div>
+        </dialog>
+
+        <div class="tk-toast" role="status" aria-live="polite" data-toast hidden></div>
     </main>
-
-    <dialog data-dialog="presets" aria-labelledby="presets-title">
-        <form method="dialog" class="dialog-body">
-            <header class="dialog-head"><h2 id="presets-title">Presets</h2><button class="icon-button" value="close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12 M18 6L6 18"/></svg></button></header>
-            <label class="topic-search">Describe your video<input data-topic-input placeholder="For example: weekly podcast with a merch sale" data-agh-ephemeral></label>
-            <div class="topic-results" data-topic-results></div>
-            <div class="tabs" role="tablist" data-preset-tabs></div>
-            <div class="preset-grid" data-preset-grid></div>
-        </form>
-    </dialog>
-
-    <dialog data-dialog="export" aria-labelledby="export-title">
-        <form method="dialog" class="dialog-body">
-            <header class="dialog-head"><h2 id="export-title">Export</h2><button class="icon-button" value="close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12 M18 6L6 18"/></svg></button></header>
-            <div class="field-grid two">
-                <label>Plaques<select data-export-scope><option value="current">This plaque</option><option value="selected">Selected plaques</option><option value="set">Whole set</option></select></label>
-                <label>Format<select data-export-format></select></label>
-            </div>
-            <p class="hint" data-export-hint></p>
-            <div class="field-grid two" data-export-options></div>
-            <div class="progress" data-export-progress hidden><span data-export-bar></span></div>
-            <p class="notice" role="status" aria-live="polite" data-export-status></p>
-            <footer class="dialog-foot"><button type="button" class="outline" data-action="cancel-export" hidden>Cancel</button><button type="button" class="primary" data-action="run-export">Export</button></footer>
-        </form>
-    </dialog>
-
-    <dialog data-dialog="open" aria-labelledby="open-title">
-        <form method="dialog" class="dialog-body">
-            <header class="dialog-head"><h2 id="open-title">Open a set</h2><button class="icon-button" value="close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12 M18 6L6 18"/></svg></button></header>
-            <p class="dialog-lead">A set replaces the one you are editing. Undo brings it back.</p>
-            <div class="open-options">
-                <label class="outline file-button">Open a file…<input type="file" accept=".json,application/json" data-open-file></label>
-                <button type="button" class="outline" data-action="paste-set">Paste from clipboard</button>
-            </div>
-            <label class="paste-box">Or paste set JSON here<textarea rows="5" data-paste-text spellcheck="false" data-agh-ephemeral></textarea></label>
-            <div class="dialog-foot"><button type="button" class="outline" data-action="import-text">Import pasted text</button></div>
-            <h3 class="subhead">From The Mothership library</h3>
-            <div class="library-sets" data-library-sets><p class="hint">Loading saved sets…</p></div>
-            <ul class="errors" data-open-errors></ul>
-        </form>
-    </dialog>
-
-    <dialog data-dialog="handoff" aria-labelledby="handoff-title">
-        <form method="dialog" class="dialog-body">
-            <header class="dialog-head"><h2 id="handoff-title">Share</h2><button class="icon-button" value="close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12 M18 6L6 18"/></svg></button></header>
-            <section class="handoff">
-                <h3>Save to the library</h3>
-                <p>Files the set's renders and its <code>.plaque.json</code> into a Mothership folder, through the normal upload.</p>
-                <div class="field-grid two">
-                    <label>Folder<select data-library-folder><option value="">Loading folders…</option></select></label>
-                    <label>Render as<select data-library-format><option value="png">PNG still per plaque</option><option value="apng">APNG animation</option><option value="gif">GIF animation</option><option value="webm-key">WebM (chroma key)</option><option value="none">No render, set only</option></select></label>
-                    <label>Plaques<select data-library-scope><option value="set">Whole set</option><option value="selected">Selected plaques</option><option value="current">This plaque</option></select></label>
-                    <label class="check"><input type="checkbox" data-library-wav checked> Include the sound as WAV</label>
-                </div>
-                <div class="dialog-foot"><button type="button" class="primary" data-action="save-library">Save to library</button></div>
-                <p class="notice" role="status" aria-live="polite" data-library-status></p>
-            </section>
-            <section class="handoff">
-                <h3>Hand to an agent</h3>
-                <p>Copies the set as JSON, images and sounds included. An agent edits it and hands it back through <strong>Open → Paste</strong>, or saves a <code>.plaque.json</code> to the library.</p>
-                <div class="dialog-foot"><button type="button" class="outline" data-action="copy-agent">Copy set for an agent</button></div>
-                <p class="notice" role="status" aria-live="polite" data-agent-status></p>
-            </section>
-        </form>
-    </dialog>
-
-    <dialog data-dialog="ai" aria-labelledby="ai-title">
-        <form method="dialog" class="dialog-body">
-            <header class="dialog-head"><h2 id="ai-title">Generate a set</h2><button class="icon-button" value="close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12 M18 6L6 18"/></svg></button></header>
-            <label>What is the video about?<textarea rows="3" data-ai="description" placeholder="A weekly cooking show: new episode, a sponsor thank-you, and a follow reminder" data-agh-ephemeral></textarea></label>
-            <div class="field-grid three">
-                <label>Themed plaques<input type="number" min="0" max="20" value="3" data-ai="themed"></label>
-                <label>Social plaques<input type="number" min="0" max="10" value="1" data-ai="social"></label>
-                <label>Donation plaques<input type="number" min="0" max="10" value="0" data-ai="donation"></label>
-                <label>Video length<input data-ai="length" placeholder="10 minutes"></label>
-                <label>Destination<select data-ai="destination"><option>Long video</option><option>Short vertical video</option><option>Livestream</option><option>Presentation</option></select></label>
-                <label>Tone<select data-ai="tone"><option>Friendly</option><option>Bold</option><option>Professional</option><option>Playful</option><option>Calm</option></select></label>
-            </div>
-            <p class="notice" role="status" aria-live="polite" data-ai-status></p>
-            <div class="ai-preview" data-ai-preview hidden></div>
-            <footer class="dialog-foot">
-                <button type="button" class="outline" data-action="ai-replace" hidden>Replace the set</button>
-                <button type="button" class="outline" data-action="ai-append" hidden>Append to the set</button>
-                <button type="button" class="primary" data-action="ai-generate">Generate</button>
-            </footer>
-        </form>
-    </dialog>
-    <p class="toast" role="status" aria-live="polite" data-toast hidden></p>
 </body>
 </html>
