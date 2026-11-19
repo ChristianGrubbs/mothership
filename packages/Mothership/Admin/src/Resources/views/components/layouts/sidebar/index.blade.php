@@ -30,7 +30,10 @@
             : null,
     ]));
 
-    $railStorageUrl = Route::has('admin.home.data') ? route('admin.home.data', ['widget' => 'storage']) : null;
+    // The meter reads Home's storage widget, so it shows only to a role that may use it; any other role would get 403.
+    $railStorageUrl = Route::has('admin.home.data') && app(\Mothership\DAM\Services\HomeWidgetRegistry::class)->permits('storage')
+        ? route('admin.home.data', ['widget' => 'storage'])
+        : null;
 @endphp
 
 <div id="mothership-sidebar" class="bridge-rail bridge-phone-hide flex flex-col shrink-0 h-full z-[10001]" aria-label="@lang('admin::app.components.layouts.rail.label')">

@@ -86,6 +86,17 @@ it('keeps universal gadgets available without asset access or allowlist entries'
     $this->get('/admin/home/tools/plaque/index.html')->assertOk();
 });
 
+it('shows the rail storage meter only to a role that may read storage', function () {
+    $meter = '<v-rail-storage url="'.route('admin.home.data', ['widget' => 'storage']).'"';
+    expect($this->get('/admin/home')->assertOk()->getContent())->toContain($meter);
+
+    // Without the Library the storage reading is refused, so the rail neither draws the meter nor requests it.
+    $role = Role::factory()->create(['permission_type' => 'custom', 'permissions' => ['settings', 'settings.users']]);
+    $this->actingAs(Admin::factory()->create(['role_id' => $role->id]), 'admin');
+    $this->getJson('/admin/home/data/storage')->assertForbidden();
+    expect($this->get('/admin/home')->assertOk()->getContent())->not->toContain('<v-rail-storage');
+});
+
 it('requires authentication for Home layout and tools', function () {
     auth('admin')->logout();
     $this->get('/admin/home')->assertRedirect(route('admin.session.create'));
