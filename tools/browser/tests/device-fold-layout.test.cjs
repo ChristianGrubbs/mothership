@@ -219,16 +219,17 @@ browserTest('a fold that arrives after the resize still reaches an open page, th
 
         return page;
     }
-    // The segments change and nothing else does, then the segment media queries change.
-    const segmentsChange = async (page, rects) => {
-        const queries = await page.evaluate(rects => {
+    // The segments change and nothing else does, then the one segment media query for that axis changes, as in Safari:
+    // book moves only the horizontal query, tabletop only the vertical one.
+    const segmentsChange = async (page, rects, axis) => {
+        const fired = await page.evaluate(([rects, axis]) => {
             window.foldRects = rects;
-            for (const list of window.segmentLists) list.dispatchEvent(new Event('change'));
-            return window.segmentLists.map(list => list.media);
-        }, rects);
+            const lists = window.segmentLists.filter(list => list.media.includes(axis));
+            for (const list of lists) list.dispatchEvent(new Event('change'));
+            return lists.length;
+        }, [rects, axis]);
+        assert.equal(fired, 1, `the page listens to the ${axis} segment query`);
         await settle(page);
-
-        return queries;
     };
     try {
         const freshFlat = await state(await openLive({width: 951, height: 585}, null));
@@ -238,11 +239,11 @@ browserTest('a fold that arrives after the resize still reaches an open page, th
         // Open flat to book at the same size: the segments arrive with no resize.
         const page = await openLive({width: 951, height: 585}, null);
         assert.deepEqual(await state(page), freshFlat);
-        assert.deepEqual((await segmentsChange(page, book(951))).sort(), ['(horizontal-viewport-segments: 2)', '(vertical-viewport-segments: 2)']);
+        await segmentsChange(page, book(951), 'horizontal');
         assert.deepEqual(await state(page), freshBook);
 
         // Book to open flat.
-        await segmentsChange(page, null);
+        await segmentsChange(page, null, 'horizontal');
         assert.deepEqual(await state(page), freshFlat);
 
         // Tabletop to closed on its side: the resize comes while the two segments are still reported, then they go.
@@ -250,7 +251,7 @@ browserTest('a fold that arrives after the resize still reaches an open page, th
         assert.equal((await state(tabletop)).fold, 'rows');
         await tabletop.setViewportSize({width: 678, height: 340});
         await settle(tabletop);
-        await segmentsChange(tabletop, null);
+        await segmentsChange(tabletop, null, 'vertical');
         assert.deepEqual(await state(tabletop), await state(await openLive({width: 678, height: 340}, null)));
     } finally {
         await browser.close();
