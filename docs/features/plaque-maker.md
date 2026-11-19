@@ -132,7 +132,8 @@ matching (`suggestTopics`) offers topic presets from the same description.
 - Panes, by the tool's own width: from 1100 px the set list (280 px), the preview over Output, and Edit (360 px),
   each scrolling by itself. From 720 px, the preview with a segment (Plaques, Output) picking the pane below, and Edit
   beside them. Under 720 px, the preview on top and a three-part segment (Plaques, Edit, Output); adding a plaque
-  opens Edit. A book fold parts the columns at the fold; a tabletop fold keeps the preview and transport above it.
+  opens Edit. A book fold parts the columns at the fold; a tabletop fold puts the stage alone above it (see iPhone
+  Duo below).
 - Bar: inside the tool page the bar names the set, its menu holds "Open a set…", and it holds Export and Save to
   Library while the set has plaques and no preset draft is open. Opened on its own, the tool shows "Open a set…" and
   Export in its own row.
@@ -143,3 +144,19 @@ matching (`suggestTopics`) offers topic presets from the same description.
   exporting (progress and cancel), export done, export failed, save to library (choose folder, no folder, saving,
   saved with a link in the page's notice, refused with the reason in the sheet), AI off, AI working, AI preview,
   import refused (list of reasons).
+
+## iPhone Duo
+
+- Tabletop: the stage alone fills the upright half. The transport (Play, the step buttons, what to play, Mute and the
+  scrubber) sits on the flat half above the segment, so every control is where the hands are.
+- Outer display upright (382 x 463 once the page's foot shows): the phone layout holds, with the preview on top and
+  the pane scrolling by itself. The "whole tool scrolls" layout is for short windows that are wider than tall (a
+  phone on its side).
+- Close-up: when the whole frame would show under 480 CSS px wide (the outer display, a phone, a book fold's half,
+  tabletop), the preview frames the plaques in play close up, centred and fitted to the stage, so their words can be
+  read. The stage keeps its size. The Output pane shows the whole frame by default, and the Close-up switch after
+  Mute turns it on or off. Exports never change.
+- Touch: every control of the tool is a 44 px target under a coarse pointer. A row's checkbox keeps its 18 px mark,
+  and the current row's Move buttons take a column beside the title.
+- Export sheet: "Copy for an agent" takes its own row whenever the sheet itself is under 560 px wide (a container
+  query), so a sheet on one half of an open Duo wraps the same way as a phone's.

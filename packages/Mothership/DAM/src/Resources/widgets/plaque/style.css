@@ -3,7 +3,10 @@
    and a segment under the preview picks the plaques or the output. Under 720 the preview stays on top and the
    segment picks one of three panes. Blue is focus and the one next step only; every other hue is the person's own
    plaques. */
+/* Positioned, so the kit's visually hidden labels are held inside the tool: Safari otherwise places one by the page,
+   and when the tool scrolls as one (a phone on its side) that spot past the bottom made the page itself scroll. */
 .plq {
+    position: relative;
     display: grid;
     grid-template-columns: 280px minmax(0, 1fr) 360px;
     grid-template-rows: auto minmax(0, 1fr);
@@ -138,6 +141,13 @@
     min-width: 128px;
 }
 
+/* Close-up is the usual state on a narrow stage, so its pressed look is the quiet control ground, not the kit's
+   filled one: Play stays the strongest thing in the row. */
+.plq-closeup.tk-btn.is-quiet[aria-pressed="true"] {
+    background: var(--ctl);
+    color: var(--ink);
+}
+
 .plq-play svg {
     fill: currentColor;
 }
@@ -257,6 +267,11 @@
 
 .plq-list .row.drop-before {
     box-shadow: 0 -2px 0 var(--ink);
+}
+
+.plq-list .row-check {
+    display: flex;
+    align-items: center;
 }
 
 .plq-list .row input[type="checkbox"] {
@@ -978,9 +993,78 @@
     border-radius: 6px;
 }
 
+/* A touch screen gets 44 px targets (Apple's HIG), as Sound Effect Maker does: every button, segment, link and field
+   of the tool, the placement grid, Mute and the scrubber. A row's checkbox keeps its 18 px mark inside a 44 px target
+   that spills into the row's padding and gap, so the row itself does not move. */
 @media (pointer: coarse) {
+    .tk-btn,
+    .tk-seg-opt,
+    .tk-check,
+    .plq-set-name .tk-input,
+    .plq-edit .segmented button,
+    .plq-edit .field :is(input:not([type="checkbox"], [type="range"], [type="color"], [type="file"]), select, textarea) {
+        min-height: 44px;
+    }
+
+    input[type="range"],
+    .plq-edit .field input[type="color"],
+    .plq-edit .icon-grid button {
+        height: 44px;
+    }
+
+    .plq-edit .icon-grid {
+        grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+    }
+
+    .tk-link {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+    }
+
+    .plq-list-tools {
+        margin-top: -12px;
+        margin-bottom: -2px;
+    }
+
+    .plq-anchors button {
+        height: 44px;
+    }
+
+    .plq-scrub {
+        height: 44px;
+        margin-top: 0;
+    }
+
+    .plq-list .row-check {
+        justify-content: center;
+        width: 44px;
+        height: 44px;
+        margin: -13px -11px;
+    }
+
+    .plq-list .row-check input[type="checkbox"] {
+        margin: 0;
+    }
+
+    /* The current row shows its Move buttons at all times, in a column of their own beside the title, which wraps
+       next to them instead of under them. */
+    .plq-list .row {
+        grid-template-columns: 22px 64px minmax(0, 1fr) auto;
+    }
+
+    .plq-list .row-move {
+        position: static;
+        transform: none;
+    }
+
     .plq-list .row.is-current .row-move {
         display: flex;
+    }
+
+    .plq-list .row-move button {
+        width: 44px;
+        height: 44px;
     }
 }
 
@@ -1040,9 +1124,14 @@
 }
 
 /* Under 720: the preview on top, then the segment and the pane it picks. */
-@media (max-width: 719px) {
-    /* Three buttons do not fit one row of a bottom sheet: the quiet "Copy for an agent" takes its own row above
-       Close and the download, under the status line. */
+/* Three buttons do not fit one row of a narrow sheet: the quiet "Copy for an agent" takes its own row above Close and
+   the download, under the status line. The sheet's own width decides, not the window's: on an open iPhone Duo the
+   sheet keeps to one half of a wide window. */
+[data-sheet="export"] {
+    container-type: inline-size;
+}
+
+@container (max-width: 560px) {
     [data-sheet="export"] .tk-sheet-foot .tk-status {
         order: -2;
     }
@@ -1051,7 +1140,9 @@
         flex-basis: 100%;
         order: -1;
     }
+}
 
+@media (max-width: 719px) {
     .plq {
         grid-template-columns: minmax(0, 1fr);
         grid-template-areas:
@@ -1134,9 +1225,10 @@
     }
 }
 
-/* A short window under 720 px (a phone on its side): there is no room to keep the preview on top, so the whole tool
-   scrolls as one. */
-@media (max-width: 719px) and (max-height: 520px) {
+/* A short window under 720 px that is wider than tall (a phone on its side): there is no room to keep the preview on
+   top, so the whole tool scrolls as one. A short window that is taller than wide (an iPhone Duo's outer display once
+   the page's foot shows, 382 x 463) keeps the phone layout: size alone cannot tell the two apart, the shape can. */
+@media (max-width: 719px) and (max-height: 520px) and (min-aspect-ratio: 1/1) {
     .plq {
         display: block;
         overflow-x: hidden;
@@ -1206,33 +1298,44 @@
     max-height: 30vh;
 }
 
-/* Folded like a laptop: the preview alone on the upright half, where it is looked at, its stage filling what the
-   half leaves; on the flat half, where the hands are, the segment picks one of the three panes. */
+/* Folded like a laptop: the stage alone on the upright half, where it is looked at, filling what the half leaves; on
+   the flat half, where the hands are, the transport (Play, the step buttons, what to play and the scrubber), then
+   the segment that picks one of the three panes. The preview section steps aside so its parts can sit either side
+   of the fold. */
 :root[data-fold="rows"] .plq {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: var(--fold-start) calc(var(--fold-end) - var(--fold-start)) auto minmax(0, 1fr);
+    grid-template-rows: var(--fold-start) calc(var(--fold-end) - var(--fold-start)) auto auto auto minmax(0, 1fr);
     grid-template-areas:
-        "preview"
+        "stage"
         "."
+        "draft"
+        "transport"
         "seg"
         "pane";
 }
 
 :root[data-fold="rows"] .plq-preview {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    padding: 12px 16px 10px;
-    overflow: hidden;
-    border: 0;
+    display: contents;
 }
 
 :root[data-fold="rows"] .plq-stage {
-    flex: 1 1 0;
+    grid-area: stage;
+    width: auto;
     min-height: 0;
     max-height: none;
+    margin: 12px 16px 10px;
     aspect-ratio: auto !important;
+}
+
+:root[data-fold="rows"] .plq-draft {
+    grid-area: draft;
+    margin: 12px 16px 0;
+}
+
+:root[data-fold="rows"] .plq-transport {
+    grid-area: transport;
+    margin: 12px 16px 0;
 }
 
 :root[data-fold="rows"] .plq-seg {

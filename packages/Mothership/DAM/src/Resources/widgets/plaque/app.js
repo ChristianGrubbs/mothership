@@ -16,7 +16,7 @@
     const frame = window.MothershipFrame || null;
     const root = $('[data-plq]');
 
-    const state = { set: C.newSet(), current: null, selected: new Set(), draft: null, draftPreset: null, scope: 'current', t: 0, playing: false, muted: false };
+    const state = { set: C.newSet(), current: null, selected: new Set(), draft: null, draftPreset: null, scope: 'current', t: 0, playing: false, muted: false, closeUp: null };
     const presetLinks = new Map(); // plaque id -> user preset id, for "Update preset"
     let userPresets = [];
 
@@ -202,6 +202,31 @@
     const FRAME_CONTEXT = { willReadFrequently: true };
     const frameCanvas = () => { const c = document.createElement('canvas'); return { c, ctx: c.getContext('2d', FRAME_CONTEXT) }; };
     const canvas = $('[data-preview]'), pctx = canvas.getContext('2d', FRAME_CONTEXT);
+    // Close-up: a whole 1920 x 1080 frame shown under 480 CSS px wide puts a plaque's title at about 6 px. There the
+    // preview frames the plaques in play instead: the canvas takes the stage's own box (whose size the output's shape
+    // still sets, so nothing round it moves) and the plaques are centred and fitted to it, at one zoom for the whole
+    // run. Exports never see it. It is on by default, except while the Output pane is open (that pane sets the frame,
+    // so it shows all of it); the switch overrides both.
+    const CLOSE_UP_BELOW = 480;
+    const stageBox = { width: 0, height: 0 };
+    new ResizeObserver(([entry]) => {
+        const { width, height } = entry.contentRect;
+        if (Math.abs(width - stageBox.width) < 1 && Math.abs(height - stageBox.height) < 1) return;
+        Object.assign(stageBox, { width, height });
+        draw();
+    }).observe($('[data-stage]'));
+    // The width the whole frame is shown at on this stage, whichever of the stage's width or height limits it.
+    const frameShown = output => Math.min(stageBox.width, stageBox.height * output.width / output.height);
+    const closeUpCan = () => state.set.output.mode === 'frame' && stageBox.height > 1 && frameShown(state.set.output) < CLOSE_UP_BELOW;
+    const closeUpOn = () => closeUpCan() && (state.closeUp ?? root.dataset.view !== 'output');
+    function closeUpScene(output, plaques) {
+        const ratio = Math.min(window.devicePixelRatio || 1, 3);
+        const size = { width: Math.max(2, Math.round(stageBox.width * ratio / 2) * 2), height: Math.max(2, Math.round(stageBox.height * ratio / 2) * 2) };
+        let w = 1, h = 1;
+        for (const plaque of plaques) { const box = C.layout(pctx, plaque); w = Math.max(w, box.width); h = Math.max(h, box.height); }
+        const fit = Math.min(size.width * 0.84 / w, size.height * 0.76 / h);
+        return { size, output: { ...output, width: size.width, height: size.height, anchor: 'center', margin: 0, scale: fit * 1080 / Math.min(size.width, size.height) } };
+    }
     let rafPending = false;
     function draw() {
         if (rafPending) return;
@@ -215,11 +240,15 @@
         root.toggleAttribute('data-empty-set', empty);
         $('[data-transport]').hidden = empty;
         if (empty) { canvas.width = 1; canvas.height = 1; return; }
-        const size = C.canvasSize(pctx, state.set.output, plaques);
-        if (canvas.width !== size.width || canvas.height !== size.height) { canvas.width = size.width; canvas.height = size.height; }
+        const frameSize = C.canvasSize(pctx, state.set.output, plaques);
         const stage = $('[data-stage]');
-        stage.style.aspectRatio = `${Math.max(size.width / size.height, 1.2)}`;
-        C.drawFrame(pctx, { output: state.set.output, plaques, size, background: null }, state.t, resolve, makePath);
+        stage.style.aspectRatio = `${Math.max(frameSize.width / frameSize.height, 1.2)}`;
+        const closeUp = closeUpOn(), toggle = $('[data-action="close-up"]');
+        toggle.hidden = !closeUpCan();
+        toggle.setAttribute('aria-pressed', String(closeUp));
+        const { size, output } = closeUp ? closeUpScene(state.set.output, plaques) : { size: frameSize, output: state.set.output };
+        if (canvas.width !== size.width || canvas.height !== size.height) { canvas.width = size.width; canvas.height = size.height; }
+        C.drawFrame(pctx, { output, plaques, size, background: null }, state.t, resolve, makePath);
         const line = C.timeline(plaques);
         $('[data-clock]').textContent = `${fmt(state.t)} / ${fmt(line.duration)}`;
         const scrub = $('[data-scrub]');
@@ -323,7 +352,7 @@
         $('[data-list-tools]').hidden = plaques.length < 2;
         list.innerHTML = plaques.map((plaque, index) => `
             <li class="row${plaque.id === state.current && !state.draft ? ' is-current' : ''}" data-id="${plaque.id}" draggable="true" aria-current="${plaque.id === state.current && !state.draft ? 'true' : 'false'}">
-                <input type="checkbox" aria-label="Select ${esc(plaque.title || 'plaque')}" data-select ${state.selected.has(plaque.id) ? 'checked' : ''}>
+                <label class="row-check"><input type="checkbox" aria-label="Select ${esc(plaque.title || 'plaque')}" data-select ${state.selected.has(plaque.id) ? 'checked' : ''}></label>
                 <canvas class="thumb" width="128" height="80" data-thumb></canvas>
                 <span class="row-text"><strong>${esc(plaque.title.split('\n')[0] || 'Untitled plaque')}</strong><span>${index + 1} · ${plaque.kind === 'social' ? 'Social' : plaque.amount.enabled ? 'Amount' : 'Plaque'} · ${C.plaqueLength(plaque).toFixed(1)} s</span></span>
                 <span class="row-move"><button type="button" data-move="-1" aria-label="Move up"><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button><button type="button" data-move="1" aria-label="Move down"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button></span>
@@ -1147,6 +1176,7 @@
     // Under 1100 px the panes share the space under the preview; a segment picks which one shows.
     function showPane(name) {
         root.dataset.view = name;
+        draw(); // the close-up preview stands down while the Output pane is open
         $$('[data-view-opt]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.viewOpt === name)));
         try { localStorage.setItem('plaque:view', name); } catch { /* the choice is only remembered where storage works */ }
         showName();
@@ -1186,6 +1216,7 @@
         play: () => (state.playing ? stop() : play()),
         'step-back': () => step(-1),
         'step-forward': () => step(1),
+        'close-up': () => { state.closeUp = !closeUpOn(); draw(); },
         'select-all': () => { state.selected = new Set(state.set.plaques.map(p => p.id)); renderList(); },
         'select-none': () => { state.selected.clear(); renderList(); },
         duplicate: () => duplicate(state.current),
@@ -1253,7 +1284,7 @@
         if (!row) return;
         const moveButton = event.target.closest('[data-move]');
         if (moveButton) { move(row.dataset.id, Number(moveButton.dataset.move)); return; }
-        if (event.target.closest('[data-select]')) return;
+        if (event.target.closest('[data-select], .row-check')) return; // the box, or the 44 px target round it on touch
         if (event.shiftKey || event.metaKey || event.ctrlKey) { toggleSelect(row.dataset.id); return; }
         selectPlaque(row.dataset.id);
     });

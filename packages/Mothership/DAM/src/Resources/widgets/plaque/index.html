@@ -47,6 +47,7 @@
                     <button type="button" class="tk-btn is-quiet" data-action="step-forward" aria-label="Next frame" title="Next frame (→)"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" x2="19" y1="5" y2="19"/></svg></button>
                     <label class="plq-scope"><span class="tk-hidden">What to play</span><select class="tk-select" data-scope><option value="current">This plaque</option><option value="selected">Selected plaques</option><option value="set">Whole set</option></select></label>
                     <label class="tk-check plq-mute"><input type="checkbox" data-mute><span>Mute</span></label>
+                    <button type="button" class="tk-btn is-quiet plq-closeup" data-action="close-up" aria-pressed="false" aria-label="Close-up" title="Close-up: frame the plaque, not the whole output" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V5a1 1 0 0 1 1-1h4"/><path d="M15 4h4a1 1 0 0 1 1 1v4"/><path d="M20 15v4a1 1 0 0 1-1 1h-4"/><path d="M9 20H5a1 1 0 0 1-1-1v-4"/></svg></button>
                     <span class="plq-clock tk-mono" data-clock>0:00.00 / 0:00.00</span>
                 </div>
                 <input type="range" class="plq-scrub" data-scrub min="0" step="0.001" value="0" aria-label="Playhead">
