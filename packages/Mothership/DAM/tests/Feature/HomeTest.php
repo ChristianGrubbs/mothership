@@ -95,6 +95,17 @@ it('shows the rail storage meter only to a role that may read storage', function
     $this->actingAs(Admin::factory()->create(['role_id' => $role->id]), 'admin');
     $this->getJson('/admin/home/data/storage')->assertForbidden();
     expect($this->get('/admin/home')->assertOk()->getContent())->not->toContain('<v-rail-storage');
+
+    // The Library alone is not enough: the role's Home allowlist decides too, as it does for the data route.
+    $library = Role::factory()->create(['permission_type' => 'custom', 'permissions' => ['dam', 'dam.assets']]);
+    DB::table('dam_role_settings')->insert(['role_id' => $library->id, 'home_widget_ids' => '["recent"]']);
+    $this->actingAs(Admin::factory()->create(['role_id' => $library->id]), 'admin');
+    $this->getJson('/admin/home/data/storage')->assertForbidden();
+    expect($this->get('/admin/home')->assertOk()->getContent())->not->toContain('<v-rail-storage');
+
+    DB::table('dam_role_settings')->where('role_id', $library->id)->update(['home_widget_ids' => '["recent","storage"]']);
+    $this->getJson('/admin/home/data/storage')->assertOk();
+    expect($this->get('/admin/home')->assertOk()->getContent())->toContain($meter);
 });
 
 it('requires authentication for Home layout and tools', function () {
