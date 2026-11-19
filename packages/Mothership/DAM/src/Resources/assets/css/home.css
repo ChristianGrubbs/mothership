@@ -451,3 +451,23 @@ body:has([data-mothership-home]) .ap-fab:hover,body:has([data-mothership-home]) 
     .hm-pic.is-wait .hm-ic{animation:none}
     .hm-tr-btn[aria-busy=true]>[data-l=busy]{animation:none}
 }
+/* A task's done box sits in a label, which is its press area; with a mouse the label is only as big as the box. */
+.agh-settings .agh-cal-done{display:inline-flex;align-items:center;justify-content:center;margin:0;font-size:inherit}
+/* A touch screen gets 44 px press areas (Apple's HIG) on Home and in every Home dialog, as Home's links already have.
+   A mouse keeps the compact sizes. After the rules above, which set smaller heights at the same weight. */
+@media (pointer:coarse){
+    .hm-btn:not(.hm-act),.hm-tr-btn,.hm-newrow,.hm-day select{height:44px}
+    .hm-tr-all{min-height:44px}
+    .agh-settings :is(.agh-button,.agh-trend-day,.agh-cal-done){min-width:44px;min-height:44px}
+    .agh-settings :is(input:not([type=checkbox],[type=radio],[type=file]),select){min-height:44px}
+    .agh-cal-row,.agh-cal-check{min-height:44px}
+    .agh-cal-check{align-items:center}
+    .agh-cal-x{display:inline-grid;place-items:center;min-width:44px;min-height:44px;padding:0}
+    /* A task row keeps its mouse layout: the done box's press area reaches 14 px past each side of the box, and delete's
+       reaches 20 px past its end, so the picker stays beside the title and delete stays beside the buttons. */
+    .agh-settings .agh-cal-done{margin-inline:-14px}
+    .agh-cal-x{margin-inline-end:-20px}
+    /* Unlink takes the thumbnail's top corner, 44 px, and shows without a hover, which a touch screen has none of; its
+       mark stays a small circle. */
+    .agh-cal-thumb button{top:0;right:0;display:grid;place-items:center;width:44px;height:44px;line-height:normal;background:radial-gradient(circle,#141414cc 11px,transparent 11.5px);opacity:1}
+}

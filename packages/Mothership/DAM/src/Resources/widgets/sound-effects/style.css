@@ -473,13 +473,20 @@
 }
 
 /* A touch screen gets 44 px targets (Apple's HIG), as the kit gives its glyph buttons: the segment, Simple and
-   Advanced, the selected sound's buttons, and the pane's own way to its sheets. */
+   Advanced, the selected sound's buttons, the pane's own way to its sheets, and each slider, whose track stays as
+   thin as it is drawn, in the middle of its taller press area. */
 @media (pointer: coarse) {
     .sfx-seg .tk-seg-opt,
     .sfx-mode .tk-seg-opt,
     .sfx-tools .tk-btn.is-small,
-    .sfx-own .tk-btn.is-small {
+    .sfx-own .tk-btn.is-small,
+    .sfx-slider input[type="range"] {
         height: 44px;
+    }
+
+    /* The slider's extra 16 px reach over its name and its hint, so each hint stays beside its own track. */
+    .sfx-slider input[type="range"] {
+        margin-block: -8px;
     }
 
     /* 16 px, as the kit's own fields under touch: Safari on iPhone zooms into a smaller one. */

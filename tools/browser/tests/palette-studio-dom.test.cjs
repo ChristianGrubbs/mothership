@@ -85,21 +85,31 @@ browserTest('alone, the tool shows its own way to its sheets and offers no Save 
     } finally { await browser.close(); }
 });
 
-// Apple's HIG asks for 44 pt targets: under touch the segment's tabs, each swatch and the hex that copies it are 44 px.
-// A mouse keeps the smaller ones.
-browserTest('on a touch screen the tabs, each swatch and the hex that copies it are 44 px targets',async()=>{
+// Apple's HIG asks for 44 pt targets: under touch the segment's tabs, each swatch, the hex that copies it, the sliders
+// and a scale's stops are 44 px. A mouse keeps the smaller ones.
+browserTest('on a touch screen the tabs, each swatch, its hex, the sliders and the scale stops are 44 px targets',async()=>{
     const browser=await launch();
     try{
         for(const touch of [true,false]){
             const {page,errors}=await open(browser,{width:390,height:844,touch});
             assert.equal(await page.evaluate(()=>matchMedia('(pointer: coarse)').matches),touch);
-            const sizes=await page.evaluate(()=>Object.fromEntries(['.ps-seg .tk-seg-opt','.ps-chip','.ps-hex'].map(selector=>[selector,
-                [...document.querySelectorAll(selector)].filter(node=>node.checkVisibility()).map(node=>{const box=node.getBoundingClientRect();return {width:box.width,height:box.height};})])));
+            const measure=selectors=>page.evaluate(selectors=>Object.fromEntries(selectors.map(selector=>[selector,
+                [...document.querySelectorAll(selector)].filter(node=>node.checkVisibility()).map(node=>{const box=node.getBoundingClientRect();return {width:box.width,height:box.height};})])),selectors);
+            const sizes=await measure(['.ps-seg .tk-seg-opt','.ps-chip','.ps-hex','.ps-sliders input']);
             for(const [selector,boxes] of Object.entries(sizes)){
                 assert.ok(boxes.length>0,`${selector} is shown`);
                 if(touch)assert.deepEqual(boxes.filter(box=>box.height<44||(selector==='.ps-chip'&&box.width<44)),[],`${selector} under touch`);
                 else assert.ok(boxes.every(box=>box.height<44),`${selector} keeps its size under a mouse`);
             }
+            // A scale's ten stops: a 44 px square each under touch, in two rows of five at a phone's width; one row of
+            // ten narrower stops under a mouse.
+            await page.locator('[data-view-opt="scales"]').click();
+            const stops=(await measure(['.ps-stop']))['.ps-stop'];
+            assert.ok(stops.length>=10,'the scales show their stops');
+            if(touch)assert.deepEqual(stops.filter(box=>box.width<44||box.height<44),[],'.ps-stop under touch');
+            else assert.ok(stops.every(box=>box.width<44),'.ps-stop keeps one row under a mouse');
+            const rows=await page.locator('.ps-stops').first().evaluate(node=>new Set([...node.children].map(stop=>Math.round(stop.getBoundingClientRect().top))).size);
+            assert.equal(rows,touch?2:1,'rows of stops');
             assert.deepEqual(errors,[]);
             await page.close();
         }
