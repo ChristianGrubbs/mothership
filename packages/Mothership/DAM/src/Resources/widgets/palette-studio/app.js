@@ -411,9 +411,13 @@
     let folders = null;
     // A save holds the sheet until the Library answers: its choices stay as sent, also when the sheet is reopened.
     let saving = false;
+    // A save that fails after its sheet was closed is said at once, and again in the sheet the next time it opens.
+    let failure = '';
     function setLibrary({ message = '', error = false } = {}) {
         const none = Array.isArray(folders) && !folders.length;
         const picked = $('[data-save-image]').checked || $('[data-save-tokens]').checked;
+        // With no folder to save into there is nothing to choose: the sheet says so and offers no ticks.
+        $('[data-save-image]').closest('fieldset').hidden = none;
         $('[data-folder-field]').hidden = none;
         $('[data-folder-empty]').hidden = !none;
         ['[data-save-image]', '[data-save-tokens]', '[data-folder]'].forEach(selector => { $(selector).disabled = saving; });
@@ -429,14 +433,16 @@
         $('[data-save-image-name]').textContent = `${core.fileName(work.name, 'png')} · ${PNG.width} × ${PNG.height}`;
         $('[data-save-tokens-name]').textContent = core.fileName(work.name, 'json');
         showSheet('library');
-        if (folders) { setLibrary(); return; }
+        const kept = failure ? { message: failure, error: true } : {};
+        failure = '';
+        if (folders) { setLibrary(kept); return; }
         setLibrary({ message: 'Finding your folders…' });
         try {
             folders = await frame.folders();
             const select = $('[data-folder]');
             select.innerHTML = folders.map(folder => `<option value="${esc(folder.id)}">${'  '.repeat(folder.depth)}${esc(folder.name)}</option>`).join('');
             if (folders.some(folder => folder.id === view.folder)) select.value = view.folder;
-            setLibrary();
+            setLibrary(kept);
         } catch (error) {
             folders = null;
             setLibrary({ message: `${error.message || 'Your folders could not be read.'} Close this and try again.`, error: true });
@@ -449,6 +455,7 @@
         const folder = $('[data-folder]').value, palette = { name: work.name, list: hexes() }, files = [];
         const image = $('[data-save-image]').checked, tokens = $('[data-save-tokens]').checked;
         saving = true;
+        failure = '';
         setLibrary();
         let failed = null;
         try {
@@ -467,7 +474,19 @@
         } finally {
             saving = false;
         }
-        if (failed) setLibrary({ message: failed.message || 'The files could not be saved. Try again.', error: true });
+        if (!failed) return;
+        const message = failed.message || 'The files could not be saved. Try again.';
+        if ($('[data-sheet="library"]').open) {
+            setLibrary({ message, error: true });
+            // Save was disabled while it ran, which dropped the focus; give it back so Enter tries again.
+            $('[data-library-go]').focus();
+            return;
+        }
+        // The sheet was closed while it saved: the bar says so now (the tool's own line where there is no bar).
+        failure = message;
+        setLibrary();
+        frame.notice({ text: `Not saved to the Library. ${message}`, tone: 'error' });
+        if (!frame.bar) say(`Not saved to the Library. ${message}`, { error: true });
     }
 
     // ---- PNG ----------------------------------------------------------------------------------------------------

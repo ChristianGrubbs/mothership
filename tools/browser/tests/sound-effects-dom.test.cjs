@@ -414,6 +414,85 @@ browserTest('in the frame, the bar speaks for the tool and a save sends the soun
     } finally { await browser.close(); }
 });
 
+browserTest('a refused save is never lost: the open sheet keeps the focus on Save, and a closed one is said in the bar and again when it opens', async () => {
+    const browser = await launch();
+    try {
+        const { page, errors } = await open(browser, { bridge: true });
+        const line = () => page.locator('[data-sheet="library"] .tk-status').evaluate(node => ({ text: node.textContent, error: node.classList.contains('is-error') }));
+        const openLibrary = async () => {
+            await page.evaluate(() => window.__press('library'));
+            await page.locator('[data-folder] option', { hasText: 'Sounds' }).waitFor({ state: 'attached' });
+        };
+
+        // Refused while the sheet is open: it says why, and Save has the focus back so Enter tries again.
+        await openLibrary();
+        await page.evaluate(() => { window.MothershipFrame.save = async () => { throw new Error('The Library is full.'); }; });
+        await page.locator('[data-library-go]').click();
+        await page.waitForFunction(() => document.querySelector('[data-sheet="library"] .tk-status').textContent === 'The Library is full.');
+        assert.deepEqual(await line(), { text: 'The Library is full.', error: true });
+        assert.equal(await page.evaluate(() => document.activeElement.matches('[data-library-go]:not(:disabled)')), true, 'Save keeps the focus');
+        assert.deepEqual(await page.evaluate(() => window.__told.notices), [], 'the open sheet says it; the bar does not');
+
+        // Refused after the sheet was closed: the bar says it at once...
+        await page.evaluate(() => { window.MothershipFrame.save = () => new Promise((_, refuse) => { window.__refuse = () => refuse(new Error('The Library is full.')); }); });
+        await page.locator('[data-library-go]').click();
+        await page.waitForFunction(() => typeof window.__refuse === 'function');
+        await page.keyboard.press('Escape');
+        assert.equal(await sheetOpen(page, 'library'), false);
+        await page.evaluate(() => window.__refuse());
+        await page.waitForFunction(() => window.__told.notices.length === 1);
+        assert.deepEqual(await page.evaluate(() => window.__told.notices[0]), { text: 'Not saved to the Library. The Library is full.', tone: 'error' });
+        assert.equal(await page.locator('[data-status]').isHidden(), true, 'the bar says it once; the tool keeps quiet');
+        // ...and the sheet says it again when it opens, free to try again; once seen, it is not said a second time.
+        await openLibrary();
+        assert.deepEqual(await line(), { text: 'The Library is full.', error: true });
+        assert.equal(await page.locator('[data-library-go]').isDisabled(), false);
+        assert.equal(await page.locator('[data-library-go]').textContent(), 'Save');
+        await page.keyboard.press('Escape');
+        await openLibrary();
+        assert.deepEqual(await line(), { text: '', error: false });
+        assert.deepEqual(errors, []);
+        await page.close();
+    } finally { await browser.close(); }
+});
+
+browserTest('with no folder to save into, the Library sheet says so and offers no ticks', async () => {
+    const browser = await launch();
+    try {
+        const { page, errors } = await open(browser, { bridge: true });
+        await page.evaluate(() => { window.MothershipFrame.folders = async () => []; });
+        await page.evaluate(() => window.__press('library'));
+        await page.locator('[data-folder-empty]').waitFor();
+        assert.equal(await page.locator('[data-save-wav]').isVisible(), false);
+        assert.equal(await page.locator('[data-save-settings]').isVisible(), false);
+        assert.equal(await page.locator('[data-folder]').isVisible(), false);
+        assert.equal(await page.locator('[data-library-go]').isDisabled(), true);
+        assert.deepEqual(errors, []);
+        await page.close();
+    } finally { await browser.close(); }
+});
+
+browserTest('a saved sound being renamed draws one edge, its field\'s, not the row\'s as well', async () => {
+    const browser = await launch();
+    try {
+        const { page, errors } = await open(browser);
+        await saveTakes(page, 1);
+        const row = page.locator('[data-sheet="saved"] [role="option"]').first();
+        await row.click();
+        // The edge eases in and out (briefly, with reduced motion): it is read once the row has finished changing.
+        const edge = () => row.evaluate(async node => { await Promise.all(node.getAnimations().map(a => a.finished)); return getComputedStyle(node).boxShadow; });
+        assert.match(await edge(), /inset/, 'the selected row has its own edge');
+        await page.locator('[data-rename]').click();
+        await page.locator('[data-rename-input]').waitFor();
+        assert.equal(await page.evaluate(() => document.activeElement.matches('[data-rename-input]')), true);
+        assert.doesNotMatch(await edge(), /inset/, 'while it is renamed, the field is the row\'s one edge');
+        await page.keyboard.press('Enter');
+        assert.match(await edge(), /inset/, 'renamed, the row has its edge back');
+        assert.deepEqual(errors, []);
+        await page.close();
+    } finally { await browser.close(); }
+});
+
 browserTest('the panes follow the tool\'s width, and nothing scrolls sideways', async () => {
     const browser = await launch();
     try {

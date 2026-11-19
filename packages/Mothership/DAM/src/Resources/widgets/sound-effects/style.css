@@ -427,6 +427,11 @@
     font-weight: 600;
 }
 
+/* While the sound is renamed, its field is the one edge in the row. */
+.sfx-item[aria-selected="true"]:has([data-rename-input]) {
+    box-shadow: var(--lift);
+}
+
 .sfx-item-name {
     flex: 1;
     min-width: 0;

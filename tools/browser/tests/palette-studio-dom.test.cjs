@@ -161,6 +161,63 @@ browserTest('a save in progress holds the Library sheet, and the Library is aske
     } finally { await browser.close(); }
 });
 
+browserTest('a refused save is never lost: the open sheet keeps the focus on Save, and a closed one is said in the bar and again when it opens',async()=>{
+    const browser=await launch();
+    try{
+        const {page,errors}=await open(browser,{bridge:true});
+        const line=()=>page.locator('[data-sheet="library"] .tk-status').evaluate(node=>({text:node.textContent,error:node.classList.contains('is-error')}));
+        const openLibrary=async()=>{
+            await page.evaluate(()=>window.__press('library'));
+            await page.locator('[data-folder] option',{hasText:'Brand'}).waitFor({state:'attached'});
+        };
+
+        // Refused while the sheet is open: it says why, and Save has the focus back so Enter tries again.
+        await openLibrary();
+        await page.evaluate(()=>{window.MothershipFrame.save=async()=>{throw new Error('The Library is full.');};});
+        await page.locator('[data-library-go]').click();
+        await page.waitForFunction(()=>document.querySelector('[data-sheet="library"] .tk-status').textContent==='The Library is full.');
+        assert.deepEqual(await line(),{text:'The Library is full.',error:true});
+        assert.equal(await page.evaluate(()=>document.activeElement.matches('[data-library-go]:not(:disabled)')),true,'Save keeps the focus');
+        assert.deepEqual(await page.evaluate(()=>window.__told.notices),[],'the open sheet says it; the bar does not');
+
+        // Refused after the sheet was closed: the bar says it at once...
+        await page.evaluate(()=>{window.MothershipFrame.save=()=>new Promise((_,refuse)=>{window.__refuse=()=>refuse(new Error('The Library is full.'));});});
+        await page.locator('[data-library-go]').click();
+        await page.waitForFunction(()=>typeof window.__refuse==='function');
+        await page.keyboard.press('Escape');
+        assert.equal(await sheetOpen(page,'library'),false);
+        await page.evaluate(()=>window.__refuse());
+        await page.waitForFunction(()=>window.__told.notices.length===1);
+        assert.deepEqual(await page.evaluate(()=>window.__told.notices[0]),{text:'Not saved to the Library. The Library is full.',tone:'error'});
+        assert.equal(await page.locator('[data-toast]').isHidden(),true,'the bar says it once; the tool keeps quiet');
+        // ...and the sheet says it again when it opens, free to try again; once seen, it is not said a second time.
+        await openLibrary();
+        assert.deepEqual(await line(),{text:'The Library is full.',error:true});
+        assert.equal(await page.locator('[data-library-go]').isDisabled(),false);
+        await page.keyboard.press('Escape');
+        await openLibrary();
+        assert.deepEqual(await line(),{text:'',error:false});
+        assert.deepEqual(errors,[]);
+        await page.close();
+    } finally { await browser.close(); }
+});
+
+browserTest('with no folder to save into, the Library sheet says so and offers no ticks',async()=>{
+    const browser=await launch();
+    try{
+        const {page,errors}=await open(browser,{bridge:true});
+        await page.evaluate(()=>{window.MothershipFrame.folders=async()=>[];});
+        await page.evaluate(()=>window.__press('library'));
+        await page.locator('[data-folder-empty]').waitFor();
+        assert.equal(await page.locator('[data-save-image]').isVisible(),false);
+        assert.equal(await page.locator('[data-save-tokens]').isVisible(),false);
+        assert.equal(await page.locator('[data-folder]').isVisible(),false);
+        assert.equal(await page.locator('[data-library-go]').isDisabled(),true);
+        assert.deepEqual(errors,[]);
+        await page.close();
+    } finally { await browser.close(); }
+});
+
 browserTest('a save sends the palette as it was when Save was pressed, however it changes while the picture is made',async()=>{
     const browser=await launch();
     try{
