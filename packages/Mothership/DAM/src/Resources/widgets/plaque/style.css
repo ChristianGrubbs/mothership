@@ -1319,6 +1319,21 @@
     .plq-closeup {
         grid-area: 2 / 5;
     }
+
+    /* Without Close-up (tight framing, or a wide stage), the last column goes: the clock and Mute share one, and Mute
+       closes the row under the clock's edge. */
+    .plq-transport:has(.plq-closeup[hidden]) {
+        grid-template-columns: 44px 44px minmax(0, 1fr) auto;
+    }
+
+    .plq-transport:has(.plq-closeup[hidden]) .plq-clock,
+    .plq-transport:has(.plq-closeup[hidden]) .plq-mute {
+        grid-column: 4 / 5;
+    }
+
+    .plq-transport:has(.plq-closeup[hidden]) .plq-mute {
+        justify-self: end;
+    }
 }
 
 /* A folded screen (the kit says how a tool learns of it). Nothing sits on the fold in either pose.

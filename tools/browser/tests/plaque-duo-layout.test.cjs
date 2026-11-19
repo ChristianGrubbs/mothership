@@ -413,7 +413,7 @@ browserTest('on a short tool under touch the transport takes two rows, hides not
             await page.close();
         }
 
-        // Tight framing stands Close-up down; the rest of the two rows hold, and nothing moves into its empty cell.
+        // Tight framing stands Close-up down; the two rows hold and Mute closes the second row.
         {
             const { page } = await open(browser, { width: 382, height: 463 });
             await addPlaques(page, 1);
@@ -423,6 +423,7 @@ browserTest('on a short tool under touch the transport takes two rows, hides not
             const t = await transport(page);
             assert.equal(t.closeUp, null, 'tight framing: no Close-up');
             assertTwoRows(t, 'tight framing');
+            assert.ok(Math.abs(t.mute.right - t.clock.right) <= 2, `tight framing: Mute ends under the clock: ${t.mute.right} vs ${t.clock.right}`);
             await page.close();
         }
 
