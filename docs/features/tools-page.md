@@ -42,9 +42,10 @@ tool opens in the tool frame: a page of its own with one top bar that is the sam
   work, so leaving it never asks.
 - A sheet the tool opens for a press on the bar (an item of the saved-sets menu, Export, Save to Library) gives the
   focus back to that control when it closes, as a dialog of the page itself would; for the menu's items that is the
-  menu's button. The bridge (`home-frame.js`) marks a sheet that opens while the tool is still answering a command
-  from the bar (`fromBar` on its `sheet` message), and the page moves the focus only while it is still in the tool. A
-  sheet the tool opens from its own control gives the focus back to that control, inside the tool.
+  menu's button. The bridge (`home-frame.js`) marks the first sheet that opens while the tool is still answering a
+  command from the bar (`fromBar` on its `sheet` message); a press owns one sheet at most. The page moves the focus
+  only while it is still in the tool. A sheet the tool opens from its own control, even while a press is still being
+  answered, gives the focus back to that control, inside the tool.
 - A role that may not use a tool gets 403 from the frame page; an id that is not a tool with a page gets 404.
 
 ## Adding a tool

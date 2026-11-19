@@ -37,11 +37,13 @@
     // The page that frames this tool steps its own actions back while a sheet is open here, so one filled control shows.
     // A sheet that opens while the tool is still answering a press on the page's bar is the bar's (fromBar): when it
     // closes, the page gives the focus back to the bar, since a sheet here can only give it back to what had it here.
-    let sheetOpen=false,fromBar=false,barCommands=0;
-    if(typeof MutationObserver==='function')new MutationObserver(()=>{const open=Boolean(document.querySelector('dialog[open]'));if(open!==sheetOpen){sheetOpen=open;if(open)fromBar=barCommands>0;notify('sheet',{open,fromBar});}}).observe(document.documentElement,{attributes:true,attributeFilter:['open'],subtree:true});
-    // A command's handler may open its sheet after an await. It counts as answering until it settles, and a task
-    // longer, so the observer above has seen the sheet it opened.
-    const answer=(handler,payload)=>{barCommands++;let result;try{result=handler(payload);}finally{Promise.resolve(result).finally(()=>setTimeout(()=>{barCommands--;},0));}};
+    // A press owns one sheet at most: the first that opens takes it, and a sheet the tool opens later is the tool's own,
+    // even while the press is still being answered (Save to Library reading its folders after its sheet is up).
+    let sheetOpen=false,fromBar=false,barPress=null;
+    if(typeof MutationObserver==='function')new MutationObserver(()=>{const open=Boolean(document.querySelector('dialog[open]'));if(open!==sheetOpen){sheetOpen=open;if(open){fromBar=Boolean(barPress);barPress=null;}notify('sheet',{open,fromBar});}}).observe(document.documentElement,{attributes:true,attributeFilter:['open'],subtree:true});
+    // A command's handler may open its sheet after an await. The press waits for it until the handler settles, and a
+    // task longer, so the observer above has seen the sheet it opened.
+    const answer=(handler,payload)=>{const press={};barPress=press;let result;try{result=handler(payload);}finally{Promise.resolve(result).finally(()=>setTimeout(()=>{if(barPress===press)barPress=null;},0));}};
     document.addEventListener('DOMContentLoaded',()=>{
         // reportsWork: the listeners above tell Home when work starts, so Home may close this tool
         // without asking while none has been reported.

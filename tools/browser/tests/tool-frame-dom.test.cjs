@@ -370,13 +370,14 @@ browserTest('the bar shows what the tool offers, writes its names as text, and t
     } finally { await browser.close(); }
 });
 
-// A tool whose bar commands open its sheet: Export and the sets' manage item at once, Save to Library after an await
-// (as a tool that reads its folders first does). Picking a set opens none. The tool's own button opens the same sheet.
+// A tool whose bar commands open its sheet: Export and the sets' manage item at once, Save to Library after an await,
+// and then it goes on reading its folders until the test lets it finish. Picking a set opens none. The tool's own
+// button opens the same sheet.
 const SHEET_TOOL_HTML=`<!doctype html><html><body><script>window.__MOTHERSHIP_FRAME__={widget:"sound-effects",state:{},url:"/admin/home/widgets/sound-effects",csrf:"fixture",library:{folders:"/folders",save:"/save",open:"/open/__ID__"}};<\/script><script>${source('home-frame.js')}<\/script><p>tool</p><button id="own">Own sheet</button><dialog id="sheet"><button>In the sheet</button></dialog><script>
 const sheet=document.querySelector('#sheet');
 MothershipFrame.on('export',()=>sheet.showModal());
 MothershipFrame.on('manage-sets',()=>sheet.showModal());
-MothershipFrame.on('library',async()=>{await new Promise(done=>setTimeout(done,50));sheet.showModal();});
+MothershipFrame.on('library',async()=>{await new Promise(done=>setTimeout(done,50));sheet.showModal();await new Promise(done=>{window.__foldersRead=done;});});
 MothershipFrame.on('open-set',()=>{});
 document.querySelector('#own').addEventListener('click',()=>sheet.showModal());
 document.addEventListener('DOMContentLoaded',()=>MothershipFrame.chrome({set:'Harbour',sets:[{id:'a',name:'Harbour',current:true}],setsLabel:'Saved palettes',manage:'Manage saved palettes…',export:true,library:true}));
@@ -401,6 +402,12 @@ browserTest('a sheet the bar opened gives the focus back to the bar when it clos
         await page.locator('.bridge-toolbar [data-tool-library]').click();
         await escapeSheet();
         assert.equal(await focusOn('.bridge-toolbar [data-tool-library]'),true,'so does Save to Library, whose sheet came after an await');
+        // Its folders are still being read, but the press has had its sheet: the next one is the tool's own.
+        await frame.locator('#own').click();
+        await escapeSheet();
+        assert.equal(await frame.evaluate(()=>document.activeElement.id),'own','a sheet the tool opens while a press is still answered keeps the focus in the tool');
+        assert.equal(await focusOn('[data-tool-window]'),true);
+        await frame.evaluate(()=>window.__foldersRead());
         await page.locator('[data-tool-sets-btn]').click();
         await page.locator('[data-tool-sets-menu] button',{hasText:'Manage saved palettes…'}).click();
         await escapeSheet();
