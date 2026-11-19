@@ -406,9 +406,29 @@
     display: none;
 }
 
+/* With no plaque, the stage holds the ways to start instead of a frame. It keeps its box where they fit and grows to
+   hold them where they don't: on a short, narrow tool (an iPhone Duo's outer display) the buttons wrap to a second
+   row, and the box cut off the heading above them and the last button below. The box's own size is kept by an
+   empty 16:9 shape in the same cell as the ways to start; whichever is taller sets the height, which overrides the
+   box's height cap. On a tabletop fold the stage fills its half, so the shape stays out. */
 .plq[data-empty-set] .plq-stage {
+    min-height: min-content;
+    aspect-ratio: auto;
     background: none;
     box-shadow: none;
+}
+
+:root:not([data-fold="rows"]) .plq[data-empty-set] .plq-stage::before {
+    content: "";
+    grid-area: 1 / 1;
+    width: 100%;
+    max-height: inherit;
+    aspect-ratio: 16 / 9;
+}
+
+.plq[data-empty-set] .plq-start {
+    position: static;
+    grid-area: 1 / 1;
 }
 
 .plq-anchors button {

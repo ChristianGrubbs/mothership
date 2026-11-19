@@ -108,6 +108,38 @@ browserTest('on the outer display upright, a set with plaques keeps the preview 
     } finally { await browser.close(); }
 });
 
+browserTest('an empty set shows its heading and every way to start whole on the outer display and folded, and a wide tool keeps the 16:9 stage', async () => {
+    const browser = await launch();
+    try {
+        const whole = async (page, label) => {
+            const stage = await box(page, '[data-stage]');
+            const cut = await page.evaluate(stage => [...document.querySelectorAll('.plq-start h2, .plq-start p, .plq-start .tk-btn')]
+                .filter(node => node.checkVisibility())
+                .filter(node => { const r = node.getBoundingClientRect(); return r.top < stage.top - .5 || r.bottom > stage.bottom + .5 || r.left < stage.left - .5 || r.right > stage.right + .5; })
+                .map(node => node.textContent.trim().slice(0, 30)), stage);
+            assert.deepEqual(cut, [], `${label}: nothing cut by the stage`);
+            return stage;
+        };
+        // The outer display upright, with the page's foot and without it: the buttons wrap to a second row.
+        for (const [width, height] of [[382, 463], [382, 524]]) {
+            const { page, errors } = await open(browser, { width, height });
+            await whole(page, `${width} x ${height}`);
+            assert.deepEqual(errors, []);
+            await page.close();
+        }
+        let { page, errors } = await open(browser, { width: 669, height: 761 });
+        await fold(page, 'rows', 286, 326);
+        await settled(page);
+        assert.ok((await whole(page, 'tabletop')).bottom <= 286, 'the stage ends above the fold');
+        assert.deepEqual(await across(page, 'y', 286, 326), [], 'nothing to tap on the fold');
+        await page.close();
+        ({ page, errors } = await open(browser, { width: 1440, height: 900, touch: false }));
+        const wide = await whole(page, '1440 x 900');
+        assert.ok(Math.abs(wide.width / wide.height - 16 / 9) < .01, `the stage keeps its 16:9 box: ${wide.width} x ${wide.height}`);
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); }
+});
+
 browserTest('held sideways on a short screen, the tool scrolls as one and its page never moves', async () => {
     const browser = await launch();
     try {
