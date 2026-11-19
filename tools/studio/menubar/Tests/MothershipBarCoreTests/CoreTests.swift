@@ -464,3 +464,19 @@ private func processCheck(
     let progress = ActionProgress(step: .waiting, finished: true, exitCode: actionBusyExitCode, failedStep: nil)
     #expect(failureMessage(progress: progress, lastLogLine: nil).hasPrefix("Another session"))
 }
+
+@Test func ollamaRowFitsTheBoardWithoutBeingCut() {
+    for count in [0, 1, 2, 12, 128] {
+        var snapshot = healthy
+        snapshot.ollama = OllamaReading(version: "0.40.16", loadedModels: count)
+        let value = healthRows(snapshot: snapshot, overall: .online)[4].value
+        #expect(value == "\(count) loaded")
+        #expect(!flapCells(value, count: 14).contains("…"))
+    }
+}
+
+@Test func theAppsOwnStackCommandIsNotAnotherSession() {
+    #expect(!anotherSessionIsChangingStack(stackCommandRunning: true, ownActionRunning: true))
+    #expect(anotherSessionIsChangingStack(stackCommandRunning: true, ownActionRunning: false))
+    #expect(!anotherSessionIsChangingStack(stackCommandRunning: false, ownActionRunning: false))
+}

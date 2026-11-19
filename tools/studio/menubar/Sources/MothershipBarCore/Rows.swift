@@ -87,6 +87,6 @@ private func bridgesRow(
 private func ollamaRow(_ ollama: OllamaReading?, problem: (String) -> HealthRow.Parts) -> HealthRow {
     guard let ollama else { return .checking("Ollama") }
     guard ollama.version != nil else { return HealthRow("Ollama", problem("No answer")) }
-    let models = ollama.loadedModels == 1 ? "1 model loaded" : "\(ollama.loadedModels) models loaded"
-    return HealthRow("Ollama", (models, .ok))
+    // The board holds 14 characters, so the count of models can't carry the word "models" as well.
+    return HealthRow("Ollama", ("\(ollama.loadedModels) loaded", .ok))
 }
