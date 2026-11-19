@@ -11,6 +11,8 @@ final class AppModel {
     private(set) var progress: ActionProgress?
     private(set) var failure: PanelState.Failure?
     private(set) var confirming: ActionKind?
+    private(set) var queueCheck: QueueCheck?
+    private(set) var siteResult: (message: String, finished: Date)?
     private(set) var startAtLogin: Bool
     private(set) var lastChecked: Date?
     private(set) var actionStarted: Date?
@@ -19,7 +21,14 @@ final class AppModel {
     private(set) var craftChecking = false
     private(set) var craftCheckFailed = false
     private(set) var showingCraft = false
-    var panelIsOpen = false { didSet { if panelIsOpen { wake() } } }
+    var panelIsOpen = false {
+        didSet {
+            guard panelIsOpen else { return }
+            wake()
+            // A count read before the panel closed may be out of date by now.
+            if confirming == .stop || confirming == .restart { readQueues() }
+        }
+    }
     var theme = PanelTheme.stored { didSet { theme.store() } }
     var panelMaxHeight: CGFloat = 800
 
@@ -40,6 +49,9 @@ final class AppModel {
     @ObservationIgnored private var lastStoreRead: Date?
     @ObservationIgnored private var storeReadRunning = false
     @ObservationIgnored private var lastCraftAttempt: Date?
+    @ObservationIgnored private var bridgeWatch = BridgeWatch()
+    @ObservationIgnored private var bridgeRestart: (id: String, name: String, started: Date)?
+    @ObservationIgnored private var queueRead: Task<Void, Never>?
 
     private var probes: Probes? { config.map { Probes(config: $0) } }
     private var runner: ActionRunner? { config.map { ActionRunner(config: $0) } }
@@ -67,6 +79,8 @@ final class AppModel {
             elapsedSeconds: actionStarted.map { max(0, Int(now.timeIntervalSince($0))) },
             failure: failure,
             confirming: confirming,
+            queueCheck: queueCheck,
+            siteResult: siteResult.flatMap { now.timeIntervalSince($0.finished) < siteResultShownFor ? $0.message : nil },
             checkedText: checkedText,
             startAtLogin: startAtLogin,
             craft: config?.craftTool == nil ? nil : CraftPanel(
@@ -91,7 +105,7 @@ final class AppModel {
         PanelActions(
             request: { [weak self] kind in self?.request(kind) },
             confirm: { [weak self] in self?.confirmPending() },
-            cancelConfirm: { [weak self] in self?.confirming = nil },
+            cancelConfirm: { [weak self] in self?.clearConfirm() },
             retry: { [weak self] in self?.retry() },
             dismissFailure: { [weak self] in self?.failure = nil },
             openSite: { [weak self] in self?.openSite() },
@@ -139,6 +153,7 @@ final class AppModel {
 
     private func request(_ kind: ActionKind) {
         failure = nil
+        siteResult = nil
         switch kind {
         case .start, .login, .craftApps:
             launch(kind)
@@ -146,9 +161,31 @@ final class AppModel {
             launch(.craftMCP)
         case .craftMCP:
             confirming = .craftMCPForce
-        case .stop, .restart, .craftEngines, .craftMCPForce:
+        case .stop, .restart:
+            confirming = kind
+            readQueues()
+        case .craftEngines, .craftMCPForce:
             confirming = kind
         }
+    }
+
+    /// Reads the queues for the question before Stop and Restart. Only the latest read counts.
+    private func readQueues() {
+        queueRead?.cancel()
+        guard let runner else { return }
+        queueCheck = .reading
+        queueRead = Task { [weak self] in
+            let reading = await runner.queueReading()
+            guard !Task.isCancelled else { return }
+            self?.queueCheck = reading.map(QueueCheck.read) ?? .unreadable
+        }
+    }
+
+    private func clearConfirm() {
+        queueRead?.cancel()
+        queueRead = nil
+        queueCheck = nil
+        confirming = nil
     }
 
     private func openCraft() {
@@ -158,7 +195,7 @@ final class AppModel {
 
     private func closeCraft() {
         showingCraft = false
-        confirming = nil
+        clearConfirm()
     }
 
     private func checkCraft(force: Bool) {
@@ -181,8 +218,8 @@ final class AppModel {
     }
 
     private func confirmPending() {
-        guard let kind = confirming else { return }
-        confirming = nil
+        guard let kind = confirming, queueCheck != .reading else { return }
+        clearConfirm()
         launch(kind)
     }
 
@@ -296,11 +333,13 @@ final class AppModel {
     }
 
     private func finish(_ current: ActionRunner.Current, _ result: ActionProgress) {
+        let seconds = actionStarted.map { max(0, Int(Date().timeIntervalSince($0))) } ?? 0
         activeAction = nil
         actionStarted = nil
         BarLog.write("info", "action.finished", loc: "AppModel.finish", ctx: ["id": current.id, "exit": "\(result.exitCode ?? -1)"])
         if result.succeeded {
             failure = nil
+            siteResult = siteResultMessage(for: current.kind, seconds: seconds).map { ($0, Date()) }
         } else {
             lastFailedKind = current.kind
             failure = PanelState.Failure(
@@ -330,6 +369,52 @@ final class AppModel {
         lastStoreRead = Date()
         storeState = reading.map(StoreState.ready) ?? .unreachable
         snapshot.store = storeState
+    }
+
+    /// Restarts a stopped bridge, one at a time. This is the only thing the app restarts by itself, and it
+    /// never runs the stack's own `up` or `down`. The runner repeats every safety check before it acts.
+    private func watchBridges(
+        readings: [BridgeReading]?, targets: [BridgeTarget], containers: ContainerReading?, driveBlocked: Bool
+    ) {
+        guard let runner, let watch = config?.bridgeWatch else { return }
+        let before = bridgeWatch.statuses
+        defer { logBridgeWatchChanges(from: before) }
+        finishBridgeRestart(runner)
+        guard let readings else { return }
+        let stackIsUp = (containers?.running ?? 0) > 0 && containers?.notRunning.contains("fpm") == false
+        let clear = activeAction == nil && !externalBusy && !driveBlocked && stackIsUp
+        guard let name = bridgeWatch.observe(readings, clear: clear, now: Date()) else { return }
+        guard let target = targets.first(where: { $0.name == name }),
+              let id = try? runner.launchBridgeRestart(target, watch: watch) else {
+            BarLog.write("error", "bridge.restart_launch_failed", loc: "AppModel.watchBridges", ctx: ["bridge": name])
+            bridgeWatch.finished(name, outcome: .failed, now: Date())
+            return
+        }
+        bridgeRestart = (id, name, Date())
+    }
+
+    private func finishBridgeRestart(_ runner: ActionRunner) {
+        guard let current = bridgeRestart else { return }
+        let progress = runner.progress(of: current.id)
+        let runnerDied = !progress.finished && !runner.runnerIsAlive() && Date().timeIntervalSince(current.started) > 10
+        guard progress.finished || runnerDied else { return }
+        let outcome = runnerDied ? BridgeRestartOutcome.failed : bridgeRestartOutcome(exitCode: progress.exitCode)
+        BarLog.write(
+            outcome == .succeeded ? "info" : "warn", "bridge.restart_finished", loc: "AppModel.finishBridgeRestart",
+            ctx: ["bridge": current.name, "id": current.id, "outcome": outcome.rawValue, "exit": "\(progress.exitCode ?? -1)"]
+        )
+        bridgeWatch.finished(current.name, outcome: outcome, now: Date())
+        bridgeRestart = nil
+    }
+
+    private func logBridgeWatchChanges(from before: [String: BridgeWatchStatus]) {
+        let after = bridgeWatch.statuses
+        for name in Set(before.keys).union(after.keys) where before[name] != after[name] {
+            BarLog.write(
+                after[name] == .restarting || after[name] == nil ? "info" : "warn", "bridge.watch_changed",
+                loc: "AppModel.watchBridges", ctx: ["bridge": name, "status": after[name]?.rawValue ?? "answering"]
+            )
+        }
     }
 
     private func pollOnce() async {
@@ -378,7 +463,13 @@ final class AppModel {
             )
         }
 
+        watchBridges(
+            readings: bridgeResult.readings, targets: bridgeResult.targets, containers: containerValue,
+            driveBlocked: bridgeResult.driveBlocked
+        )
+
         var next = HealthSnapshot()
+        next.bridgeWatch = bridgeWatch.statuses
         next.site = site
         next.containers = containerValue
         next.tunnel = await tunnel

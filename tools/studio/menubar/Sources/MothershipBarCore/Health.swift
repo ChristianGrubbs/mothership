@@ -165,6 +165,8 @@ public struct HealthSnapshot: Sendable, Equatable {
     public var unreadable: [ReadablePart]
     /// macOS has refused, or not yet answered, this app's request to use the stack's drive.
     public var driveBlocked: Bool
+    /// What the bridge watcher is doing about each bridge that isn't answering.
+    public var bridgeWatch: [String: BridgeWatchStatus] = [:]
     public init(
         site: SiteReading? = nil, containers: ContainerReading? = nil, tunnel: TunnelReading? = nil,
         bridges: [BridgeReading]? = nil, ollama: OllamaReading? = nil, stats: StatsReading? = nil,
@@ -218,7 +220,7 @@ public func problems(in snapshot: HealthSnapshot) -> [String] {
         found.append("No bridges are configured")
     }
     for bridge in snapshot.bridges ?? [] where !bridge.ok {
-        found.append("The \(bridge.name) bridge isn't answering")
+        found.append(snapshot.bridgeWatch[bridge.name]?.problem(bridge: bridge.name) ?? "The \(bridge.name) bridge isn't answering")
     }
     if let ollama = snapshot.ollama, ollama.version == nil {
         found.append("Ollama isn't answering")
@@ -244,7 +246,7 @@ public func restartWouldHelp(_ snapshot: HealthSnapshot) -> Bool {
     guard !snapshot.driveBlocked, snapshot.unreadable.isEmpty else { return false }
     if snapshot.containers?.allRunning == false { return true }
     if snapshot.site?.originOK == false { return true }
-    return snapshot.bridges?.contains { !$0.ok } == true
+    return snapshot.bridges?.contains { !$0.ok && snapshot.bridgeWatch[$0.name] != .restarting } == true
 }
 
 public func verdict(for snapshot: HealthSnapshot, action: ActionKind?, externalBusy: Bool) -> Verdict {

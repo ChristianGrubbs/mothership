@@ -14,6 +14,9 @@ struct PanelState {
     var elapsedSeconds: Int?
     var failure: Failure?
     var confirming: ActionKind?
+    var queueCheck: QueueCheck?
+    /// What the last Start or Restart found when it checked the site.
+    var siteResult: String?
     var checkedText: String
     var startAtLogin: Bool
     /// Nil when this Mac has no ArtCraft update tool.
@@ -103,6 +106,9 @@ struct PanelView: View {
                 Text(state.verdict.reason)
             } else {
                 ForEach(faults, id: \.self) { Text($0) }
+            }
+            if let result = state.siteResult {
+                Label(result, systemImage: "checkmark.circle.fill").foregroundStyle(Theme.text)
             }
         }
         .font(BrandFont.sans(14))
@@ -286,7 +292,10 @@ struct PanelView: View {
 
     @ViewBuilder private var controls: some View {
         if let confirming = state.confirming {
-            ConfirmBlock(copy: confirmCopy(for: confirming, mcp: state.craft?.status?.mcp), actions: actions)
+            ConfirmBlock(
+                copy: confirmCopy(for: confirming, mcp: state.craft?.status?.mcp, queues: state.queueCheck),
+                actions: actions
+            )
         } else if let failure = state.failure {
             FailureBlock(failure: failure, actions: actions)
         } else {
@@ -384,6 +393,7 @@ struct ConfirmBlock: View {
                     .keyboardShortcut(.cancelAction)
                 Button(copy.button, action: actions.confirm)
                     .buttonStyle(StudioButtonStyle(kind: copy.isDestructive ? .destructive : .primary))
+                    .disabled(copy.isWaiting)
             }
             .padding(.top, 4)
         }

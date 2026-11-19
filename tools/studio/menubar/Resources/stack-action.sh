@@ -1,7 +1,9 @@
 #!/bin/zsh
 # Runs one stack action, detached from the menu bar app, so quitting the app never interrupts it.
 # Usage: stack-action.sh <id> <action> <wrapper> <action-dir> <container-binary> <python> <craft-tool> <coordinator> <deploy-lease> <site-url>
-# Actions: start, stop, restart, login, craft-apps, craft-engines, craft-mcp, craft-mcp-force.
+#        [<bridge-python> <bridge-source> <native-services> <bridge-label> <bridge-host> <bridge-port>]
+# Actions: start, stop, restart, login, craft-apps, craft-engines, craft-mcp, craft-mcp-force, bridge-restart, queue-read.
+# queue-read only prints the site's queue counts as JSON. It changes nothing, takes no lock and writes no files.
 # Writes <action-dir>/<id>.progress.jsonl (one JSON object per step) and <id>.log (wrapper output).
 # While it changes the stack it also keeps <action-dir>/stack-action.json, which deploys read:
 #   {"action","pid","process_start","started_at"}. process_start is `LC_ALL=C ps -o lstart= -p <pid>`, trimmed.
@@ -11,6 +13,7 @@ umask 077
 export PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
 
 id=$1 action=$2 wrapper=$3 dir=$4 container=$5 python=${6:-} craft_tool=${7:-} coordinator=${8:-} deploy_lease=${9:-} site_url=${10:-}
+bridge_python=${11:-} bridge_source=${12:-} native_services=${13:-} bridge_label=${14:-} bridge_host=${15:-} bridge_port=${16:-}
 progress="$dir/$id.progress.jsonl"
 log="$dir/$id.log"
 lock="$dir/runner.lock"
@@ -21,9 +24,16 @@ marker_written=0
 readonly EX_BUSY=75 EX_DRIVE_REFUSED=77 RUNTIME_WAIT_LOGIN=600 RUNTIME_WAIT_MANUAL=30 EXPECTED_CONTAINERS=13
 readonly DRIVE_PROBE_TENTHS=50 EX_USAGE=64 EX_CRAFT_IN_USE=3 EX_CRAFT_STACK_RUNNING=65
 readonly EX_DEPLOY_RUNNING=79 EX_QUEUES_BUSY=80 EX_BUILDER_RUNNING=81 EX_SITE_NOT_BACK=82 STACK_PREFIX=mothership-private-
+readonly EX_BRIDGE_PORT_HELD=83 EX_STACK_NOT_RUNNING=84 BRIDGE_START_LIMIT=180
 readonly SITE_WAIT=${MOTHERSHIP_SITE_WAIT:-180}
 # TODO 2026-11-18: re-read these connection and queue names from tools/studio/runtime.py after each release.
 readonly QUEUE_CHECK='$m=["redis"=>["webhooks","system","completeness","default","broadcastable"],"panorama"=>["panorama","video-preview"],"database"=>["stylepress"],"vectorization"=>["vectorization"],"ai-index"=>["ai-index"]]; $o=[]; foreach($m as $c=>$qs){foreach($qs as $q){$o[$c."/".$q]=Queue::connection($c)->size($q);}} $o["chunk_uploads_open"]=DB::table("dam_chunk_uploads")->whereNotIn("state",["completed","failed","cancelled","expired"])->count(); echo json_encode(["idle"=>array_sum($o)===0,"counts"=>$o]),PHP_EOL;'
+
+# The panel asks this before Stop and Restart. It runs beside any other action, because it only reads.
+if [[ $action == queue-read ]]; then
+  gtimeout --preserve-status 40 "$container" exec "${STACK_PREFIX}fpm" php artisan tinker --execute="$QUEUE_CHECK" 2>/dev/null
+  exit $?
+fi
 
 emit() { # step state [rc]
   local rc_field=""
@@ -242,13 +252,9 @@ check_safe_to_stop() {
   emit preflight end 0
 }
 
-# Starts the stack once, then waits for the public site to answer 200. It never starts anything a second time.
-# A site that doesn't answer ends the action here. So does a failed start, even if the site answers.
-bring_site_back() {
-  local code deadline up_rc
-  wrapper_step up
-  up_rc=$?
-  deadline=$(( SECONDS + SITE_WAIT ))
+# Waits for the public site to answer 200. A site that doesn't answer ends the action here.
+wait_for_site() {
+  local code deadline=$(( SECONDS + SITE_WAIT ))
   emit site start
   while true; do
     code=$(curl -sS -o /dev/null -m 10 -w '%{http_code}' "$site_url" 2>>"$log")
@@ -261,7 +267,62 @@ bring_site_back() {
     sleep 5
   done
   emit site end 0
+}
+
+# Starts the stack once, then waits for the site. It never starts anything a second time.
+# A failed start ends the action even if the site answers.
+bring_site_back() {
+  local up_rc
+  wrapper_step up
+  up_rc=$?
+  wait_for_site
   (( up_rc == 0 )) || finish $up_rc
+}
+
+# True only when the runtime lists the site's PHP container as running. A restart copies the bridge's server
+# from the deployed checkout, and that checkout moves while a deploy has the stack down.
+site_container_is_running() {
+  local listing
+  listing=$(gtimeout --preserve-status 60 "$container" list --quiet 2>>"$log") || return 1
+  print -r -- "$listing" | grep -qx "${STACK_PREFIX}fpm"
+}
+
+# Runs the bridge's own manager and nothing else. The manager's `up` does nothing to a healthy bridge, and
+# it replaces one that runs but doesn't answer. This never stops a process and never edits the manager's files.
+# Output goes to a file, because a server the manager leaves running could hold a pipe open.
+restart_bridge() {
+  local manager state_name rc output_file="$dir/$id.bridge-output"
+  case $bridge_label in
+    optimizer) manager=clop_service.py state_name=clop ;;
+    ai) manager=ai_service.py state_name=ai ;;
+    video) manager=video_service.py state_name=video ;;
+    *) print -r -- "unknown bridge: $bridge_label" >> "$log"; finish $EX_USAGE ;;
+  esac
+  if [[ -z $bridge_python || -z $bridge_source || -z $native_services || -z ${HOME:-} ]] \
+    || [[ ! $bridge_host =~ '^[A-Za-z0-9.:-]+$' || ! $bridge_port =~ '^[0-9]+$' ]] \
+    || (( bridge_port < 1 || bridge_port > 65535 )); then
+    print -r -- "the bridge restart is not configured" >> "$log"
+    finish $EX_USAGE
+  fi
+  wait_for_runtime $RUNTIME_WAIT_MANUAL
+  guard_stack_action
+  emit preflight start
+  if ! site_container_is_running; then
+    print -r -- "the site's PHP container isn't running, so the bridge was left alone" >> "$log"
+    emit preflight end $EX_STACK_NOT_RUNNING
+    finish $EX_STACK_NOT_RUNNING
+  fi
+  emit preflight end 0
+  emit bridge start
+  gtimeout $BRIDGE_START_LIMIT "$bridge_python" "$bridge_source/tools/studio/$manager" up \
+    --source "$bridge_source" --state "$native_services/$state_name" --host "$bridge_host" --port "$bridge_port" \
+    > "$output_file" 2>&1
+  rc=$?
+  /bin/cat "$output_file" >> "$log"
+  if (( rc != 0 )) && grep -q "not owned by this receipt" "$output_file"; then rc=$EX_BRIDGE_PORT_HELD; fi
+  rm -f "$output_file"
+  emit bridge end $rc
+  (( rc == 0 )) || finish $rc
 }
 
 # The site goes down only after the downloads succeed and the checks pass. The builder runs only while every
@@ -316,8 +377,8 @@ if [[ $action != craft-(apps|mcp|mcp-force) && ( -z $coordinator || -z $deploy_l
   print -r -- "the deploy lease check is not configured" >> "$log"
   finish $EX_USAGE
 fi
-if [[ $action == craft-engines && -z $site_url ]]; then
-  print -r -- "the site address is not configured, so an engine update could not confirm the site came back" >> "$log"
+if [[ $action == (craft-engines|start|restart) && -z $site_url ]]; then
+  print -r -- "the site address is not configured, so this action could not confirm the site came back" >> "$log"
   finish $EX_USAGE
 fi
 
@@ -335,9 +396,10 @@ case $action in
       run_step up
     fi
     ;;
-  start) wait_for_runtime $RUNTIME_WAIT_MANUAL; guard_stack_action; run_step up ;;
+  start) wait_for_runtime $RUNTIME_WAIT_MANUAL; guard_stack_action; run_step up; wait_for_site ;;
   stop) wait_for_runtime $RUNTIME_WAIT_MANUAL; guard_stack_action; run_step down ;;
-  restart) wait_for_runtime $RUNTIME_WAIT_MANUAL; guard_stack_action; run_step down; run_step up ;;
+  restart) wait_for_runtime $RUNTIME_WAIT_MANUAL; guard_stack_action; run_step down; run_step up; wait_for_site ;;
+  bridge-restart) restart_bridge ;;
   *) print -r -- "unknown action: $action" >> "$log"; finish 64 ;;
 esac
 finish 0

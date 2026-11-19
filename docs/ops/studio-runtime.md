@@ -269,7 +269,7 @@ Install or update it from Terminal on the host. Installing never starts, stops
 or restarts the stack, and a failed update puts the previous version back:
 
 ```bash
-zsh tools/studio/menubar/scripts/install.sh --wrapper <stack-wrapper> --app-env <state>/app.env --site-url https://<host>/up --disk <volume> --coordinator <lease-tool> --deploy-lease worktree:<live-checkout> --umbrel-ssh <user@umbrel-host> --umbrel-key <private-key> --umbrel-capacity-file <state>/storage/app/private/umbrel-capacity.json --craft-tool <artcraft>/tools/craft-local/craft_updates.py
+zsh tools/studio/menubar/scripts/install.sh --wrapper <stack-wrapper> --app-env <state>/app.env --site-url https://<host>/up --disk <volume> --coordinator <lease-tool> --deploy-lease worktree:<live-checkout> --umbrel-ssh <user@umbrel-host> --umbrel-key <private-key> --umbrel-capacity-file <state>/storage/app/private/umbrel-capacity.json --craft-tool <artcraft>/tools/craft-local/craft_updates.py --bridge-source <live-checkout> --bridge-native <native-services-folder>
 ```
 
 - The panel is a split-flap board in the site's style. Its **Graphite** and **White**
@@ -300,6 +300,17 @@ zsh tools/studio/menubar/scripts/install.sh --wrapper <stack-wrapper> --app-env 
   Clear **Start site at login** in the panel to turn that off.
 - The app starts the stack only at login or when you click its control. It never
   restarts the stack because it looks down, so a planned outage stays down.
+- With `--bridge-source` and `--bridge-native` set, the app also watches the
+  optimizer, AI and video bridges. A bridge that fails two health reads in a row is
+  restarted with its own manager's `up`, one bridge at a time. The app never runs the
+  stack's `up` or `down` for this, and never stops a process itself. It leaves the
+  bridges alone while a stack action runs, while a deploy holds the lease on the live
+  checkout, and while the site's PHP container isn't running. After two failed restarts
+  it stops trying and the panel stays on **Needs attention** until the bridge answers
+  again. If the bridge's manager reports that another program answers on its port, or
+  macOS refuses the restart, it stops at once and says so. Another program on that port
+  that doesn't answer the bridge's health check reads as two failed restarts. A stopped
+  Ollama never counts against the AI bridge.
 - A Mac that keeps the stack on a removable volume asks once for access to that
   volume and to the local network. Allow both, or the app cannot read the stack.
   If macOS refuses the drive, the panel says so and opens Privacy & Security.
@@ -310,6 +321,12 @@ zsh tools/studio/menubar/scripts/install.sh --wrapper <stack-wrapper> --app-env 
 - Actions refuse to run while another `up` or `down` is in progress, while a
   deploy holds the lease on the live checkout, or when the coordinator can't say
   whether one does. An engine update also refuses while the site's queues are busy.
+- **Stop** and **Restart** first read the site's queues and say how many jobs and
+  open uploads there are. The person can go on or cancel. If the queues can't be
+  read, the panel says so and still lets the person choose.
+- **Start** and **Restart** finish only when the public `/up` answers 200, and the
+  panel shows the result. If it doesn't answer within 3 minutes, the panel reports a
+  failure and the app does not start anything again.
 - While an action runs, the app writes `stack-action.json` in its actions folder.
   The deploy steps read that marker after they claim the lease.
 - Output of each action is in

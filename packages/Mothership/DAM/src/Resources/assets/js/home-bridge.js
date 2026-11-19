@@ -10,10 +10,7 @@
         {key: 'status', width: 8, name: 'k5'},
     ];
     const SUMMARY_INTERVAL_MS = 60000;
-    const SIGNAL_INTERVAL_MS = 300000;
     const TICK_MS = 15000;
-    const STORY_LIMIT = 4;
-    const TRENDING_LIMIT = 3;
     const FLAP_STEP_MS = 55;
     const FLAP_COLUMN_MS = 6;
     const GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -61,11 +58,9 @@
     function create({root, request, signal, state}) {
         const $ = selector => root.querySelector(selector);
         const data = root.dataset;
-        // Signal and Trending are the studio's own feeds: only a full-access account reads them.
-        const admin = data.superuser === '1';
         const reducedMotion =() => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
         let summary = null, flapped = false;
-        const feed = {stories: [], waiting: [], trending: [], answeredAt: null, failedAt: null, empty: false, loaded: false};
+        const signalCard = window.MothershipHomeSignal.create({root, request, signal, state, format: {esc, plural, clock, dayAndTime}, onChange: () => { if (summary?.away) paintGlance(); }});
 
         function cellsHtml(model) {
             return COLUMNS.map((column, index) => {
@@ -256,9 +251,9 @@
 
         function paintGlance() {
             const nav = $('[data-glance]'), readable = Boolean(summary.board?.rows), docked = summary.board?.docked || [];
-            const newest = docked[0], story = feed.stories[0];
+            const newest = docked[0], feed = signalCard.snapshot();
             const away = summary.away, links = away.shares.available ? plural(away.shares.count, 'link') : 'Links not available';
-            nav.innerHTML = `${readable ? `<button type="button" data-glance-open="docked"><span><b>${docked.length ? esc(plural(docked.length, 'craft', 'craft')) : 'No craft'}</b> docked<small>${newest ? esc(savedLine({name: state.craftName(newest.producer), last_save_at: newest.last_save_at}, new Date(summary.generated_at))) : 'Nothing has saved here yet'}</small></span>${icon('chevron')}</button>` : ''}${feed.loaded ? `<button type="button" data-glance-open="signal"><span class="hm-ell"><b>Signal</b><small class="hm-ell">${esc(story?.title || (feed.failedAt ? 'Not answering' : 'No stories yet'))}</small></span>${icon('chevron')}</button>` : ''}<button type="button" data-glance-open="away"><span><b>${esc(links)}</b> away from ship<small>Shared links and upload requests</small></span>${icon('chevron')}</button>`;
+            nav.innerHTML = `${readable ? `<button type="button" data-glance-open="docked"><span><b>${docked.length ? esc(plural(docked.length, 'craft', 'craft')) : 'No craft'}</b> docked<small>${newest ? esc(savedLine({name: state.craftName(newest.producer), last_save_at: newest.last_save_at}, new Date(summary.generated_at))) : 'Nothing has saved here yet'}</small></span>${icon('chevron')}</button>` : ''}${feed.loaded ? `<button type="button" data-glance-open="signal"><span class="hm-ell"><b>Signal</b><small class="hm-ell">${esc(feed.story?.title || (feed.failed ? 'Not answering' : 'No stories yet'))}</small></span>${icon('chevron')}</button>` : ''}<button type="button" data-glance-open="away"><span><b>${esc(links)}</b> away from ship<small>Shared links and upload requests</small></span>${icon('chevron')}</button>`;
         }
 
         function paintSummary() {
@@ -291,53 +286,6 @@
             note.innerHTML = stale ? '<span>Home could not refresh. This is the last update.</span><button type="button" class="hm-btn" data-summary-recheck>Try again</button>' : '';
         }
 
-        // A feed writes its own links, so only a web address becomes one.
-        const storyRow = story => {
-            const body = `<b>${esc(story.title)}</b><span>${esc(story.source || 'Signal')}${story.publishedAt ? ` · ${esc(dayAndTime(story.publishedAt))}` : ''}</span>`;
-            return /^https?:\/\//i.test(String(story.url ?? '')) ? `<a class="hm-story" href="${esc(story.url)}" target="_blank" rel="noopener noreferrer">${body}</a>` : `<div class="hm-story">${body}</div>`;
-        };
-        function paintSignal() {
-            const card = $('[data-signal]');
-            if (!admin) { card.hidden = true; return; }
-            const head = tag => `<div class="hm-ch"><h2>Signal</h2>${tag}</div>`;
-            if (!feed.loaded) { card.innerHTML = `${head('')}<p class="hm-empty">Reading your feeds…</p>`; return; }
-            const trending = feed.trending.length ? `<h3 class="hm-tr"><span>Trending on GitHub</span><span>${feed.trendingStale ? 'Out of date' : 'Stars today'}</span></h3>${feed.trending.map(repo => `<a class="hm-repo" href="${esc(`https://github.com/${repo.repo}`)}" target="_blank" rel="noopener noreferrer"><span><b>${esc(repo.repo)}</b><span>${esc(repo.description || 'No description provided.')}</span></span>${repo.starsToday != null ? `<span class="hm-mono">+${new Intl.NumberFormat('en', {notation: 'compact', maximumFractionDigits: 1}).format(Number(repo.starsToday) || 0)}</span>` : ''}</a>`).join('')}` : '';
-            if (feed.failedAt) {
-                const had = feed.answeredAt ? ` These are the stories from ${esc(clock(feed.answeredAt))}.` : '';
-                card.innerHTML = `${head('<span class="hm-tag hm-mono hm-r"><i class="hm-lamp r"></i>Not answering</span>')}<p class="hm-empty">Your Umbrel’s feed adapter did not answer at ${esc(clock(feed.failedAt))}.${had}</p>${feed.stories.map(storyRow).join('')}<button type="button" class="hm-btn hm-wide" data-signal-retry>Try again</button>${trending}`;
-                return;
-            }
-            if (feed.empty) {
-                card.innerHTML = `${head('')}<p class="hm-empty-title">No feeds yet</p><p class="hm-empty">Add the first feed in Settings.</p>${trending}`;
-                return;
-            }
-            const waiting = feed.waiting.length ? `<button type="button" class="hm-newrow" data-signal-show><i class="hm-lamp y"></i><span>${esc(plural(feed.waiting.length, 'new story', 'new stories'))}</span><span class="hm-mono">Show</span></button>` : '';
-            card.innerHTML = `${head(`<span class="hm-mono hm-r">${feed.answeredAt ? `Updated ${esc(clock(feed.answeredAt))}` : ''}</span>`)}${waiting}${feed.stories.map(storyRow).join('')}${trending}`;
-        }
-        async function loadSignal({reveal = false} = {}) {
-            const stories = request(`/service/rss/v1/stories?limit=${STORY_LIMIT}`);
-            // The adapter can answer with an old list, so its own status decides whether the list is called current.
-            const trending = request('/service/trending/v1/trending')
-                .then(result => ({repos: (result.repos || []).slice(0, TRENDING_LIMIT), stale: ['error', 'stale'].includes(result.status)}))
-                .catch(() => ({repos: feed.trending, stale: feed.trending.length > 0}));
-            try {
-                const result = await stories;
-                const incoming = result.stories || [];
-                const known = new Set(feed.stories.map(story => story.id));
-                // Rows hold still while someone reads: new stories wait behind a row until asked for.
-                if (feed.loaded && !reveal && feed.stories.length) feed.waiting = incoming.filter(story => !known.has(story.id));
-                else { feed.stories = incoming; feed.waiting = []; }
-                feed.empty = !incoming.length;
-                feed.answeredAt = new Date();
-                feed.failedAt = null;
-            } catch { feed.failedAt = new Date(); }
-            ({repos: feed.trending, stale: feed.trendingStale} = await trending);
-            if (signal.aborted || !root.isConnected) return;
-            feed.loaded = true;
-            paintSignal();
-            if (summary?.away) paintGlance();
-        }
-
         async function loadSummary() {
             const result = await request('/summary');
             if (signal.aborted || !root.isConnected) return result;
@@ -348,7 +296,6 @@
         }
         const poller = state.poller({interval: SUMMARY_INTERVAL_MS, visible: () => document.visibilityState !== 'hidden', request: loadSummary});
         const refresh = () => poller.refresh().catch(error => { if (summary) paintStale(true); else paintFailure(error); });
-        const signalPoller = state.poller({interval: SIGNAL_INTERVAL_MS, visible: () => document.visibilityState !== 'hidden', request: () => loadSignal()});
 
         // On a phone the right column lives in a sheet, opened from the glance rows.
         const side = $('[data-side]'), layout = side.parentElement, sheet = $('[data-side-sheet]'), sheetBody = $('[data-sheet-body]');
@@ -368,8 +315,6 @@
             if (event.target.closest('[data-sheet-close]')) sheet.close();
             if (event.target.closest('[data-summary-retry]')) { paintLoading(); refresh(); }
             if (event.target.closest('[data-summary-recheck]')) refresh();
-            if (event.target.closest('[data-signal-retry]')) loadSignal({reveal: true});
-            if (event.target.closest('[data-signal-show]')) loadSignal({reveal: true});
         }, {signal});
 
         // Shelves size their tiles to the room they have, so any change of width redraws them.
@@ -383,16 +328,15 @@
 
         const ticker = setInterval(() => {
             poller.tick().catch(() => { if (summary) paintStale(true); });
-            if (admin) signalPoller.tick().catch(() => {});
+            signalCard.tick();
         }, TICK_MS);
         signal.addEventListener('abort', () => { clearInterval(ticker); observer?.disconnect(); }, {once: true});
 
         return {
             start() {
                 paintLoading();
-                paintSignal();
+                signalCard.start();
                 refresh();
-                if (admin) signalPoller.refresh().catch(() => {});
             },
             refresh,
         };

@@ -73,6 +73,14 @@ enum RenderStates {
         twoBridgesDown.bridges?[0].ok = false
         twoBridgesDown.bridges?[2].ok = false
 
+        var bridgeRestarting = healthy
+        bridgeRestarting.bridges?[0].ok = false
+        bridgeRestarting.bridgeWatch = ["Optimizer": .restarting]
+
+        var bridgeGaveUp = healthy
+        bridgeGaveUp.bridges?[0].ok = false
+        bridgeGaveUp.bridgeWatch = ["Optimizer": .noRecovery]
+
         var unreadable = healthy
         unreadable.containers = nil
         unreadable.bridges = nil
@@ -117,12 +125,13 @@ enum RenderStates {
         func panel(
             _ snapshot: HealthSnapshot, action: ActionKind? = nil, busy: Bool = false, step: String? = nil,
             elapsed: Int? = nil, failure: PanelState.Failure? = nil, confirming: ActionKind? = nil,
-            craft: CraftPanel? = craftPanel(craftUpdates)
+            queues: QueueCheck? = nil, siteResult: String? = nil, craft: CraftPanel? = craftPanel(craftUpdates)
         ) -> PanelState {
             PanelState(
                 verdict: verdict(for: snapshot, action: action, externalBusy: busy),
                 snapshot: snapshot, stepTitle: step, elapsedSeconds: elapsed, failure: failure,
-                confirming: confirming, checkedText: "Checked 8 s ago", startAtLogin: true, craft: craft
+                confirming: confirming, queueCheck: queues, siteResult: siteResult,
+                checkedText: "Checked 8 s ago", startAtLogin: true, craft: craft
             )
         }
 
@@ -145,12 +154,20 @@ enum RenderStates {
             ("5-restarting", panel(starting, action: .restart, step: ActionStep.down.title, elapsed: 12)),
             ("6-busy", panel(healthy, busy: true)),
             ("7-confirm-stop", panel(healthy, confirming: .stop)),
+            ("7a-confirm-stop-reading", panel(healthy, confirming: .stop, queues: .reading)),
+            ("7b-confirm-stop-idle", panel(healthy, confirming: .stop, queues: .read(QueueReading(jobs: 0, uploads: 0)))),
+            ("7c-confirm-stop-busy", panel(healthy, confirming: .stop, queues: .read(QueueReading(jobs: 12, uploads: 1)))),
+            ("7d-confirm-stop-unreadable", panel(healthy, confirming: .stop, queues: .unreadable)),
             ("8-confirm-restart", panel(healthy, confirming: .restart)),
+            ("8a-confirm-restart-busy", panel(healthy, confirming: .restart, queues: .read(QueueReading(jobs: 1, uploads: 0)))),
+            ("8b-restart-result", panel(healthy, siteResult: siteResultMessage(for: .restart, seconds: 74))),
             ("9-failed", panel(offline, failure: failure)),
             ("10-checking", panel(HealthSnapshot())),
             ("11-stopping", panel(starting, action: .stop, step: ActionStep.down.title, elapsed: 21)),
             ("12-bridges-all-down", panel(bridgesDown)),
             ("13-bridges-two-down", panel(twoBridgesDown)),
+            ("13a-bridge-restarting", panel(bridgeRestarting)),
+            ("13b-bridge-gave-up", panel(bridgeGaveUp)),
             ("14-unreadable", panel(unreadable)),
             ("15-long-figures", panel(longFigures)),
             ("16-ollama-down", panel(ollamaDown)),
