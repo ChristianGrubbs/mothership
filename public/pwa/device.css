@@ -165,6 +165,70 @@ html[data-fold="columns"] .agh-grid[data-fold-split] {
     column-gap: var(--fold-gap, 0px);
 }
 
+/* Home's dialogs (upload, calendar, event editor, iPhone app), its tool workspace and its phone sheet.
+   Book: inside the trailing segment, as the generic dialogs are; the calendar alone takes both segments (further down).
+   Laptop: inside the lower segment, the half that lies flat. No control on the fold. */
+html[data-fold="columns"] dialog.agh-settings,
+html[data-fold="columns"] dialog.hm-sheet,
+html[data-fold="columns"] .agh-workspace {
+    left: calc(var(--seg-trailing-left) + 1rem);
+    right: auto;
+    width: calc(var(--seg-trailing-width) - 2rem);
+    max-width: calc(var(--seg-trailing-width) - 2rem);
+    margin-left: 0;
+    margin-right: 0;
+}
+html[data-fold="columns"] dialog.hm-sheet {
+    left: var(--seg-trailing-left);
+    width: var(--seg-trailing-width);
+    max-width: var(--seg-trailing-width);
+}
+/* One segment is phone-wide: the event editor's paired fields stack there, as they do on a phone. */
+html[data-fold="columns"] .agh-cal-dialog .agh-cal-fields { grid-template-columns: minmax(0, 1fr); }
+html[data-fold="rows"] dialog.agh-settings {
+    top: var(--seg-b-top);
+    max-height: calc(var(--seg-b-height) - 1rem);
+}
+html[data-fold="rows"] dialog.hm-sheet {
+    top: var(--seg-b-top);
+    height: var(--seg-b-height);
+}
+html[data-fold="rows"] .agh-workspace { top: calc(var(--seg-b-top) + 0.5rem); }
+/* The workspace is not a modal dialog and brings its own scrim. Home is inert while a tool is open, so on a folded
+   screen the scrim covers the other segment as well. */
+html[data-fold] .agh-workspace { box-shadow: 0 0 0 100vmax #14141488, 0 20px 80px #0005; }
+/* Book: the calendar is wide enough for both segments. The month takes the leading one and the chosen day the trailing
+   one, with the gap between the two columns on the fold wherever the browser reports it. --cal-lead is the leading
+   column: the leading segment less the dialog's own edge (its 1rem offset, border and padding, fixed here so the sum
+   holds) and half the gutter. Its bar follows the same columns: month navigation on one side, filters and Add event
+   on the other. */
+html[data-fold="columns"] dialog.agh-calendar-dialog {
+    --cal-edge: calc(1rem + 1px + 22px);
+    --cal-lead: max(0px, calc(var(--seg-a-width) - var(--cal-edge) - 0.75rem));
+    left: 1rem;
+    width: calc(100% - 2rem);
+    max-width: none;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    padding-left: 22px;
+    padding-right: 22px;
+}
+html[data-fold="columns"][dir="rtl"] dialog.agh-calendar-dialog {
+    --cal-lead: max(0px, calc(var(--seg-b-width) - var(--cal-edge) - 0.75rem));
+}
+html[data-fold="columns"] .agh-calendar-dialog .agh-cal-main {
+    grid-template-columns: var(--cal-lead) minmax(0, 1fr);
+    column-gap: calc(var(--fold-gap, 0px) + 1.5rem);
+}
+html[data-fold="columns"] .agh-calendar-dialog .agh-cal-bar {
+    display: grid;
+    grid-template-columns: var(--cal-lead) calc(var(--fold-gap, 0px) + 1.5rem) minmax(0, 1fr) auto;
+    column-gap: 0;
+}
+html[data-fold="columns"] .agh-calendar-dialog .agh-cal-bar > .agh-cal-nav { grid-column: 1; justify-self: start; }
+html[data-fold="columns"] .agh-calendar-dialog .agh-cal-bar > .agh-cal-filters { grid-column: 3; }
+html[data-fold="columns"] .agh-calendar-dialog .agh-cal-bar > [data-cal-add] { grid-column: 4; }
+
 /* Flowing rows of controls (the analytics notice, the Library tabs, the Web Pages toolbar). Book: they wrap before the
    fold, staying in the leading segment, instead of putting a link or control on it. */
 html[data-fold="columns"] [data-fold-wrap] {
