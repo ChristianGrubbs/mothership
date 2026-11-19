@@ -3012,6 +3012,21 @@ html[data-fold="columns"] .bridge-toolset-menu {
     width: min(320px, calc(var(--seg-a-width) - 24px));
 }
 
+/* Book pose: the tool's name and the set button share the leading screen and end 12 px before the fold. 92 px is
+   the bar's padding, Back, the two gaps and that 12 px. */
+html[data-fold="columns"] .bridge-toolbar-name {
+    max-width: calc((var(--seg-a-width) - 92px) / 2);
+}
+
+html[data-fold="columns"] .bridge-toolset {
+    max-width: min(220px, calc((var(--seg-a-width) - 92px) / 2));
+}
+
+/* Tabletop pose: the menu ends 12 px above the fold, so the item pinned at its foot is never on it. */
+html[data-fold="rows"] .bridge-toolset-menu {
+    max-height: min(420px, calc(var(--seg-a-height) - 70px));
+}
+
 /* Export and Save to Library sit under the tool only on the phone form; the bar holds them everywhere else. */
 .bridge-toolfoot {
     display: none;
@@ -3129,9 +3144,11 @@ html[data-fold="columns"] .bridge-toolset-menu {
         margin-left: 10px;
     }
 
+    /* The 220 px of the wide bar is a flex basis, which a grid ignores; a long set name would stretch the button. */
     .bridge-toolset {
         grid-column: 3;
         min-width: 0;
+        max-width: 220px;
         margin-left: 10px;
     }
 
