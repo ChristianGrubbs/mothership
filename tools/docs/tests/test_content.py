@@ -164,7 +164,7 @@ class ContentTests(unittest.TestCase):
             'estimate',
             'generation',
             'reference',
-            'Generate with Higgsfield',
+            'select **Generate**',
             'Reuse in StylePress',
             "Account B receives no view of account A's job",
             'does not automatically resubmit',

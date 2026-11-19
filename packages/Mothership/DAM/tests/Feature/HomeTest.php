@@ -382,9 +382,12 @@ it('keeps StylePress useful without an unconfigured generation connection', func
     $this->get('/admin/home/tools/stylepress/index.html')->assertOk()->assertSee('data-connected="0"', false)
         ->assertSeeInOrder(['value="gpt_image_2_5:flare" selected', 'value="gpt_image_2_5:sunburst"', 'value="gpt_image_2"'], false);
     $this->get('/admin/home/tools/stylepress/index.html')->assertOk()
-        ->assertSee('id="sp-output"', false)->assertSee('id="sp-lightbox"', false)->assertSee('sp-spinner', false)->assertSee('View full size')->assertSee('data-density="comfortable"', false)
-        ->assertSee('/generation/output?download=1', false)->assertSee('/generation/view', false)
-        ->assertSee('.sp-cards[data-density=list]>*{flex:0 0 auto}', false);
+        ->assertSee('id="sp-output"', false)->assertSee('id="sp-lightbox"', false)->assertSee('data-density="comfortable"', false)
+        ->assertSee('/admin/home/tools/stylepress/app.js', false)->assertSee('/admin/home/tools/stylepress/style.css', false);
+    // The page's script and styles are the tool's own files, served beside it.
+    $served = fn (string $path) => (string) file_get_contents($this->get('/admin/home/tools/stylepress/'.$path)->assertOk()->baseResponse->getFile()->getPathname());
+    expect($served('app.js'))->toContain('sp-spinner', 'View full size', '/generation/output?download=1', '/generation/view')
+        ->and($served('style.css'))->toContain('.sp-cards[data-density="list"]', '.sp-spinner');
     $catalog = $this->getJson('/admin/home/stylepress/catalog')->assertOk()->json();
     $tracked = json_decode(file_get_contents((string) config('stylepress.catalog_path')), true);
     expect(count($catalog['presets']))->toBe(count($tracked['presets']))->toBeGreaterThan(0);
