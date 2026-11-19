@@ -45,6 +45,9 @@ async function openTool(browser, { app = false, framed = false, jobs = [] } = {}
                     : { contentType: 'application/json', body: '{"ok":true}' });
             }
             if (at === 'jobs') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ jobs: studio.jobs, optimize: true, optimize_max: LIMIT, now: Date.now() / 1000 }) });
+            if (at === 'probe') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ title: 'A found clip', site: 'Example', duration: 95, choices: [
+                { id: 'v720', label: '720p video (MP4)', size: 50 * 1048576, default: true }, { id: 'mp3', label: 'Audio only (MP3)', size: 3 * 1048576 },
+            ] }) });
             return route.fulfill({ status: 404, body: '' });
         }
         if (url.pathname === '/home.html') {
@@ -67,9 +70,11 @@ async function openTool(browser, { app = false, framed = false, jobs = [] } = {}
                 });
             </script><iframe src="/admin/home/tools/video-downloader/index.html" style="width:100%;height:700px;border:0"></iframe>` });
         }
-        const file = path.join(widget, path.basename(url.pathname));
+        // The tool kit is served beside the tool, as the server serves it, so the layout under test is the real one.
+        const kit = url.pathname === '/admin/home/tools/_kit/tool-kit.css';
+        const file = kit ? path.join(widget, '../_kit/tool-kit.css') : path.join(widget, path.basename(url.pathname));
         const type = { '.html': 'text/html', '.css': 'text/css', '.js': 'application/javascript' }[path.extname(file)];
-        return url.pathname.startsWith('/admin/home/tools/video-downloader/') && type && fs.existsSync(file)
+        return (kit || url.pathname.startsWith('/admin/home/tools/video-downloader/')) && type && fs.existsSync(file)
             ? route.fulfill({ contentType: `${type}; charset=utf-8`, body: fs.readFileSync(file) }) : route.fulfill({ status: 404, body: '' });
     });
     if (app) {
@@ -259,7 +264,7 @@ run('Video Downloader says what happens over the limit, and a browser or a Mac D
         assert.match(await said('going'), /Downloading, 33% · 100 MB of 300 MB · over 250 MB, so it will be saved as it is$/);
         assert.match(await said('over'), /Ready · 300 MB · too large to make smaller \(over 250 MB\) · kept until /);
         assert.match(await said('earlier'), /Ready · 57 MB · too large to make smaller · kept until /);
-        const link = row('over').locator('a.outline');
+        const link = row('over').locator('a[download]');
         assert.equal(await link.innerText(), 'Save to this device');
         assert.equal(await link.getAttribute('href'), origin + '/admin/home/video/jobs/over/file');
         assert.equal(await link.getAttribute('download'), 'over.mp4');
@@ -268,8 +273,43 @@ run('Video Downloader says what happens over the limit, and a browser or a Mac D
 
         // The site in the Mac Dock is installed too, but it downloads as a browser does: the link, not the share sheet.
         const dock = await openTool(browser, { app: 'dock', jobs: [job('done', 'done')] });
-        assert.equal(await dock.row('done').locator('a.outline').getAttribute('download'), 'done.mp4');
+        assert.equal(await dock.row('done').locator('a[download]').getAttribute('download'), 'done.mp4');
         assert.equal(await dock.row('done').locator('button[data-act="save"]').count(), 0);
         assert.deepEqual(dock.errors, []);
+    } finally { await browser.close(); }
+});
+
+run('Video Downloader fills one control, the next step: Find video, Download while a video is found, then a file waiting for the share sheet', async () => {
+    const browser = await launch();
+    try {
+        const { page, errors, row } = await openTool(browser, { app: true, jobs: [job('a', 'done')] });
+        // Filled is the accent's ground; every other control is a card or plain words.
+        const filled = () => page.evaluate(() => {
+            const act = getComputedStyle(document.documentElement).getPropertyValue('--act').trim();
+            const probe = Object.assign(document.createElement('i'), { style: `color:${act}` });
+            document.body.append(probe);
+            const ground = getComputedStyle(probe).color;
+            probe.remove();
+            return [...document.querySelectorAll('button, a')].filter(node => node.checkVisibility() && getComputedStyle(node).backgroundColor === ground).map(node => node.textContent.trim());
+        });
+        assert.deepEqual(await filled(), ['Find video']);
+
+        await page.locator('[data-url]').fill('https://example.test/clip');
+        await page.locator('[data-find]').click();
+        await page.locator('[data-found]').waitFor();
+        assert.deepEqual(await filled(), ['Download']);
+        await page.locator('[data-dismiss]').click();
+        assert.deepEqual(await filled(), ['Find video']);
+
+        // Brought onto this device, the share sheet closed without saving: saving it is the next step, until it is saved.
+        await page.evaluate(() => { window.__sheetClosedUnsaved = true; });
+        await row('a').locator('button[data-act="save"]').click();
+        await row('a', '.is-save-ready').waitFor();
+        assert.deepEqual(await filled(), ['Save video']);
+        await page.evaluate(() => { window.__sheetClosedUnsaved = false; });
+        await row('a').locator('button[data-act="share"]').click();
+        await page.waitForFunction(() => document.querySelector('[data-vd]').dataset.next === 'find');
+        assert.deepEqual(await filled(), ['Find video']);
+        assert.deepEqual(errors, []);
     } finally { await browser.close(); }
 });

@@ -10,6 +10,7 @@
     const list = $('[data-jobs]'), empty = $('[data-empty]'), listError = $('[data-list-error]');
     const smallerOption = $('[data-smaller-option]'), smaller = $('[data-smaller]');
     const smallerHelp = $('[data-smaller-help]'), smallerNote = $('[data-smaller-note]');
+    const main = $('[data-vd]');
     const ACTIVE = ['queued', 'running', 'processing', 'optimizing'];
     // An app installed to an iPhone or iPad Home Screen has no browser bar and no download manager: following a file
     // link there replaces the whole app with a file preview that has no way back (operator report 2026-11-11). So in
@@ -63,17 +64,27 @@
     const until = epoch => new Date(epoch * 1000).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
     const show = (node, text) => { node.textContent = text || ''; node.hidden = !text; };
 
+    // The one next step is the only filled control (style.css reads data-next): Download while a found video is open,
+    // then a file in the installed app waiting for the share sheet, then Find video.
+    function mark() {
+        main.dataset.next = !found.hidden ? 'download'
+            : [...saves.values()].some(local => local.phase === 'ready' && !local.shared) ? 'save' : 'find';
+    }
+
     // --- Find a video ---------------------------------------------------------------------------------------
+    urlField.addEventListener('input', () => urlField.removeAttribute('aria-invalid'));
     finder.addEventListener('submit', async event => {
         event.preventDefault();
         const url = urlField.value.trim();
         show(error, '');
+        urlField.removeAttribute('aria-invalid');
         if (!/^https?:\/\/\S+$/i.test(url)) {
             show(error, url ? 'That does not look like a link. It should start with https://' : 'Paste the link to a video first.');
+            urlField.setAttribute('aria-invalid', 'true');
             urlField.focus();
             return;
         }
-        findButton.disabled = true; findButton.textContent = 'Looking…'; help.hidden = true; found.hidden = true;
+        findButton.disabled = true; findButton.textContent = 'Looking…'; help.hidden = true; found.hidden = true; mark();
         try {
             const video = await call('probe', { method: 'POST', body: { url } });
             current = { url, title: video.title, choices: video.choices };
@@ -81,17 +92,17 @@
             $('[data-found-title]').title = video.title;
             $('[data-found-meta]').textContent = [video.site, video.uploader, length(video.duration)].filter(Boolean).join(' · ');
             choices.replaceChildren(...video.choices.map((choice, index) => {
-                const label = document.createElement('label'); label.className = 'choice';
+                const label = document.createElement('label'); label.className = 'tk-check vd-choice';
                 const input = Object.assign(document.createElement('input'), { type: 'radio', name: 'choice', value: choice.id, checked: 'default' in choice ? choice.default : index === 0 });
                 const name = Object.assign(document.createElement('span'), { textContent: choice.label });
-                const weight = Object.assign(document.createElement('small'), { textContent: choice.size ? 'about ' + size(choice.size) : '' });
+                const weight = Object.assign(document.createElement('small'), { className: 'tk-mono', textContent: choice.size ? 'about ' + size(choice.size) : '' });
                 label.append(input, name, weight);
                 return label;
             }));
             show(addError, '');
             smaller.checked = false;
             offerSmaller();
-            found.hidden = false;
+            found.hidden = false; mark();
             addButton.focus();
         } catch (failure) {
             show(error, failure.message);
@@ -115,7 +126,7 @@
     choices.addEventListener('change', offerSmaller);
     smaller.addEventListener('change', offerSmaller);
 
-    const dismiss = () => { found.hidden = true; current = null; show(smallerNote, ''); };
+    const dismiss = () => { found.hidden = true; current = null; show(smallerNote, ''); mark(); };
     $('[data-dismiss]').addEventListener('click', () => { dismiss(); urlField.focus(); });
 
     async function add(url, choice, title, optimize) {
@@ -197,27 +208,29 @@
             item.dataset.state = shown;
             item.className = 'job is-' + state + (local ? ' is-save-' + local.phase : '');
             const actions = item.querySelector('.job-actions');
-            const button = (text, kind, act) => { const b = Object.assign(document.createElement('button'), { type: 'button', className: kind, textContent: text }); b.dataset.act = act; return b; };
+            // card: a kit button; plain: a lesser action with no ground; share: Save video, filled while it is the next step.
+            const KIND = { card: 'tk-btn is-small', plain: 'tk-btn is-small vd-plain', share: 'tk-btn is-small vd-share' };
+            const button = (text, kind, act) => { const b = Object.assign(document.createElement('button'), { type: 'button', className: KIND[kind], textContent: text }); b.dataset.act = act; return b; };
             if (job.status === 'done') {
                 let save;
                 if (!inApp) {
-                    save = Object.assign(document.createElement('a'), { className: 'outline', textContent: 'Save to this device', href: fileUrl(job) });
+                    save = Object.assign(document.createElement('a'), { className: KIND.card, textContent: 'Save to this device', href: fileUrl(job) });
                     save.setAttribute('download', job.filename || '');
                 } else {
-                    save = local?.phase === 'ready' ? button('Save video', 'primary', 'share')
-                        : local?.phase === 'fetching' ? button('Stop', 'quiet', 'stop-save')
-                        : button(local?.retry ? 'Try again' : 'Save to this device', 'outline', 'save');
+                    save = local?.phase === 'ready' ? button('Save video', 'share', 'share')
+                        : local?.phase === 'fetching' ? button('Stop', 'plain', 'stop-save')
+                        : button(local?.retry ? 'Try again' : 'Save to this device', 'card', 'save');
                 }
                 const busy = local?.phase === 'fetching';
                 // The lesser actions are one group: where the row is too narrow for all of them, they drop below the save button together.
                 const more = Object.assign(document.createElement('span'), { className: 'job-more' });
-                more.append(...(job.can_optimize ? [button('Optimize', 'quiet', 'optimize')] : []), button('Remove', 'quiet', 'remove'));
+                more.append(...(job.can_optimize ? [button('Optimize', 'plain', 'optimize')] : []), button('Remove', 'plain', 'remove'));
                 actions.replaceChildren(save, ...(busy ? [] : [more]));
             } else if (job.status === 'failed') {
-                actions.replaceChildren(button('Try again', 'outline', 'retry'), button('Remove', 'quiet', 'remove'));
+                actions.replaceChildren(button('Try again', 'card', 'retry'), button('Remove', 'plain', 'remove'));
             } else {
                 // While a finished file is being made smaller there is nothing to cancel: the button removes the download.
-                actions.replaceChildren(button(job.status === 'optimizing' ? 'Remove' : 'Cancel', 'quiet', 'remove'));
+                actions.replaceChildren(button(job.status === 'optimizing' ? 'Remove' : 'Cancel', 'plain', 'remove'));
             }
         }
         item.classList.toggle('is-save-error', local?.phase === 'error' || !!local?.note);
@@ -250,6 +263,7 @@
     // file is then reported as work as well (dirty). Saying false again clears that report.
     let toldHome = null;
     function tellHome() {
+        mark();
         if (window.parent === window) return;
         const holdsWork = [...saves.values()].some(local => local.phase === 'fetching' || (local.phase === 'ready' && !local.shared));
         if (holdsWork === toldHome) return;
