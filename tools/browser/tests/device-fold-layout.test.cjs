@@ -200,6 +200,7 @@ browserTest('a fold that arrives after the resize still reaches an open page, th
         fold: document.documentElement.dataset.fold ?? null,
         gap: document.documentElement.style.getPropertyValue('--fold-gap'),
         start: [...document.querySelectorAll('[data-fold-split]')].map(el => el.style.getPropertyValue('--fold-start')),
+        top: [...document.querySelectorAll('[data-fold-split]')].map(el => el.style.getPropertyValue('--fold-top')),
     }));
     const settle = page => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     async function openLive(viewport, rects) {
@@ -253,6 +254,73 @@ browserTest('a fold that arrives after the resize still reaches an open page, th
         await settle(tabletop);
         await segmentsChange(tabletop, null, 'vertical');
         assert.deepEqual(await state(tabletop), await state(await openLive({width: 678, height: 340}, null)));
+    } finally {
+        await browser.close();
+    }
+});
+
+// A rows split is measured as if the page and every scroller around it were at the top, so it comes out the same
+// wherever the reader has scrolled: through the page's own scroll, two nested scrollers, and in a fixed box, which the
+// page's scroll does not move. The share card is the other layout drawn from it. In book pose or with no fold it goes.
+const rowsBody = `<style>body{margin:0}.card{display:flex;flex-direction:column;height:500px}${css}</style>
+<div style="height:40px"></div>
+<div data-fold-split data-case="page" style="height:20px"></div>
+<div data-scroller="outer" style="height:200px;overflow-y:auto"><div style="height:30px"></div>
+  <div data-scroller="inner" style="height:150px;overflow-y:auto"><div style="height:25px"></div><div data-fold-split data-case="nested" style="height:20px"></div><div style="height:600px"></div></div>
+  <div style="height:600px"></div></div>
+<div style="position:fixed;top:120px;left:0;width:200px"><div style="height:10px"></div><div data-fold-split data-case="fixed" style="height:20px"></div></div>
+<div class="card" data-dam-share-card data-fold-split data-case="share card"><div data-preview>Preview</div><div>Name</div><div>Actions</div></div>
+<div style="height:3000px"></div>
+<script>${js}</script>`;
+
+browserTest('a rows split measures the same wherever the page and its scrollers are, and clears when the pose changes', async () => {
+    const browser = await launchBrowser({playwrightPath: process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH});
+    try {
+        const page = await browser.newPage({viewport: {width: 669, height: 867}});
+        // Tabletop with a 40px hinge band; the test changes the segments through window.foldRects.
+        await page.addInitScript(rects => { window.foldRects = rects; Object.defineProperty(window, 'viewport', {configurable: true,
+            get: () => ({segments: window.foldRects ? window.foldRects.map(rect => new DOMRect(...rect)) : [new DOMRect(0, 0, innerWidth, innerHeight)]})}); },
+        [[0, 0, 669, 413], [0, 453, 669, 414]]);
+        await page.route('http://mothership.test/**', route => route.fulfill({contentType: 'text/html', body: `<!doctype html><html><body>${rowsBody}</body></html>`}));
+        await page.goto('http://mothership.test/');
+        const settle = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        const read = () => page.evaluate(() => ({
+            fold: document.documentElement.dataset.fold ?? null,
+            top: Object.fromEntries([...document.querySelectorAll('[data-case]')].map(el => [el.dataset.case, el.style.getPropertyValue('--fold-top')])),
+            preview: document.querySelector('[data-preview]').getBoundingClientRect().height,
+            card: getComputedStyle(document.querySelector('[data-dam-share-card]')).display,
+        }));
+        const scrolls = () => page.evaluate(() => [document.scrollingElement, ...document.querySelectorAll('[data-scroller]')].map(el => el.scrollTop));
+        await settle();
+
+        // Each is the fold (413) less where the element's top sits with nothing scrolled.
+        const atRest = await read();
+        assert.deepEqual(atRest, {fold: 'rows', top: {page: '373px', nested: '298px', fixed: '283px', 'share card': '153px'}, preview: 153, card: 'grid'});
+
+        await page.evaluate(() => {
+            document.scrollingElement.scrollTop = 150;
+            document.querySelector('[data-scroller="outer"]').scrollTop = 20;
+            document.querySelector('[data-scroller="inner"]').scrollTop = 10;
+        });
+        assert.deepEqual(await scrolls(), [150, 20, 10]);
+        await page.evaluate(() => dispatchEvent(new Event('resize')));
+        await settle();
+        assert.deepEqual(await read(), atRest, 'scrolled, after a resize');
+        await page.evaluate(() => document.body.append(document.createElement('div')));
+        await settle();
+        assert.deepEqual(await read(), atRest, 'scrolled, after a DOM change');
+        assert.deepEqual(await scrolls(), [150, 20, 10]);
+
+        // Book, then no fold: no element keeps a value from tabletop, and the share card has its own layout back.
+        for (const [fold, rects] of [['columns', [[0, 0, 314, 867], [354, 0, 315, 867]]], [null, null]]) {
+            await page.evaluate(rects => { window.foldRects = rects; dispatchEvent(new Event('resize')); }, rects);
+            await settle();
+            const now = await read();
+            const label = fold ?? 'no fold';
+            assert.equal(now.fold, fold, label);
+            assert.deepEqual(now.top, {page: '', nested: '', fixed: '', 'share card': ''}, `${label}: --fold-top`);
+            assert.equal(now.card, 'flex', `${label}: share card`);
+        }
     } finally {
         await browser.close();
     }

@@ -47,10 +47,13 @@ const BOOK = [
     {name: 'book with a 40px hinge', viewport: {width: 951, height: 585}, segments: [[0, 0, 455, 585], [495, 0, 456, 585]]},
     {name: 'book at the Safari size', viewport: {width: 951, height: 543}, segments: [[0, 0, 475, 543], [476, 0, 475, 543]]},
 ];
+// The wider tabletops are sanity sizes, not a device's, so the grid's three- and four-column widths are laid out folded.
 const TABLETOP = [
-    {name: 'tabletop', viewport: {width: 669, height: 867}, segments: [[0, 0, 669, 433], [0, 433, 669, 434]]},
-    {name: 'tabletop with a 40px hinge', viewport: {width: 669, height: 867}, segments: [[0, 0, 669, 413], [0, 453, 669, 414]]},
-    {name: 'tabletop at the Safari size', viewport: {width: 669, height: 825}, segments: [[0, 0, 669, 349], [0, 350, 669, 475]]},
+    {name: 'tabletop', viewport: {width: 669, height: 867}, segments: [[0, 0, 669, 433], [0, 433, 669, 434]], columns: 2},
+    {name: 'tabletop with a 40px hinge', viewport: {width: 669, height: 867}, segments: [[0, 0, 669, 413], [0, 453, 669, 414]], columns: 2},
+    {name: 'tabletop at the Safari size', viewport: {width: 669, height: 825}, segments: [[0, 0, 669, 349], [0, 350, 669, 475]], columns: 2},
+    {name: 'a wider tabletop, three columns', viewport: {width: 900, height: 840}, segments: [[0, 0, 900, 400], [0, 440, 900, 400]], columns: 3},
+    {name: 'a wider tabletop, four columns', viewport: {width: 1180, height: 840}, segments: [[0, 0, 1180, 400], [0, 440, 1180, 400]], columns: 4},
 ];
 
 async function open(browser, {viewport, segments = null, dir = 'ltr'}) {
@@ -117,9 +120,11 @@ browserTest('in tabletop no tile rests on the fold, the first row above it and t
             assert.equal(await tab.evaluate(() => document.documentElement.dataset.fold), 'rows', pose.name);
 
             const tiles = await boxes(tab);
+            const {columns} = pose;
+            assert.equal(new Set(tiles.map(box => Math.round(box.left))).size, columns, `${pose.name}: columns`);
             assert.deepEqual(tiles.filter(box => box.bottom > foldTop && box.top < foldEnd), [], `${pose.name}: tiles on the fold`);
-            for (const box of tiles.slice(0, 2)) assert.ok(Math.abs(box.bottom - (foldTop - 7)) <= 1, `${pose.name}: the first row ends at ${box.bottom}`);
-            for (const box of tiles.slice(2, 4)) assert.ok(Math.abs(box.top - (foldEnd + 7)) <= 1, `${pose.name}: the second row starts at ${box.top}`);
+            for (const box of tiles.slice(0, columns)) assert.ok(Math.abs(box.bottom - (foldTop - 7)) <= 1, `${pose.name}: the first row ends at ${box.bottom}`);
+            for (const box of tiles.slice(columns, 2 * columns)) assert.ok(Math.abs(box.top - (foldEnd + 7)) <= 1, `${pose.name}: the second row starts at ${box.top}`);
             await tab.close();
         }
     } finally {
@@ -155,8 +160,9 @@ browserTest('in tabletop the rows hold still when the fold layer measures again 
     }
 });
 
-// Ordinary phones, the outer display, the inner display unfolded and desktop: the marker moves no tile.
-browserTest('outside book and tabletop the fold hook moves no tile', async () => {
+// Ordinary phones, the outer display, the inner display unfolded, desktop, and a tabletop too narrow for cards side by
+// side (a sanity size), where the tiles are one column of rows: the marker moves no tile.
+browserTest('outside book and the card grid in tabletop the fold hook moves no tile', async () => {
     const browser = await launchBrowser({playwrightPath});
     try {
         const poses = [
@@ -165,9 +171,11 @@ browserTest('outside book and tabletop the fold hook moves no tile', async () =>
             {name: 'inner display 669x867', viewport: {width: 669, height: 867}},
             {name: 'inner display on its side, no fold', viewport: {width: 951, height: 585}},
             {name: 'desktop', viewport: {width: 1440, height: 900}},
+            {name: 'tabletop with one column of tiles', viewport: {width: 500, height: 867}, segments: [[0, 0, 500, 413], [0, 453, 500, 414]]},
         ];
         for (const pose of poses) {
             const tab = await open(browser, pose);
+            assert.equal(await tab.evaluate(() => document.documentElement.dataset.fold ?? null), pose.segments ? 'rows' : null, pose.name);
             const marked = await boxes(tab);
             await tab.evaluate(() => document.querySelector('.bridge-tools-grid').removeAttribute('data-fold-split'));
             await settle(tab);
