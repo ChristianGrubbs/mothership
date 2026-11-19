@@ -1,18 +1,18 @@
 {
-  "accounted": 1594,
+  "accounted": 1598,
   "counts": {
     "api": 288,
     "authentication": 10,
-    "head-alias": 493,
+    "head-alias": 495,
     "health": 1,
-    "internal": 758,
+    "internal": 760,
     "page": 2,
     "public-link": 40,
     "static": 2,
     "unsupported": 0
   },
   "missing": [],
-  "registered": 1594,
+  "registered": 1598,
   "routes": [
     {
       "id": "DELETE * /admin/ai-agent/agents/{id}",
@@ -2321,6 +2321,16 @@
     },
     {
       "id": "GET * /admin/sphere-seam/script",
+      "kind": "internal",
+      "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory."
+    },
+    {
+      "id": "GET * /admin/tools",
+      "kind": "internal",
+      "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory."
+    },
+    {
+      "id": "GET * /admin/tools/{widget}",
       "kind": "internal",
       "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory."
     },
@@ -4801,6 +4811,16 @@
     },
     {
       "id": "HEAD * /admin/sphere-seam/script",
+      "kind": "head-alias",
+      "reason": "Laravel HEAD alias; see corresponding GET identity."
+    },
+    {
+      "id": "HEAD * /admin/tools",
+      "kind": "head-alias",
+      "reason": "Laravel HEAD alias; see corresponding GET identity."
+    },
+    {
+      "id": "HEAD * /admin/tools/{widget}",
       "kind": "head-alias",
       "reason": "Laravel HEAD alias; see corresponding GET identity."
     },

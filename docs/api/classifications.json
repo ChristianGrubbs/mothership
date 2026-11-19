@@ -3767,6 +3767,24 @@
     "reviewed": true
   },
   {
+    "id": "GET * /admin/tools",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/ToolsController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "GET * /admin/tools/{widget}",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/ToolsController.php"
+    ],
+    "reviewed": true
+  },
+  {
     "id": "GET * /admin/viewed-notifications/{id}",
     "kind": "internal",
     "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
@@ -7327,6 +7345,24 @@
     "reason": "Laravel HEAD alias; see corresponding GET identity.",
     "sources": [
       "packages/Mothership/SphereSeam/src/Http/Controllers/SphereSeamController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "HEAD * /admin/tools",
+    "kind": "head-alias",
+    "reason": "Laravel HEAD alias; see corresponding GET identity.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/ToolsController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "HEAD * /admin/tools/{widget}",
+    "kind": "head-alias",
+    "reason": "Laravel HEAD alias; see corresponding GET identity.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/ToolsController.php"
     ],
     "reviewed": true
   },
