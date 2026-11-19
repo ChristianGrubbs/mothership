@@ -444,7 +444,7 @@
     nodes.smart.addEventListener('change', () => { if (nodes.smart.checked) findBest(); dirty(); });
     const edgeAt = time => { const edge = Math.max(.15, state.buffer.duration * .012), end = state.start + state.length; return Math.abs(time - state.start) < edge ? 'start' : Math.abs(time - end) < edge ? 'end' : 'move'; };
     const timeAt = event => { const rect = nodes.overlay.getBoundingClientRect(); return (event.clientX - rect.left) / rect.width * state.buffer.duration; };
-    nodes.overlay.addEventListener('pointerdown', event => { if (!state.buffer) return; const time = timeAt(event); state.drag = edgeAt(time); state.dragOffset = time - state.start; state.dragFrom = [state.start, state.length]; nodes.overlay.setPointerCapture(event.pointerId); });
+    nodes.overlay.addEventListener('pointerdown', event => { if (!state.buffer) return; const time = timeAt(event); state.drag = edgeAt(time); state.dragOffset = time - state.start; state.dragFrom = { start: state.start, length: state.length, crossfade: state.crossfade, fadeIn: state.fadeIn, fadeOut: state.fadeOut }; nodes.overlay.setPointerCapture(event.pointerId); });
     nodes.overlay.addEventListener('pointermove', event => {
         if (!state.buffer) return;
         // The pointer says what a press would do: resize at an edge, move inside or beside the region.
@@ -455,11 +455,12 @@
     });
     nodes.overlay.addEventListener('pointerup', () => { state.drag = null; });
     // A finger that goes up or down the wave scrolls the page, and the browser then cancels the press: the region goes
-    // back to where it was, so the slight sideways drift of a scroll edits nothing.
+    // back to where it was, with the crossfade and fades a shorter region may have capped, so the slight sideways drift
+    // of a scroll edits nothing.
     nodes.overlay.addEventListener('pointercancel', () => {
         if (!state.drag) return;
         state.drag = null;
-        [state.start, state.length] = state.dragFrom;
+        Object.assign(state, state.dragFrom);
         syncControls(); scoreSeam(); draw();
     });
     // Space plays and the arrows nudge the start, but never in place of what a field, a button or an open sheet does.

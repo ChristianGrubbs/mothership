@@ -282,3 +282,35 @@ browserTest('Loop Maker on the iPhone Duo: Play and both figures above a tableto
         assert.deepEqual(errors, []);
     } finally { await browser.close(); }
 });
+
+browserTest('Loop Maker puts the whole loop back, crossfade and fades included, when the browser cancels a press on the wave', async () => {
+    const browser = await launch();
+    try {
+        const { page, errors } = await open(browser);
+        await loadDemo(page);
+        const settings = () => page.evaluate(() => Object.fromEntries(['start', 'length', 'crossfade', 'fade-in', 'fade-out'].map(name => [name, document.querySelector(`[data-${name}]`).value])));
+        await page.evaluate(() => {
+            for (const [name, value] of [['fade-in', '2'], ['fade-out', '1.5']]) {
+                const input = document.querySelector(`[data-${name}]`);
+                input.value = value;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        });
+        const before = await settings();
+        assert.ok(Number(before.crossfade) > .75 && Number(before['fade-in']) > .75, `a crossfade and fades a short loop would cap (${JSON.stringify(before)})`);
+
+        // The demo is 8 s and its loop ends at its end: pull the end edge in to 2 s, a 1.5 s loop.
+        const wave = await page.locator('[data-overlay]').boundingBox(), y = wave.y + wave.height / 2;
+        await page.mouse.move(wave.x + wave.width - 2, y);
+        await page.mouse.down();
+        await page.mouse.move(wave.x + wave.width * 2 / 8, y, { steps: 6 });
+        const squeezed = await settings();
+        assert.ok(Number(squeezed.length) < 2 && Number(squeezed.crossfade) <= .75 && Number(squeezed['fade-in']) <= .75, `the short loop capped them (${JSON.stringify(squeezed)})`);
+        // What the browser sends when it takes the press for a scroll.
+        await page.locator('[data-overlay]').dispatchEvent('pointercancel', { pointerId: 1, pointerType: 'mouse' });
+        assert.deepEqual(await settings(), before);
+        await page.mouse.up();
+        assert.deepEqual(await settings(), before, 'and the release after it changes nothing');
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); }
+});
