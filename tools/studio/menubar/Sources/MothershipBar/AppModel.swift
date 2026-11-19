@@ -11,6 +11,8 @@ final class AppModel {
     private(set) var progress: ActionProgress?
     private(set) var failure: PanelState.Failure?
     private(set) var confirming: ActionKind?
+    private(set) var queueCheck: QueueCheck?
+    private(set) var siteResult: (message: String, finished: Date)?
     private(set) var startAtLogin: Bool
     private(set) var lastChecked: Date?
     private(set) var actionStarted: Date?
@@ -19,7 +21,14 @@ final class AppModel {
     private(set) var craftChecking = false
     private(set) var craftCheckFailed = false
     private(set) var showingCraft = false
-    var panelIsOpen = false { didSet { if panelIsOpen { wake() } } }
+    var panelIsOpen = false {
+        didSet {
+            guard panelIsOpen else { return }
+            wake()
+            // A count read before the panel closed may be out of date by now.
+            if confirming == .stop || confirming == .restart { readQueues() }
+        }
+    }
     var theme = PanelTheme.stored { didSet { theme.store() } }
     var panelMaxHeight: CGFloat = 800
 
@@ -42,6 +51,7 @@ final class AppModel {
     @ObservationIgnored private var lastCraftAttempt: Date?
     @ObservationIgnored private var bridgeWatch = BridgeWatch()
     @ObservationIgnored private var bridgeRestart: (id: String, name: String, started: Date)?
+    @ObservationIgnored private var queueRead: Task<Void, Never>?
 
     private var probes: Probes? { config.map { Probes(config: $0) } }
     private var runner: ActionRunner? { config.map { ActionRunner(config: $0) } }
@@ -69,6 +79,8 @@ final class AppModel {
             elapsedSeconds: actionStarted.map { max(0, Int(now.timeIntervalSince($0))) },
             failure: failure,
             confirming: confirming,
+            queueCheck: queueCheck,
+            siteResult: siteResult.flatMap { now.timeIntervalSince($0.finished) < siteResultShownFor ? $0.message : nil },
             checkedText: checkedText,
             startAtLogin: startAtLogin,
             craft: config?.craftTool == nil ? nil : CraftPanel(
@@ -93,7 +105,7 @@ final class AppModel {
         PanelActions(
             request: { [weak self] kind in self?.request(kind) },
             confirm: { [weak self] in self?.confirmPending() },
-            cancelConfirm: { [weak self] in self?.confirming = nil },
+            cancelConfirm: { [weak self] in self?.clearConfirm() },
             retry: { [weak self] in self?.retry() },
             dismissFailure: { [weak self] in self?.failure = nil },
             openSite: { [weak self] in self?.openSite() },
@@ -141,6 +153,7 @@ final class AppModel {
 
     private func request(_ kind: ActionKind) {
         failure = nil
+        siteResult = nil
         switch kind {
         case .start, .login, .craftApps:
             launch(kind)
@@ -148,9 +161,31 @@ final class AppModel {
             launch(.craftMCP)
         case .craftMCP:
             confirming = .craftMCPForce
-        case .stop, .restart, .craftEngines, .craftMCPForce:
+        case .stop, .restart:
+            confirming = kind
+            readQueues()
+        case .craftEngines, .craftMCPForce:
             confirming = kind
         }
+    }
+
+    /// Reads the queues for the question before Stop and Restart. Only the latest read counts.
+    private func readQueues() {
+        queueRead?.cancel()
+        guard let runner else { return }
+        queueCheck = .reading
+        queueRead = Task { [weak self] in
+            let reading = await runner.queueReading()
+            guard !Task.isCancelled else { return }
+            self?.queueCheck = reading.map(QueueCheck.read) ?? .unreadable
+        }
+    }
+
+    private func clearConfirm() {
+        queueRead?.cancel()
+        queueRead = nil
+        queueCheck = nil
+        confirming = nil
     }
 
     private func openCraft() {
@@ -160,7 +195,7 @@ final class AppModel {
 
     private func closeCraft() {
         showingCraft = false
-        confirming = nil
+        clearConfirm()
     }
 
     private func checkCraft(force: Bool) {
@@ -183,8 +218,8 @@ final class AppModel {
     }
 
     private func confirmPending() {
-        guard let kind = confirming else { return }
-        confirming = nil
+        guard let kind = confirming, queueCheck != .reading else { return }
+        clearConfirm()
         launch(kind)
     }
 
@@ -298,11 +333,13 @@ final class AppModel {
     }
 
     private func finish(_ current: ActionRunner.Current, _ result: ActionProgress) {
+        let seconds = actionStarted.map { max(0, Int(Date().timeIntervalSince($0))) } ?? 0
         activeAction = nil
         actionStarted = nil
         BarLog.write("info", "action.finished", loc: "AppModel.finish", ctx: ["id": current.id, "exit": "\(result.exitCode ?? -1)"])
         if result.succeeded {
             failure = nil
+            siteResult = siteResultMessage(for: current.kind, seconds: seconds).map { ($0, Date()) }
         } else {
             lastFailedKind = current.kind
             failure = PanelState.Failure(

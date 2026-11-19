@@ -321,6 +321,12 @@ zsh tools/studio/menubar/scripts/install.sh --wrapper <stack-wrapper> --app-env 
 - Actions refuse to run while another `up` or `down` is in progress, while a
   deploy holds the lease on the live checkout, or when the coordinator can't say
   whether one does. An engine update also refuses while the site's queues are busy.
+- **Stop** and **Restart** first read the site's queues and say how many jobs and
+  open uploads there are. The person can go on or cancel. If the queues can't be
+  read, the panel says so and still lets the person choose.
+- **Start** and **Restart** finish only when the public `/up` answers 200, and the
+  panel shows the result. If it doesn't answer within 3 minutes, the panel reports a
+  failure and the app does not start anything again.
 - While an action runs, the app writes `stack-action.json` in its actions folder.
   The deploy steps read that marker after they claim the lease.
 - Output of each action is in
