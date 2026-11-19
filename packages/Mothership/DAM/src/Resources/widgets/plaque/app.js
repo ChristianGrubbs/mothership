@@ -11,6 +11,10 @@
     const slug = value => (String(value || 'plaques').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'plaques');
     const fmt = seconds => { const s = Math.max(0, seconds); return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}.${String(Math.floor(s * 100) % 100).padStart(2, '0')}`; };
     const log = (event, ctx = {}) => { if (localStorage.getItem('plaque:debug') === '1') console.info(JSON.stringify({ ts: new Date().toISOString(), event, ctx })); };
+    // The page that frames the tool (home-frame.js) draws its bar: the set, Export and Save to Library. Where no bar is
+    // drawn, the Plaques pane carries its own way to the same sheets.
+    const frame = window.MothershipFrame || null;
+    const root = $('[data-plq]');
 
     const state = { set: C.newSet(), current: null, selected: new Set(), draft: null, draftPreset: null, scope: 'current', t: 0, playing: false, muted: false };
     const presetLinks = new Map(); // plaque id -> user preset id, for "Update preset"
@@ -41,16 +45,21 @@
         };
     })();
     let saveTimer;
+    function kept(text, error = false) {
+        const line = $('[data-save-state]');
+        line.textContent = text;
+        line.dataset.state = error ? 'error' : '';
+    }
     function autosave() {
         clearTimeout(saveTimer);
-        $('[data-save-state]').textContent = 'Saving…';
+        kept('Keeping…');
         saveTimer = setTimeout(async () => {
             try {
                 await db.put('sets', { set: C.exportSet(state.set), current: state.current }, 'current');
-                $('[data-save-state]').textContent = 'Saved';
+                kept('Kept on this device');
             } catch (error) {
                 log('autosave.failed', { message: String(error) });
-                $('[data-save-state]').textContent = 'Not saved';
+                kept('Not kept: this browser refused to store the set. Export it to keep it.', true);
             }
         }, 600);
     }
@@ -80,9 +89,18 @@
     }
     function undo() { if (!history.past.length) return; history.future.push(snapshot()); restore(history.past.pop()); history.lastKey = null; afterChange({ rebuild: true, full: true }); toast('Undone'); }
     function redo() { if (!history.future.length) return; history.past.push(snapshot()); restore(history.future.pop()); history.lastKey = null; afterChange({ rebuild: true, full: true }); toast('Redone'); }
+    // The set's name, all of it: the field grows to the lines its words take. While it is being typed in, the field
+    // is the source, so a cleared field is not filled back in under the caret.
+    function showName() {
+        const field = $('[data-set-name]');
+        if (document.activeElement !== field) field.value = state.set.name;
+        if (!field.offsetParent) return; // in a pane that is not shown; fitted when it is
+        field.style.height = 'auto';
+        field.style.height = `${field.scrollHeight}px`;
+    }
     function afterChange({ rebuild = false, full = false } = {}) {
         if (full) syncOutputControls();
-        $('[data-set-name]').value = state.set.name;
+        showName();
         renderList();
         if (rebuild) renderInspector();
         updateButtons();
@@ -169,6 +187,7 @@
         const plaques = scopePlaques();
         const empty = !state.set.plaques.length && !state.draft;
         $('[data-empty]').hidden = !empty;
+        root.toggleAttribute('data-empty-set', empty);
         $('[data-transport]').hidden = empty;
         if (empty) { canvas.width = 1; canvas.height = 1; return; }
         const size = C.canvasSize(pctx, state.set.output, plaques);
@@ -238,7 +257,10 @@
         updatePlayButton();
         draw();
     }
-    function updatePlayButton() { const button = $('[data-action="play"]'); button.textContent = state.playing ? 'Pause' : 'Play'; button.setAttribute('aria-label', state.playing ? 'Pause' : 'Play'); }
+    function updatePlayButton() {
+        $('[data-play-label]').textContent = state.playing ? 'Pause' : 'Play';
+        $('[data-play-glyph]').innerHTML = state.playing ? '<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>' : '<polygon points="6 3 20 12 6 21 6 3"/>';
+    }
     function step(direction) {
         stop();
         const fps = state.set.output.fps;
@@ -317,7 +339,7 @@
             ids.forEach(id => state.selected.delete(id));
             if (!plaqueById(state.current)) state.current = state.set.plaques[Math.min(Math.max(0, index), state.set.plaques.length - 1)]?.id ?? null;
         }, { rebuild: true });
-        toast(ids.length > 1 ? `${ids.length} plaques deleted. Undo brings them back.` : 'Plaque deleted. Undo brings it back.');
+        toast(ids.length > 1 ? `${ids.length} plaques deleted` : 'Plaque deleted', { undo: true });
     }
     function duplicate(id) {
         const source = plaqueById(id);
@@ -353,27 +375,27 @@
         const host = $('[data-inspector]');
         const p = editing();
         if (!p) {
-            host.innerHTML = '<h2>Nothing selected</h2><p class="lead">Add a plaque or pick one from the list to edit it here.</p>';
+            host.innerHTML = '<h2>Nothing to edit</h2><p class="tk-empty">Add a plaque, or pick one from the list, and edit it here.</p>';
             return;
         }
         const s = p.style, glyphs = Object.keys(C.ICONS).filter(n => n !== 'cursor');
         const visual = p.kind === 'social' ? `
             <div class="pair">
-                <div class="field">Page image${assetChip(p.social.pageAssetId, 'None yet')}<label class="outline small file-button">Choose…<input type="file" accept="image/*" data-upload="social.pageAssetId"></label></div>
-                <div class="field">Platform image${assetChip(p.social.platformAssetId, 'None yet')}<label class="outline small file-button">Choose…<input type="file" accept="image/*" data-upload="social.platformAssetId"></label></div>
+                <div class="field">Page image${assetChip(p.social.pageAssetId, 'None yet')}<label class="tk-btn is-small file-button">Choose…<input type="file" accept="image/*" data-upload="social.pageAssetId"></label></div>
+                <div class="field">Platform image${assetChip(p.social.platformAssetId, 'None yet')}<label class="tk-btn is-small file-button">Choose…<input type="file" accept="image/*" data-upload="social.platformAssetId"></label></div>
             </div>` : `
             <div class="field">Visual${seg('visual.type', p.visual.type, [['icon', 'Icon'], ['symbol', 'Symbol or emoji'], ['image', 'Image'], ['none', 'None']])}</div>
             ${p.visual.type === 'icon' ? `<div class="icon-grid" role="group" aria-label="Icon">${glyphs.map(n => `<button type="button" data-seg="visual.icon" data-value="${n}" aria-pressed="${p.visual.icon === n}" aria-label="${n}" title="${n}">${iconSvg(n)}</button>`).join('')}</div>` : ''}
             ${p.visual.type === 'symbol' ? field('Symbol', `<input data-k="visual.symbol" value="${esc(p.visual.symbol)}" maxlength="8" placeholder="★ or 🎉">`) : ''}
-            ${p.visual.type === 'image' ? `<div class="field">Image${assetChip(p.visual.assetId, 'No image yet')}<label class="outline small file-button">Choose image…<input type="file" accept="image/*" data-upload="visual.assetId"></label></div>` : ''}
+            ${p.visual.type === 'image' ? `<div class="field">Image${assetChip(p.visual.assetId, 'No image yet')}<label class="tk-btn is-small file-button">Choose image…<input type="file" accept="image/*" data-upload="visual.assetId"></label></div>` : ''}
             ${p.visual.type !== 'none' ? `<div class="field">Shape${seg('visual.shape', p.visual.shape, [['rounded', 'Rounded'], ['circle', 'Circle'], ['square', 'Square']])}</div>` : ''}`;
         const social = p.kind === 'social' ? `
             <details open><summary>Click effects</summary><div class="fields">
                 <p class="lead">Each action is a timed click: the pointer moves to the button, presses it, and the button changes to its done wording.</p>
-                ${p.social.actions.map((a, i) => `<div class="action-card"><header><span>Action ${i + 1}</span><button type="button" class="link" data-remove-action="${i}">Remove</button></header>
+                ${p.social.actions.map((a, i) => `<div class="action-card"><header><span>Action ${i + 1}</span><button type="button" class="tk-link" data-remove-action="${i}">Remove</button></header>
                     <div class="pair">${field('Button', `<input data-k="social.actions.${i}.label" value="${esc(a.label)}" maxlength="24">`)}${field('After the click', `<input data-k="social.actions.${i}.doneLabel" value="${esc(a.doneLabel)}" maxlength="24">`)}</div>
                     <div class="triple">${field('Glyph', `<select data-k="social.actions.${i}.glyph">${options(glyphs.map(n => [n, n]), a.glyph)}</select>`)}${numBox(`social.actions.${i}.at`, a.at, 0, 65, 0.05, 'Click at (s)')}${field('Sound', `<select data-k="social.actions.${i}.sound">${soundOptions(a.sound)}</select>`)}</div></div>`).join('')}
-                ${p.social.actions.length < C.LIMITS.actions ? '<button type="button" class="outline small" data-action="add-action">Add a click</button>' : ''}
+                ${p.social.actions.length < C.LIMITS.actions ? '<button type="button" class="tk-btn is-small" data-action="add-action">Add a click</button>' : ''}
             </div></details>` : '';
         const linked = presetLinks.get(p.id), linkedPreset = userPresets.find(u => u.id === linked);
         host.innerHTML = `
@@ -417,27 +439,33 @@
                 <div class="pair">${field('Easing', `<select data-k="animation.easing">${options([['ease-out', 'Smooth stop'], ['ease-in-out', 'Smooth both ends'], ['linear', 'Even'], ['back', 'Overshoot']], p.animation.easing)}</select>`)}${numBox('animation.distance', p.animation.distance, 0, 600, 5, 'Slide distance')}</div>
             </div></details>
             <details open><summary>Sound</summary><div class="fields">
-                <div class="pair">${field('Sound', `<select data-k="sound.source">${soundOptions(p.sound.source)}</select>`)}<div class="field">Your own<label class="outline small file-button">Upload audio…<input type="file" accept="audio/*" data-upload-sound></label></div></div>
+                <div class="pair">${field('Sound', `<select data-k="sound.source">${soundOptions(p.sound.source)}</select>`)}<div class="field">Your own<label class="tk-btn is-small file-button">Upload audio…<input type="file" accept="audio/*" data-upload-sound></label></div></div>
                 ${num('sound.volume', p.sound.volume, 0, 1, 0.05, 'Volume')}
                 ${numBox('sound.offset', p.sound.offset, -5, 60, 0.05, 'Start offset (s, from the plaque start)')}
-                <button type="button" class="outline small" data-action="hear-sound"${p.sound.source === 'none' ? ' disabled' : ''}>Hear it</button>
+                <button type="button" class="tk-btn is-small" data-action="hear-sound"${p.sound.source === 'none' ? ' disabled' : ''}>Hear it</button>
             </div></details>
             </div></div>
             <div class="button-row">
-                ${state.draft ? '' : '<button type="button" class="outline small" data-action="duplicate">Duplicate</button><button type="button" class="outline small" data-action="delete">Delete</button>'}
-                <button type="button" class="outline small" data-action="save-preset">Save as preset</button>
-                ${linkedPreset ? `<button type="button" class="outline small" data-action="update-preset">Update “${esc(linkedPreset.name)}”</button>` : ''}
+                ${state.draft ? '' : '<button type="button" class="tk-btn is-small" data-action="duplicate">Duplicate</button><button type="button" class="tk-btn is-small" data-action="delete">Delete</button>'}
+                <button type="button" class="tk-btn is-small" data-action="save-preset">Save as preset</button>
+                ${linkedPreset ? `<button type="button" class="tk-btn is-small" data-action="update-preset">Update “${esc(linkedPreset.name)}”</button>` : ''}
             </div>`;
     }
     const label = value => ({ fade: 'Fade', 'slide-up': 'Slide up', 'slide-down': 'Slide down', 'slide-left': 'Slide left', 'slide-right': 'Slide right', pop: 'Pop', none: 'Cut' }[value]);
     function bulkPanel() {
         return `<div class="bulk" data-bulk><h3>Bulk edit · ${state.selected.size} selected</h3><p>Copy settings from the plaque shown below to every selected plaque.</p>
             <div class="checks">${[['timing', 'Timing'], ['animation', 'Motion'], ['style', 'Style'], ['sound', 'Sound'], ['amount', 'Amount format']].map(([k, l]) => `<label class="check"><input type="checkbox" data-bulk-part="${k}"${k === 'timing' ? ' checked' : ''}> ${l}</label>`).join('')}</div>
-            <div class="button-row"><button type="button" class="primary small" data-action="bulk-apply">Apply to ${state.selected.size}</button><button type="button" class="outline small" data-action="bulk-delete">Delete ${state.selected.size}</button></div></div>`;
+            <div class="button-row"><button type="button" class="tk-btn is-small" data-action="bulk-apply">Apply to ${state.selected.size}</button><button type="button" class="tk-btn is-small" data-action="bulk-delete">Delete ${state.selected.size}</button></div></div>`;
     }
+    // The panel comes and goes with a selection of two or more; between those, only its count changes, in place, so
+    // the parts ticked in it stay ticked.
     function renderBulkHint() {
-        const bulk = $('[data-bulk]');
-        if ((state.selected.size > 1) !== Boolean(bulk)) renderInspector();
+        const bulk = $('[data-bulk]'), size = state.selected.size;
+        if ((size > 1 && !state.draft) !== Boolean(bulk)) { renderInspector(); return; }
+        if (!bulk) return;
+        bulk.querySelector('h3').textContent = `Bulk edit · ${size} selected`;
+        bulk.querySelector('[data-action="bulk-apply"]').textContent = `Apply to ${size}`;
+        bulk.querySelector('[data-action="bulk-delete"]').textContent = `Delete ${size}`;
     }
 
     // One handler for every bound control. Typing in one field within a second is one undo step.
@@ -524,10 +552,10 @@
     }
     function renderPresets() {
         const tabs = [['starter', 'Starter'], ['topic', 'Topics'], ['social', 'Social'], ['donation', 'Donations'], ['mine', 'Mine']];
-        $('[data-preset-tabs]').innerHTML = tabs.map(([id, name]) => `<button type="button" role="tab" data-tab="${id}" aria-selected="${presetTab === id}">${name}</button>`).join('');
+        $('[data-preset-tabs]').innerHTML = tabs.map(([id, name]) => `<button type="button" class="tk-seg-opt" role="tab" data-tab="${id}" aria-selected="${presetTab === id}">${name}</button>`).join('');
         const grid = $('[data-preset-grid]');
         if (presetTab === 'mine') {
-            grid.innerHTML = userPresets.length ? userPresets.map(p => presetCard(p, true)).join('') : '<p class="preset-empty">No presets of your own yet. Edit a plaque, then choose “Save as preset”.</p>';
+            grid.innerHTML = userPresets.length ? userPresets.map(p => presetCard(p, true)).join('') : '<p class="preset-empty tk-empty">No presets of your own yet. Edit a plaque, then choose “Save as preset”.</p>';
             paintPresetThumbs(grid, userPresets);
         } else {
             const list = C.PRESETS.filter(p => p.group === presetTab);
@@ -537,7 +565,7 @@
     }
     function renderTopics() {
         const matches = C.suggestTopics($('[data-topic-input]').value);
-        $('[data-topic-results]').innerHTML = matches.map(p => `<button type="button" class="chip" data-preset="${p.id}">${esc(p.name)}</button>`).join('');
+        $('[data-topic-results]').innerHTML = matches.map(p => `<button type="button" data-preset="${p.id}">${esc(p.name)}</button>`).join('');
     }
     function startDraft(preset, mine) {
         stop();
@@ -546,7 +574,7 @@
         state.draftPreset = mine ? preset.id : null;
         $('[data-draft-banner]').hidden = false;
         $('[data-draft-name]').textContent = preset.name;
-        $('[data-dialog="presets"]').close();
+        $('[data-sheet="presets"]').close();
         renderList(); renderInspector(); showStill(); updateButtons();
     }
     function endDraft(commit) {
@@ -655,16 +683,24 @@
         select.dataset.hints = JSON.stringify(Object.fromEntries(formats.map(([v, , h]) => [v, h])));
         exportOptions();
         $('[data-export-status]').textContent = '';
-        $('[data-export-status]').className = 'notice';
-        $('[data-dialog="export"]').showModal();
+        $('[data-export-status]').className = 'tk-status';
+        showSheet('export');
     }
+    // The commit says what it does for the chosen format.
+    const EXPORT_LABELS = { png: 'Download PNG', apng: 'Download APNG', gif: 'Download GIF', sequence: 'Download frames', 'webm-key': 'Record WebM', 'webm-alpha': 'Record WebM', wav: 'Download WAV', json: 'Download set file' };
     function exportOptions() {
         const format = $('[data-export-format]').value;
         $('[data-export-hint]').textContent = JSON.parse($('[data-export-format]').dataset.hints || '{}')[format] || '';
         $('[data-export-options]').innerHTML = format === 'webm-key'
-            ? `<label>Key colour<select data-key-color>${options([['#00ff00', 'Green'], ['#0000ff', 'Blue'], ['#ff00ff', 'Magenta']], localStorage.getItem('plaque:key') || '#00ff00')}</select></label>`
-            : format === 'wav' ? `<label class="check"><input type="checkbox" data-pad${state.set.output.padSound ? ' checked' : ''}> Pad with silence to the animation length</label>` : '';
-        $('[data-export-scope]').disabled = format === 'json';
+            ? `<label class="tk-field">Key colour<select class="tk-select" data-key-color>${options([['#00ff00', 'Green'], ['#0000ff', 'Blue'], ['#ff00ff', 'Magenta']], localStorage.getItem('plaque:key') || '#00ff00')}</select></label>`
+            : format === 'wav' ? `<label class="tk-check"><input type="checkbox" data-pad${state.set.output.padSound ? ' checked' : ''}><span>Pad with silence to the animation length</span></label>` : '';
+        // The set file always holds the whole set, so the choice says so while it is set aside, and comes back after.
+        const scope = $('[data-export-scope]');
+        if (format === 'json') { if (!scope.disabled) scope.dataset.before = scope.value; scope.value = 'set'; }
+        else if (scope.disabled && scope.dataset.before) scope.value = scope.dataset.before;
+        scope.disabled = format === 'json';
+        $('[data-action="run-export"]').textContent = EXPORT_LABELS[format] || 'Download';
+        $('[data-action="copy-agent"]').hidden = format !== 'json';
     }
     let exportJob = null;
     function progress(fraction) { $('[data-export-progress]').hidden = fraction == null; $('[data-export-bar]').style.width = `${Math.round((fraction || 0) * 100)}%`; }
@@ -810,7 +846,8 @@
         exportJob = { cancelled: false };
         $('[data-action="run-export"]').disabled = true;
         $('[data-action="cancel-export"]').hidden = false;
-        status.className = 'notice'; status.textContent = format.startsWith('webm') ? 'Recording in real time…' : 'Rendering…';
+        $('[data-export-close]').hidden = true;
+        status.className = 'tk-status'; status.textContent = format.startsWith('webm') ? 'Recording in real time…' : 'Rendering…';
         progress(0);
         const started = performance.now();
         try {
@@ -819,13 +856,14 @@
             status.textContent = `Exported ${files.map(f => f.name).join(', ')} (${Math.round(files.reduce((s, f) => s + f.blob.size, 0) / 1024)} KB).`;
             log('export.done', { format, scope, ms: Math.round(performance.now() - started), bytes: files.reduce((s, f) => s + f.blob.size, 0) });
         } catch (error) {
-            status.className = 'notice error';
+            status.className = error.message === 'cancelled' ? 'tk-status' : 'tk-status is-error';
             status.textContent = error.message === 'cancelled' ? 'Export cancelled.' : `Export failed: ${error.message}`;
             log('export.failed', { format, message: error.message });
         } finally {
             exportJob = null; progress(null);
             $('[data-action="run-export"]').disabled = false;
             $('[data-action="cancel-export"]').hidden = true;
+            $('[data-export-close]').hidden = false;
         }
     }
 
@@ -844,7 +882,7 @@
         await preloadAll();
         syncOutputControls();
         showStill();
-        $('[data-dialog="open"]').close();
+        $('[data-sheet="open"]').close();
         toast(result.errors.length ? `Opened with ${result.errors.length} fix${result.errors.length > 1 ? 'es' : ''}: ${result.errors[0]}` : `Opened “${state.set.name}”`);
         log('import.done', { source, plaques: state.set.plaques.length, fixes: result.errors.length });
         return true;
@@ -853,78 +891,114 @@
     async function openDialog() {
         $('[data-open-errors]').innerHTML = '';
         $('[data-paste-text]').value = '';
-        $('[data-dialog="open"]').showModal();
+        showSheet('open');
         const box = $('[data-library-sets]');
-        if (!hostContext.library) { box.innerHTML = '<p class="hint">Sets saved in the Library open here for accounts with Library access. Files and pasted sets open for everyone.</p>'; return; }
-        box.innerHTML = '<p class="hint">Loading saved sets…</p>';
+        if (!hostContext.library) { box.innerHTML = '<p class="tk-empty">Sets kept in the Library open here for accounts with Library access. Files and pasted sets open for everyone.</p>'; return; }
+        box.innerHTML = '<p class="tk-note">Finding sets…</p>';
         try {
             const response = await fetch(new URL('home/plaque/sets', ADMIN), { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
             if (!response.ok) throw new Error(String(response.status));
             const { sets } = await response.json();
-            box.innerHTML = sets.length ? sets.map(s => `<button type="button" data-library-set="${esc(s.download)}"><strong>${esc(s.name)}</strong><span>${esc(s.updated)}</span></button>`).join('') : '<p class="hint">No saved sets yet. Use Share → Save to library, or have an agent save a <code>.plaque.json</code> file to the library.</p>';
+            box.innerHTML = sets.length ? sets.map(s => `<button type="button" data-library-set="${esc(s.download)}"><strong>${esc(s.name)}</strong><span>${esc(s.updated)}</span></button>`).join('') : '<p class="tk-empty">No sets in the Library yet. Save to Library keeps one there, and an agent can save a <code>.plaque.json</code> file there too.</p>';
         } catch {
-            box.innerHTML = '<p class="hint">The library is not reachable from here. Files and pasted sets still open.</p>';
+            box.innerHTML = '<p class="tk-empty">The Library cannot be reached from here. Files and pasted sets still open.</p>';
         }
     }
 
-    // ---- hand-off: library and agent ------------------------------------------------------------------------------
-    async function loadFolders() {
-        const select = $('[data-library-folder]');
-        if (!hostContext.library) {
-            select.innerHTML = '<option value="">Saving to the Library needs Library access</option>';
-            $('[data-action="save-library"]').disabled = true;
-            return;
+    // ---- Save to Library, through the frame's bridge, which records the tool with each file -------------------------
+    // A render, the sound and the set file, into a folder this account may upload to. The files are made from the set
+    // as it is when Save is pressed, and the sheet holds until the Library answers. A failure that arrives after the
+    // sheet was closed is said in the bar (or a toast), and again when the sheet is opened.
+    let folders = null, saving = false, wantWav = true, lateError = '';
+    function setLibrary({ message = '', error = false } = {}) {
+        const none = Array.isArray(folders) && !folders.length;
+        const scope = $('[data-library-scope]').value, base = slug(state.set.name);
+        const sound = C.soundSchedule(scopePlaques(scope)).events.length > 0;
+        const wav = $('[data-library-wav]');
+        wav.checked = sound && wantWav;
+        wav.disabled = saving || !sound;
+        $('[data-library-wav-name]').textContent = sound ? `${base}.wav` : 'These plaques have no sound';
+        $('[data-library-set-name]').textContent = `${base}.plaque.json · opens again with “Open a set”`;
+        $('[data-folder-field]').hidden = none;
+        $('[data-folder-empty]').hidden = !none;
+        for (const sel of ['[data-library-format]', '[data-library-scope]', '[data-library-folder]']) $(sel).disabled = saving;
+        const go = $('[data-action="save-library"]');
+        go.disabled = saving || none || !folders;
+        go.textContent = saving ? 'Saving…' : 'Save';
+        const line = $('[data-library-status]');
+        line.textContent = message || (saving ? 'Rendering and saving to the Library…' : '');
+        line.classList.toggle('is-error', error);
+    }
+    async function openLibrary() {
+        if (!frame?.library || !state.set.plaques.length || state.draft) return;
+        if (!saving) {
+            const format = localStorage.getItem('plaque:library-format');
+            if (format && [...$('[data-library-format]').options].some(o => o.value === format)) $('[data-library-format]').value = format;
+            $('[data-library-scope]').value = state.selected.size > 1 ? 'selected' : 'set';
         }
+        showSheet('library');
+        const late = lateError;
+        lateError = '';
+        if (folders) { setLibrary(late ? { message: late, error: true } : {}); return; }
+        setLibrary({ message: 'Finding your folders…' });
         try {
-            const response = await fetch(new URL('dam/directory', ADMIN), { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
-            if (!response.ok) throw new Error(String(response.status));
-            const { data } = await response.json();
-            const rows = [];
-            const walk = (nodes, depth) => (nodes || []).forEach(node => { rows.push([node.id, `${' '.repeat(depth)}${node.name}`]); walk(node.children, depth + 1); });
-            walk(data, 0);
-            const remembered = localStorage.getItem('plaque:folder');
-            select.innerHTML = rows.length ? options(rows, remembered && rows.some(r => String(r[0]) === remembered) ? remembered : rows[0][0]) : '<option value="">No folders you can use</option>';
-            $('[data-action="save-library"]').disabled = !rows.length;
-        } catch {
-            select.innerHTML = '<option value="">The library is not reachable</option>';
-            $('[data-action="save-library"]').disabled = true;
+            folders = await frame.folders();
+            const select = $('[data-library-folder]'), remembered = localStorage.getItem('plaque:folder');
+            select.innerHTML = folders.map(f => `<option value="${esc(f.id)}">${'\u00a0\u00a0'.repeat(f.depth)}${esc(f.name)}</option>`).join('');
+            if (folders.some(f => String(f.id) === remembered)) select.value = remembered;
+            setLibrary(late ? { message: late, error: true } : {});
+        } catch (error) {
+            folders = null;
+            setLibrary({ message: `${error.message || 'Your folders could not be read.'} Close this and try again.`, error: true });
         }
     }
     async function saveToLibrary() {
+        if (saving || !folders?.length) return;
         const folder = $('[data-library-folder]').value, format = $('[data-library-format]').value, scope = $('[data-library-scope]').value;
-        const status = $('[data-library-status]'), button = $('[data-action="save-library"]');
-        if (!folder) return;
-        localStorage.setItem('plaque:folder', folder);
-        button.disabled = true; status.className = 'notice'; status.textContent = 'Rendering…';
+        const withWav = $('[data-library-wav]').checked;
+        saving = true;
+        setLibrary();
+        let failed = null;
         try {
             const files = [];
             if (format !== 'none') files.push(...await buildExport(format, scope, { separate: true, keyColor: '#00ff00' }));
-            if ($('[data-library-wav]').checked && C.soundSchedule(scopePlaques(scope)).events.length) files.push(...await buildExport('wav', scope, { pad: state.set.output.padSound }));
+            if (withWav && C.soundSchedule(scopePlaques(scope)).events.length) files.push(...await buildExport('wav', scope, { pad: state.set.output.padSound }));
             files.push(...await buildExport('json', scope));
-            status.textContent = `Uploading ${files.length} file${files.length > 1 ? 's' : ''}…`;
-            const form = new FormData();
-            files.forEach(f => form.append('files[]', new File([f.blob], f.name, { type: f.blob.type || 'application/octet-stream' })));
-            form.append('directory_id', folder);
-            const response = await fetch(new URL('dam/assets/upload', ADMIN), { method: 'POST', body: form, credentials: 'same-origin', headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
-            const body = await response.json().catch(() => ({}));
-            if (!response.ok || body.success === false) throw new Error(body.message || (response.status === 403 ? 'You cannot upload to that folder.' : `The library answered ${response.status}.`));
-            const saved = body.files || [];
-            const first = saved[0];
-            status.innerHTML = `Saved ${saved.length || files.length} file${(saved.length || files.length) > 1 ? 's' : ''} to the library.${first?.id ? ` <a href="${esc(new URL(`dam/assets/edit/${first.id}`, ADMIN))}" target="_top">Open in the library</a>` : ''}`;
+            const saved = await frame.save({ files, folder });
+            localStorage.setItem('plaque:folder', folder);
+            localStorage.setItem('plaque:library-format', format);
+            const text = `Saved ${saved.count} file${saved.count === 1 ? '' : 's'} to ${folders.find(f => String(f.id) === folder)?.name || 'the Library'}.`;
+            $('[data-sheet="library"]').close();
+            frame.notice({ text, ...(saved.url ? { link: { label: 'Open in Library', url: saved.url } } : {}) });
+            // Where the page draws a bar, its status line says it once, with the link. Elsewhere the tool says it.
+            if (!frame.bar) toast(text);
             log('library.saved', { files: files.length, format, scope });
         } catch (error) {
-            status.className = 'notice error';
-            status.textContent = `Not saved: ${error.message}`;
+            failed = error;
             log('library.failed', { message: error.message });
-        } finally { button.disabled = false; }
+        } finally {
+            saving = false;
+        }
+        if (!failed) return;
+        const message = failed.message || 'The files could not be saved. Try again.';
+        if ($('[data-sheet="library"]').open) {
+            setLibrary({ message, error: true });
+            // Save was disabled while it ran, which dropped the focus; give it back so Enter tries again.
+            $('[data-action="save-library"]').focus();
+            return;
+        }
+        lateError = message;
+        frame.notice({ text: `Not saved to the Library: ${message}`, tone: 'error' });
+        if (!frame.bar) toast(`Not saved to the Library: ${message}`, { error: true });
     }
+    // The set as JSON on the clipboard, for an agent to edit and hand back through "Open a set".
     async function copyForAgent() {
-        const status = $('[data-agent-status]');
+        const status = $('[data-export-status]');
         const json = JSON.stringify(C.exportSet(state.set), null, 2);
+        status.className = 'tk-status';
         try {
             await navigator.clipboard.writeText(json);
-            status.className = 'notice';
-            status.textContent = `Copied ${state.set.plaques.length} plaque${state.set.plaques.length === 1 ? '' : 's'} (${Math.round(json.length / 1024)} KB of JSON, format ${C.FORMAT} v${C.VERSION}).`;
+            status.textContent = `Copied ${state.set.plaques.length} plaque${state.set.plaques.length === 1 ? '' : 's'} as ${Math.round(json.length / 1024)} KB of JSON. An agent hands it back through “Open a set”.`;
         } catch {
             download(new Blob([json], { type: 'application/json' }), `${slug(state.set.name)}.plaque.json`);
             status.textContent = 'The clipboard is not available here, so the set was downloaded as a file instead.';
@@ -940,17 +1014,17 @@
             const response = await fetch(new URL('home/plaque/context', ADMIN), { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
             if (response.ok) Object.assign(hostContext, await response.json());
         } catch { /* offline: everything but the Library and AI still works */ }
-        $('[data-ai-open]').hidden = !hostContext.ai;
+        $$('[data-ai-open]').forEach(button => { button.hidden = !hostContext.ai; });
         log('host.context', hostContext);
     }
     async function generate() {
         const field = name => $(`[data-ai="${name}"]`).value.trim();
         const description = field('description');
         const status = $('[data-ai-status]');
-        if (!description) { status.className = 'notice error'; status.textContent = 'Describe the video first.'; return; }
+        if (!description) { status.className = 'tk-status is-error'; status.textContent = 'Describe the video first.'; return; }
         const count = name => Math.max(0, Math.min(12, Math.round(Number(field(name)) || 0)));
         const brief = { description, themed: count('themed'), social: count('social'), donation: count('donation'), length: field('length') || null, destination: field('destination') || null, tone: field('tone') || null };
-        status.className = 'notice'; status.textContent = 'Asking the AI…';
+        status.className = 'tk-status'; status.textContent = 'Asking the AI…';
         $('[data-action="ai-generate"]').disabled = true;
         try {
             const response = await fetch(new URL('home/plaque/generate', ADMIN), { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(brief) });
@@ -970,13 +1044,30 @@
             preview.innerHTML = aiResult.plaques.map((p, i) => `<div><canvas data-ai-thumb="${i}"></canvas><span><strong>${esc(p.title)}</strong><br>${esc(p.subtitle)}</span></div>`).join('');
             $$('[data-ai-thumb]', preview).forEach(slot => { const t = thumbnail(aiResult.plaques[Number(slot.dataset.aiThumb)], 180); slot.width = t.width; slot.height = t.height; slot.getContext('2d').drawImage(t, 0, 0); });
             status.textContent = `${aiResult.plaques.length} plaques ready. Append them, or replace the set. Undo reverts either in one step.`;
-            $('[data-action="ai-append"]').hidden = false;
-            $('[data-action="ai-replace"]').hidden = !state.set.plaques.length;
+            setAiCommit(true);
             log('ai.generated', { plaques: aiResult.plaques.length, fixes: result.errors.length });
         } catch (error) {
-            status.className = 'notice error';
+            status.className = 'tk-status is-error';
             status.textContent = `Nothing generated: ${error.message}. Presets and topic suggestions still work offline.`;
         } finally { $('[data-action="ai-generate"]').disabled = false; }
+    }
+    // One filled button at a time: Generate until there is an answer, then Append (the next step), with Generate again
+    // left quiet beside it.
+    function setAiCommit(ready) {
+        const append = $('[data-action="ai-append"]'), replace = $('[data-action="ai-replace"]'), go = $('[data-action="ai-generate"]');
+        append.hidden = !ready;
+        replace.hidden = !ready || !state.set.plaques.length;
+        append.classList.toggle('is-act', ready);
+        go.classList.toggle('is-act', !ready);
+        go.textContent = ready ? 'Generate again' : 'Generate';
+    }
+    function openAi() {
+        aiResult = null;
+        $('[data-ai-preview]').hidden = true;
+        const status = $('[data-ai-status]');
+        status.className = 'tk-status'; status.textContent = '';
+        setAiCommit(false);
+        showSheet('ai');
     }
     function applyAi(replace) {
         if (!aiResult) return;
@@ -988,28 +1079,75 @@
             state.current = incoming[0].id;
         }, { rebuild: true });
         aiResult = null;
-        $('[data-dialog="ai"]').close();
+        $('[data-sheet="ai"]').close();
         showStill();
         toast(replace ? 'Set replaced. Undo brings the old one back.' : `${incoming.length} plaques appended`);
     }
 
     // ---- toolbar, keyboard, misc ----------------------------------------------------------------------------------
     let toastTimer;
-    function toast(message) {
+    // Says what just happened, once; a delete's toast also offers Undo and stays up longer so it can be reached.
+    function toast(message, { undo: offerUndo = false, error = false } = {}) {
         const node = $('[data-toast]');
-        node.textContent = message; node.hidden = false;
-        clearTimeout(toastTimer); toastTimer = setTimeout(() => { node.hidden = true; }, 3200);
+        const text = document.createElement('span');
+        text.textContent = message;
+        node.replaceChildren(text);
+        if (offerUndo) {
+            const button = document.createElement('button');
+            button.type = 'button'; button.className = 'tk-link'; button.textContent = 'Undo';
+            button.addEventListener('click', () => { node.hidden = true; undo(); });
+            node.append(button);
+        }
+        node.classList.toggle('is-error', error);
+        node.hidden = false;
+        clearTimeout(toastTimer); toastTimer = setTimeout(() => { node.hidden = true; }, offerUndo || error ? 6000 : 3200);
+    }
+    const openSheet = () => $('dialog[open]');
+    function showSheet(name) {
+        const sheet = $(`[data-sheet="${name}"]`);
+        if (sheet.open) return;
+        openSheet()?.close();
+        sheet.showModal();
+        const first = sheet.querySelector('.tk-sheet-body :is(button, select, input[type="checkbox"], input[type="radio"], input[type="search"]):not(:disabled)')
+            ?? sheet.querySelector('.tk-sheet-foot button:not(:disabled):not([hidden])');
+        first?.focus();
+    }
+    // Under 1100 px the panes share the space under the preview; a segment picks which one shows.
+    function showPane(name) {
+        root.dataset.view = name;
+        $$('[data-view-opt]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.viewOpt === name)));
+        try { localStorage.setItem('plaque:view', name); } catch { /* the choice is only remembered where storage works */ }
+        showName();
+    }
+    // The page's bar: the set's name, a set menu holding only "Open a set…", and Export and Save to Library while
+    // there is a set to take out. A preset draft hides both, so "Add to set" is the one filled button.
+    let told = '';
+    function tellBar() {
+        if (!frame) return;
+        const offer = state.set.plaques.length > 0 && !state.draft;
+        const bar = { set: state.set.name, sets: [], setsLabel: 'Plaque sets', manage: 'Open a set…', export: offer, library: offer };
+        const next = JSON.stringify(bar);
+        if (next === told) return;
+        told = next;
+        frame.chrome(bar);
     }
     function updateButtons() {
         $('[data-action="undo"]').disabled = !history.past.length;
         $('[data-action="redo"]').disabled = !history.future.length;
         const none = !state.set.plaques.length;
-        $('[data-action="open-export"]').disabled = none && !state.draft;
-        $('[data-action="open-handoff"]').disabled = none;
+        $('[data-own-bar] [data-action="open-export"]').disabled = none && !state.draft;
+        $('[data-own-bar] [data-action="open-library"]').disabled = none || Boolean(state.draft);
+        tellBar();
     }
     const actions = {
-        'add-blank': () => { endDraftSilently(); addPlaques([C.defaultPlaque()], { key: 'add-blank' }); $('[data-k="title"]')?.focus(); $('[data-k="title"]')?.select(); },
-        'open-presets': async () => { await loadUserPresets(); renderPresets(); renderTopics(); $('[data-dialog="presets"]').showModal(); },
+        'add-blank': () => {
+            endDraftSilently();
+            addPlaques([C.defaultPlaque()], { key: 'add-blank' });
+            // Where Edit shares the space with the list, a new plaque goes straight to its editor.
+            if (getComputedStyle($('[data-pane="edit"]')).display === 'none') showPane('edit');
+            $('[data-k="title"]')?.focus(); $('[data-k="title"]')?.select();
+        },
+        'open-presets': async () => { await loadUserPresets(); renderPresets(); renderTopics(); showSheet('presets'); },
         'commit-draft': () => endDraft(true),
         'discard-draft': () => endDraft(false),
         undo, redo,
@@ -1045,7 +1183,7 @@
         'open-set': openDialog,
         'paste-set': async () => { try { const text = await navigator.clipboard.readText(); await importSet(text, 'clipboard'); } catch { $('[data-open-errors]').innerHTML = '<li>The clipboard could not be read here. Paste into the box below instead.</li>'; } },
         'import-text': () => importSet($('[data-paste-text]').value, 'paste'),
-        'open-handoff': () => { $('[data-library-status]').textContent = ''; $('[data-agent-status]').textContent = ''; loadFolders(); $('[data-dialog="handoff"]').showModal(); },
+        'open-library': openLibrary,
         'save-library': saveToLibrary,
         'copy-agent': copyForAgent,
         'ai-generate': generate,
@@ -1071,7 +1209,11 @@
             fetch(librarySet.dataset.librarySet, { credentials: 'same-origin' }).then(r => { if (!r.ok) throw new Error(); return r.text(); })
                 .then(text => importSet(text, 'library')).catch(() => { $('[data-open-errors]').innerHTML = '<li>That file could not be downloaded from the library.</li>'; });
         }
-        if (event.target.closest('[data-ai-open]')) { aiResult = null; $('[data-ai-preview]').hidden = true; $('[data-action="ai-append"]').hidden = true; $('[data-action="ai-replace"]').hidden = true; $('[data-ai-status]').textContent = ''; $('[data-dialog="ai"]').showModal(); }
+        if (event.target.closest('[data-ai-open]')) { openAi(); return; }
+        const close = event.target.closest('[data-sheet-close]');
+        if (close) { close.closest('dialog').close(); return; }
+        const view = event.target.closest('[data-view-opt]');
+        if (view) showPane(view.dataset.viewOpt);
     });
     const list = $('[data-list]');
     list.addEventListener('click', event => {
@@ -1097,14 +1239,23 @@
         change('move', () => { const items = state.set.plaques, from = items.findIndex(p => p.id === moving), [item] = items.splice(from, 1); items.splice(items.findIndex(p => p.id === row.dataset.id), 0, item); });
     });
 
-    $('[data-set-name]').addEventListener('input', event => change('name', () => { state.set.name = event.target.value.slice(0, 120) || 'Untitled set'; }));
+    $('[data-set-name]').addEventListener('input', event => change('name', () => { state.set.name = event.target.value.replace(/\s*[\r\n]+\s*/g, ' ').slice(0, 120) || 'Untitled set'; }));
+    $('[data-set-name]').addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); event.target.blur(); } });
     $('[data-scope]').addEventListener('change', event => { stop(); state.scope = event.target.value; state.t = 0; if (state.scope === 'current') showStill(); else draw(); });
     $('[data-mute]').addEventListener('change', event => { state.muted = event.target.checked; if (playback) playback.master.gain.value = state.muted ? 0 : 1; });
     $('[data-scrub]').addEventListener('input', event => { stop(); state.t = Number(event.target.value); paint(); });
     $('[data-export-format]').addEventListener('change', exportOptions);
     $('[data-topic-input]').addEventListener('input', renderTopics);
     $('[data-open-file]').addEventListener('change', async event => { const file = event.target.files?.[0]; if (file) await importSet(await file.text(), 'file'); event.target.value = ''; });
-    $$('dialog').forEach(dialog => dialog.addEventListener('close', () => { if (dialog.dataset.dialog === 'export' && exportJob) exportJob.cancelled = true; }));
+    $$('dialog').forEach(dialog => dialog.addEventListener('close', () => { if (dialog.dataset.sheet === 'export' && exportJob) exportJob.cancelled = true; }));
+    $('[data-library-scope]').addEventListener('change', () => setLibrary());
+    $('[data-library-wav]').addEventListener('change', event => { wantWav = event.target.checked; });
+    // In the frame, the page's bar carries Open, Export and Save to Library; on its own the tool shows its own row.
+    frame?.on('manage-sets', openDialog);
+    frame?.on('export', openExport);
+    frame?.on('library', openLibrary);
+    $('[data-own-bar]').hidden = Boolean(frame?.bar);
+    $('[data-own-bar] [data-action="open-library"]').hidden = !frame?.library;
     document.addEventListener('keydown', event => {
         const typing = event.target.closest?.('input:not([type="checkbox"]):not([type="range"]), textarea, select, [contenteditable]');
         if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z' && !typing) { event.preventDefault(); (event.shiftKey ? redo : undo)(); return; }
@@ -1114,7 +1265,7 @@
         else if (event.key === 'ArrowRight') { event.preventDefault(); step(1); }
         else if ((event.key === 'Delete' || event.key === 'Backspace') && event.target.closest('[data-list]')) { event.preventDefault(); removePlaques(state.selected.size > 1 ? [...state.selected] : [state.current]); }
     });
-    window.addEventListener('resize', draw);
+    window.addEventListener('resize', () => { draw(); showName(); });
 
     // ---- start: restore the autosaved set through the importer, then probe AI ------------------------------------------
     (async () => {
@@ -1126,12 +1277,15 @@
             }
         } catch (error) { log('restore.failed', { message: String(error) }); }
         await loadUserPresets();
-        $('[data-set-name]').value = state.set.name;
+        showName();
+        let view = 'plaques';
+        try { view = localStorage.getItem('plaque:view') || view; } catch { /* storage refused: start on the list */ }
+        showPane(['plaques', 'edit', 'output'].includes(view) ? view : 'plaques');
         syncOutputControls();
         renderList(); renderInspector(); updateButtons();
         await preloadAll();
         showStill();
-        $('[data-save-state]').textContent = state.set.plaques.length ? 'Saved' : '';
+        kept(state.set.plaques.length ? 'Kept on this device' : '');
         probeHost();
     })();
 })();
