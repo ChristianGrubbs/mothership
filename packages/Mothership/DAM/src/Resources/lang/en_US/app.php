@@ -2749,8 +2749,10 @@ return [
                 'system'  => 'System',
             ],
             'footer' => [
-                'text' => 'The Mothership measures how its features are used, to improve them.',
-                'link' => 'What is collected and how to opt out',
+                'text'       => 'The Mothership measures how its features are used, to improve them.',
+                'link'       => 'What is collected and how to opt out',
+                'text-short' => 'Feature use is measured.',
+                'link-short' => 'Details and opt-out',
             ],
             'privacy' => [
                 'title'             => 'Usage analytics and your privacy',

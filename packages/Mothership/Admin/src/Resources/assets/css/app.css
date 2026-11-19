@@ -905,13 +905,14 @@ body:has(.sidebar-collapsed) [dir="rtl"] .unsaved-bar {
     right: var(--rail-w-collapsed);
 }
 
-/* The rail is icons only below 900px and gone below 720px, where the tab bar holds the bottom edge. */
-@media (max-width: 899px) {
+/* The rail is icons only below 1180px and gone in the phone form, where the tab bar holds the bottom edge. */
+@media (max-width: 1179px) {
     .unsaved-bar { left: var(--rail-w-collapsed); }
     [dir="rtl"] .unsaved-bar { left: 0; right: var(--rail-w-collapsed); }
 }
 
-@media (max-width: 719px) {
+/* The phone form of the shell (see "Phone tab bar" below for the test). */
+@media (max-width: 579px), (max-width: 719px) and (min-height: 501px) {
     .unsaved-bar,
     [dir="rtl"] .unsaved-bar {
         left: 0;
@@ -1019,6 +1020,8 @@ html.dark .dark\:text-slate-500:is(.dark *):where(:not([class*="hover:text-"]:ho
     --rail-w: 224px;
     --rail-w-collapsed: 72px;
     --tabbar-h: 72px;
+    /* The room the tab bar takes at the foot of the screen: its real height where it shows, nothing where it does not. */
+    --tabbar-space: 0px;
     --bar-0: rgba(0, 0, 0, .09);
 }
 
@@ -1773,7 +1776,9 @@ a.bridge-review-name:hover {
     border-radius: 2px;
 }
 
-@container list (min-width: 640px) {
+/* The row form starts at 620 px of list width. At 640 the inner screen of an iPhone Duo held upright (669 px wide, a
+   637 px list) fell 3 px short and got the phone's card stretched across it. */
+@container list (min-width: 620px) {
     .bridge-list-row {
         grid-template-columns: minmax(0, 1fr) auto auto;
         grid-template-areas:
@@ -1898,6 +1903,68 @@ a.bridge-review-name:hover {
     .bridge-list-actions {
         flex-wrap: nowrap;
         justify-content: flex-end;
+    }
+}
+
+/*
+ * A list on a screen at most 430 px tall (a phone on its side, an iPhone Duo closed and held sideways). The first rows
+ * belong on the first screen, so the page gives them its spare lines: the group's name and the page's description go,
+ * the gaps close to 8 px, the filters and the grid's toolbar keep to as few lines as they can, and the selection
+ * strip keeps to one.
+ */
+@media (max-height: 430px) {
+    #main-content:has(.bridge-list, .bridge-list-grid) .bridge-page-group,
+    #main-content:has(.bridge-list, .bridge-list-grid) .bridge-page-head h1 + p {
+        display: none;
+    }
+
+    #main-content:has(.bridge-list, .bridge-list-grid) .bridge-page-head {
+        min-height: 0;
+    }
+
+    .bridge-list-filters,
+    .bridge-list,
+    .bridge-list-filters ~ .bridge-list {
+        margin-top: 8px;
+    }
+
+    /* Tag review's four filters fit one line of a 490 px list when the term menu is no wider than this. */
+    .bridge-list-filters .bridge-list-select {
+        max-width: 10rem;
+    }
+
+    /* Shared links: Filter and the pager share a line of a 490 px list when each arrow gives up 4 px. */
+    .bridge-list-grid .datagrid-toolbar {
+        margin-top: 8px;
+        gap: 8px;
+    }
+
+    .bridge-list-grid .datagrid-toolbar > div:last-child {
+        gap: 8px;
+    }
+
+    .bridge-list-grid .datagrid-toolbar [role="navigation"] button {
+        min-width: 36px;
+    }
+
+    .bridge-list-bar {
+        min-height: 52px;
+        padding-block: 4px;
+    }
+
+    /* With rows picked, the tick box alone stands for "select all on this page": its words stay in the page for a
+       screen reader and leave the line to the count and the two actions. */
+    .bridge-list-bar:has(.bridge-list-bar-actions) .bridge-list-pick {
+        position: relative;
+    }
+
+    .bridge-list-bar:has(.bridge-list-bar-actions) .bridge-list-pick > span:not(.bridge-list-check) {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
     }
 }
 
@@ -2031,7 +2098,9 @@ a.bridge-review-name:hover {
     background: var(--ctl);
 }
 
-/* Collapsed rail: chosen by the person (cookie) at any width, and always between 720 and 899px. */
+/* Collapsed rail: chosen by the person (cookie) at any width, and always from the end of the phone form up to 1179px.
+   1179 is where the top bar's theme segment drops its words and where Home leaves its wide layout, so the shell and
+   Home change at one width. It also puts an unfolded iPhone Duo held sideways (951 px) in the icon state. */
 .sidebar-collapsed .bridge-rail {
     width: var(--rail-w-collapsed);
     padding: 24px 10px 18px;
@@ -2070,7 +2139,7 @@ a.bridge-review-name:hover {
     margin: 12px auto 0;
 }
 
-@media (max-width: 899px) {
+@media (max-width: 1179px) {
     .bridge-rail {
         width: var(--rail-w-collapsed);
         padding: 24px 10px 18px;
@@ -2100,8 +2169,28 @@ a.bridge-review-name:hover {
         padding: 0;
     }
 
+    /* In the icon rail every submenu is a fly-out beside the rail, the current page's too: opened inline, as it is
+       in the wide rail, its links would be cut off by the rail's 72 px. It shows on hover or focus like the others
+       (the sidebar's script holds it open; the hover rule is what is left if that script does not run). */
     .bridge-rail-row > .bridge-rail-flyout {
+        position: fixed;
         left: calc(var(--rail-w-collapsed) - 4px);
+        z-index: 100;
+        min-width: 200px;
+        padding: 6px;
+        background: var(--card);
+        border: 1px solid var(--edge);
+        border-radius: 14px;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, .14);
+    }
+
+    .bridge-rail-row > .bridge-rail-flyout.is-open {
+        display: none;
+    }
+
+    .bridge-rail-row:hover > .bridge-rail-flyout.is-open,
+    .bridge-rail-row:focus-within > .bridge-rail-flyout.is-open {
+        display: grid;
     }
 }
 
@@ -2296,6 +2385,49 @@ a.bridge-review-name:hover {
     display: none;
 }
 
+/* Shown only in the phone form of the shell: the theme switch in the More drawer. */
+.bridge-phone-only {
+    display: none;
+}
+
+/* The analytics notice keeps clear of the tab bar on every page, so its link can be reached. */
+#app footer[data-fold-wrap] {
+    margin-bottom: var(--tabbar-space);
+}
+
+/* The notice is one line at every width. Its link is laid out first; a sentence too long for the line is cut, never
+   the link. Under 720 px the page shows the short sentence and the short link (both forms are in the page, and only
+   one is displayed, so a screen reader hears one). */
+.bridge-notice {
+    display: flex;
+    gap: .3em;
+    white-space: nowrap;
+}
+
+.bridge-notice-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bridge-notice > a {
+    flex: none;
+}
+
+.bridge-notice-short {
+    display: none;
+}
+
+@media (max-width: 719px) {
+    .bridge-notice-long {
+        display: none;
+    }
+
+    .bridge-notice-short {
+        display: inline;
+    }
+}
+
 @media (max-width: 1179px) {
     .bridge-seg-text {
         display: none;
@@ -2308,7 +2440,27 @@ a.bridge-review-name:hover {
     }
 }
 
-@media (max-width: 719px) {
+/*
+ * The phone form of the shell: no rail, the short top bar (lockup, search, bell, account) and the tab bar.
+ * It is for screens under 720 px wide, except a short, wide one: at least 580 px wide and at most 500 px tall, which is
+ * a phone on its side or an iPhone Duo closed and held sideways. A tab bar would take 78 px of a height that has none
+ * to spare, so that screen keeps the icon rail and the wide top bar, as a 720 px screen does. The unsaved bar above
+ * is switched by the same test.
+ */
+@media (max-width: 579px), (max-width: 719px) and (min-height: 501px) {
+    :root {
+        --tabbar-space: calc(64px + max(14px, env(safe-area-inset-bottom, 0px)));
+    }
+
+    .bridge-rail.bridge-phone-hide,
+    .bridge-icon-btn.bridge-phone-hide {
+        display: none;
+    }
+
+    .bridge-phone-only {
+        display: block;
+    }
+
     .bridge-top {
         gap: 8px;
         padding: 10px 16px 6px;
@@ -2375,10 +2527,6 @@ a.bridge-review-name:hover {
         border-radius: 999px;
     }
 
-    #main-content {
-        padding-bottom: calc(var(--tabbar-h) + 24px);
-    }
-
     .bridge-tabbar {
         display: grid;
         grid-template-columns: repeat(5, 1fr);
@@ -2409,6 +2557,52 @@ a.bridge-review-name:hover {
 
     .bridge-tabbar .is-current {
         color: var(--ink);
+    }
+}
+
+/*
+ * A short screen that keeps the icon rail (at most 500 px tall, 580 to 1179 px wide). The top bar gives its spare
+ * padding to the page. The rail scrolls as one piece: with its foot held in place, the foot's rows took 124 of 343 px
+ * and left four of the other rows in view.
+ */
+@media (min-width: 580px) and (max-width: 1179px) and (max-height: 500px) {
+    .bridge-top {
+        padding: 10px 16px 6px;
+        height: 60px;
+    }
+
+    .bridge-rail,
+    .sidebar-collapsed .bridge-rail {
+        padding-top: 12px;
+        padding-bottom: 10px;
+        overflow-x: hidden;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        /* The current page's row is brought into view on load; it stops short of the rail's edge. */
+        scroll-padding-block: 10px;
+    }
+
+    .bridge-rail .bridge-rail-scroll {
+        flex: none;
+        overflow: visible;
+    }
+
+    .bridge-rail-foot {
+        padding-top: 6px;
+    }
+
+}
+
+/* Under 640 px wide the Library's bulk-action bar is fixed across the bottom of the screen while files are picked (it
+   carries its fixed classes only then). Beside the rail it starts where the rail ends, and the notice, which it would
+   cut in two, steps aside for it: in the phone form the bar covers the notice whole. */
+@media (min-width: 580px) and (max-width: 639px) and (max-height: 500px) {
+    .bridge-column [data-explorer-selection-bar] {
+        inset-inline-start: var(--rail-w-collapsed);
+    }
+
+    #app:has([data-explorer-selection-bar][class*="max-[639px]:fixed"]) footer[data-fold-wrap] {
+        visibility: hidden;
     }
 }
 

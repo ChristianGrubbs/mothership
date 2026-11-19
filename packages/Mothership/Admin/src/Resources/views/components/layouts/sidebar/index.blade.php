@@ -33,7 +33,7 @@
     $railStorageUrl = Route::has('admin.home.data') ? route('admin.home.data', ['widget' => 'storage']) : null;
 @endphp
 
-<div id="mothership-sidebar" class="bridge-rail flex flex-col shrink-0 h-full z-[10001] max-[719px]:hidden" aria-label="@lang('admin::app.components.layouts.rail.label')">
+<div id="mothership-sidebar" class="bridge-rail bridge-phone-hide flex flex-col shrink-0 h-full z-[10001]" aria-label="@lang('admin::app.components.layouts.rail.label')">
     <a href="{{ $adminLandingUrl ?? route('admin.home.index') }}" class="bridge-rail-word" aria-label="{{ config('documentation.name') }}">
         <img src="{{ mothership_asset('images/logo.svg') }}" width="236" height="32" class="block dark:hidden" data-mothership-logo alt="{{ config('documentation.name') }}" />
         <img src="{{ mothership_asset('images/dark_logo.svg') }}" width="236" height="32" class="hidden dark:block" data-mothership-logo alt="{{ config('documentation.name') }}" />
@@ -196,6 +196,11 @@
                 }
             },
 
+            mounted() {
+                // On a short screen the rail scrolls as one piece, so the current page's row can start below its edge.
+                this.$nextTick(() => this.$el.closest('#mothership-sidebar')?.querySelector('.bridge-rail-row.active')?.scrollIntoView({ block: 'nearest' }));
+            },
+
             methods: {
                 toggle() {
                     this.isCollapsed = this.isCollapsed ? 0 : 1;
@@ -331,6 +336,13 @@
                 .sidebar-collapsed #mothership-sidebar [data-submenu],
                 #mothership-sidebar [data-menu-item].inactive [data-submenu] {
                     display: none !important;
+                }
+
+                /* The icon rail the stylesheet draws by width: there the current page's submenu is a fly-out too. */
+                @media (max-width: 1179px) {
+                    #mothership-sidebar [data-menu-item] [data-submenu] {
+                        display: none !important;
+                    }
                 }
             `;
 
