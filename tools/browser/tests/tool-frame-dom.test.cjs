@@ -370,6 +370,54 @@ browserTest('the bar shows what the tool offers, writes its names as text, and t
     } finally { await browser.close(); }
 });
 
+// A tool whose bar commands open its sheet: Export and the sets' manage item at once, Save to Library after an await
+// (as a tool that reads its folders first does). Picking a set opens none. The tool's own button opens the same sheet.
+const SHEET_TOOL_HTML=`<!doctype html><html><body><script>window.__MOTHERSHIP_FRAME__={widget:"sound-effects",state:{},url:"/admin/home/widgets/sound-effects",csrf:"fixture",library:{folders:"/folders",save:"/save",open:"/open/__ID__"}};<\/script><script>${source('home-frame.js')}<\/script><p>tool</p><button id="own">Own sheet</button><dialog id="sheet"><button>In the sheet</button></dialog><script>
+const sheet=document.querySelector('#sheet');
+MothershipFrame.on('export',()=>sheet.showModal());
+MothershipFrame.on('manage-sets',()=>sheet.showModal());
+MothershipFrame.on('library',async()=>{await new Promise(done=>setTimeout(done,50));sheet.showModal();});
+MothershipFrame.on('open-set',()=>{});
+document.querySelector('#own').addEventListener('click',()=>sheet.showModal());
+document.addEventListener('DOMContentLoaded',()=>MothershipFrame.chrome({set:'Harbour',sets:[{id:'a',name:'Harbour',current:true}],setsLabel:'Saved palettes',manage:'Manage saved palettes…',export:true,library:true}));
+<\/script></body></html>`;
+
+browserTest('a sheet the bar opened gives the focus back to the bar when it closes; a sheet the tool opened keeps it in the tool',async()=>{
+    const browser=await launch();
+    try{
+        const {page}=await framePage(browser,{toolHtml:SHEET_TOOL_HTML});
+        const frame=await barOpen(page);
+        const focusOn=selector=>page.evaluate(wanted=>document.activeElement===document.querySelector(wanted),selector);
+        // Escape inside the sheet closes it, and the page hears that it closed.
+        const escapeSheet=async()=>{
+            await page.waitForSelector('[data-tool-frame][data-tool-sheet]',{state:'attached'});
+            await frame.locator('#sheet button').press('Escape');
+            await page.waitForSelector('[data-tool-frame]:not([data-tool-sheet])',{state:'attached'});
+        };
+
+        await page.locator('.bridge-toolbar [data-tool-export]').click();
+        await escapeSheet();
+        assert.equal(await focusOn('.bridge-toolbar [data-tool-export]'),true,'Export has the focus again');
+        await page.locator('.bridge-toolbar [data-tool-library]').click();
+        await escapeSheet();
+        assert.equal(await focusOn('.bridge-toolbar [data-tool-library]'),true,'so does Save to Library, whose sheet came after an await');
+        await page.locator('[data-tool-sets-btn]').click();
+        await page.locator('[data-tool-sets-menu] button',{hasText:'Manage saved palettes…'}).click();
+        await escapeSheet();
+        assert.equal(await focusOn('[data-tool-sets-btn]'),true,'a sheet from the sets menu gives it to the menu\'s button');
+        assert.equal((await ask(page)).shown,false,'and none of these Escapes asks');
+
+        // Picking a set opens no sheet, so a sheet the tool opens later from its own button is the tool's.
+        await page.locator('[data-tool-sets-btn]').click();
+        await page.locator('[data-tool-sets-menu] button',{hasText:'Harbour'}).click();
+        await frame.locator('#own').click();
+        await escapeSheet();
+        assert.equal(await focusOn('[data-tool-window]'),true,'the focus stays in the tool');
+        assert.equal(await frame.evaluate(()=>document.activeElement.id),'own');
+        await page.close();
+    } finally { await browser.close(); }
+});
+
 browserTest('the phone form moves Export and Save to Library under the tool, and only the phone form',async()=>{
     const browser=await launch();
     try{

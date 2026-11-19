@@ -35,8 +35,13 @@
     // An Escape that closes a sheet inside the tool is the tool's own: it is not passed on as a wish to leave.
     document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!document.querySelector('dialog[open]')){notify('escape');}});
     // The page that frames this tool steps its own actions back while a sheet is open here, so one filled control shows.
-    let sheetOpen=false;
-    if(typeof MutationObserver==='function')new MutationObserver(()=>{const open=Boolean(document.querySelector('dialog[open]'));if(open!==sheetOpen){sheetOpen=open;notify('sheet',{open});}}).observe(document.documentElement,{attributes:true,attributeFilter:['open'],subtree:true});
+    // A sheet that opens while the tool is still answering a press on the page's bar is the bar's (fromBar): when it
+    // closes, the page gives the focus back to the bar, since a sheet here can only give it back to what had it here.
+    let sheetOpen=false,fromBar=false,barCommands=0;
+    if(typeof MutationObserver==='function')new MutationObserver(()=>{const open=Boolean(document.querySelector('dialog[open]'));if(open!==sheetOpen){sheetOpen=open;if(open)fromBar=barCommands>0;notify('sheet',{open,fromBar});}}).observe(document.documentElement,{attributes:true,attributeFilter:['open'],subtree:true});
+    // A command's handler may open its sheet after an await. It counts as answering until it settles, and a task
+    // longer, so the observer above has seen the sheet it opened.
+    const answer=(handler,payload)=>{barCommands++;let result;try{result=handler(payload);}finally{Promise.resolve(result).finally(()=>setTimeout(()=>{barCommands--;},0));}};
     document.addEventListener('DOMContentLoaded',()=>{
         // reportsWork: the listeners above tell Home when work starts, so Home may close this tool
         // without asking while none has been reported.
@@ -60,7 +65,7 @@
         if(event.source!==window.parent||event.origin!==location.origin||event.data?.protocol!=='mothership-widget/v1')return;
         if(event.data.type==='theme')setTheme(event.data.payload?.theme);
         if(event.data.type==='fold')setFold(event.data.payload);
-        if(event.data.type==='command')commands.get(event.data.payload?.name)?.(event.data.payload);
+        if(event.data.type==='command'){const handler=commands.get(event.data.payload?.name);if(handler)answer(handler,event.data.payload);}
     });
     const originalFetch=window.fetch.bind(window);
     window.fetch=(input,options={})=>{

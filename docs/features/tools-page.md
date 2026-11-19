@@ -40,6 +40,11 @@ tool opens in the tool frame: a page of its own with one top bar that is the sam
   when the file came. The band steps aside while a question is up.
 - A tool whose page marks itself `data-agh-ephemeral` (Palette Studio saves every edit as it happens) never reports
   work, so leaving it never asks.
+- A sheet the tool opens for a press on the bar (an item of the saved-sets menu, Export, Save to Library) gives the
+  focus back to that control when it closes, as a dialog of the page itself would; for the menu's items that is the
+  menu's button. The bridge (`home-frame.js`) marks a sheet that opens while the tool is still answering a command
+  from the bar (`fromBar` on its `sheet` message), and the page moves the focus only while it is still in the tool. A
+  sheet the tool opens from its own control gives the focus back to that control, inside the tool.
 - A role that may not use a tool gets 403 from the frame page; an id that is not a tool with a page gets 404.
 
 ## Adding a tool
@@ -56,7 +61,8 @@ tool. Home still has its own Tools shelf, which opens a tool in a panel over Hom
 
 `packages/Mothership/DAM/tests/Feature/ToolsPageTest.php` covers who gets which tile, what each footer says over
 time, and who may open a frame. `tools/browser/tests/tool-frame-dom.test.cjs` covers Back, Reload, Escape, the
-question, a tool that did not open, a file in the frame and a load that stalls, in a browser. Its page is the frame
+question, a tool that did not open, a file in the frame, a load that stalls, the bar and where the focus goes when a
+sheet it opened closes, in a browser. Its page is the frame
 view as Laravel renders it (`tools/browser/fixtures/blade/tool-frame.html`) under the committed admin stylesheet;
 after changing `tools/frame.blade.php`, regenerate the fixture with
 `BLADE_FIXTURES_WRITE=1 vendor/bin/pest tests/Feature/BrowserBladeFixturesTest.php`.

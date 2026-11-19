@@ -177,6 +177,19 @@
         // What the tool says it has (the bridge's chrome call): its saved sets, Export, Save to Library. The bar shows
         // a control only while the tool's current document offers it, and tells the tool what was pressed.
         const command = (name, extra = {}) => post('command', {name, ...extra});
+        // A press on the bar sends the tool a command and puts the focus in the tool. A sheet the tool opens for it
+        // closes with the focus back on the bar's control, as a menu or a dialog of this page would: inside the tool, a
+        // closing sheet can only give the focus back to what had it there. `pressed` is the control that sent the last
+        // command, and `barSheet` whether the open sheet is the one the bridge says that command opened.
+        let pressed = null, barSheet = false;
+        const fromBar = (control, name, extra) => { pressed = control; command(name, extra); iframe.focus(); };
+        const sheetMoved = ({open, fromBar: opened}) => {
+            if (open) { barSheet = opened === true && Boolean(pressed); return; }
+            const back = barSheet ? pressed : null;
+            barSheet = false;
+            // Only while the focus is still in the tool: a person who has moved on in this page keeps their place.
+            if (back?.isConnected && !back.inert && back.getClientRects().length && document.activeElement === iframe) back.focus();
+        };
         const closeSets = ({focus = false} = {}) => {
             if (setsMenu.hidden) return false;
             setsMenu.hidden = true;
@@ -210,8 +223,8 @@
             setName.textContent = name || words.sets;
             setsBtn.title = name;
             setsMenu.setAttribute('aria-label', typeof shown?.setsLabel === 'string' ? shown.setsLabel.slice(0, 60) : words.sets);
-            const items = list.map(set => menuItem({role: 'menuitemradio', label: set.name, note: set.current === true ? words['sets-open'] : '', checked: set.current === true, press: () => { command('open-set', {id: set.id}); iframe.focus(); }}));
-            if (manage) items.push(menuItem({role: 'menuitem', label: manage, press: () => { command('manage-sets'); iframe.focus(); }}));
+            const items = list.map(set => menuItem({role: 'menuitemradio', label: set.name, note: set.current === true ? words['sets-open'] : '', checked: set.current === true, press: () => fromBar(setsBtn, 'open-set', {id: set.id})}));
+            if (manage) items.push(menuItem({role: 'menuitem', label: manage, press: () => fromBar(setsBtn, 'manage-sets')}));
             setsMenu.replaceChildren(...items);
             exportButtons.forEach(button => { button.hidden = shown?.export !== true; });
             libraryButtons.forEach(button => { button.hidden = shown?.library !== true; });
@@ -236,8 +249,8 @@
         // focus from this window, which says the same.
         document.addEventListener('pointerdown', event => { if (!sets.contains(event.target)) closeSets(); }, {signal});
         window.addEventListener('blur', () => closeSets(), {signal});
-        exportButtons.forEach(button => button.addEventListener('click', () => { command('export'); iframe.focus(); }));
-        libraryButtons.forEach(button => button.addEventListener('click', () => { command('library'); iframe.focus(); }));
+        exportButtons.forEach(button => button.addEventListener('click', () => fromBar(button, 'export')));
+        libraryButtons.forEach(button => button.addEventListener('click', () => fromBar(button, 'library')));
         const reloadTool = () => {
             // What the old document reported is forgotten, and its promise to report is dropped and not taken again
             // (its ready message may still be on the way): until the new document promises, leaving asks.
@@ -246,6 +259,7 @@
             discardedDocument = currentDocument();
             showChrome(null);
             setSheet(false);
+            barSheet = false;
             showStatus(null);
             setAway(false);
             showNote({text: words.reloading});
@@ -280,6 +294,7 @@
         iframe.addEventListener('load', () => {
             clearTimeout(slow);
             setSheet(false);
+            barSheet = false;
             let identity;
             try { identity = iframe.contentWindow?.__MOTHERSHIP_FRAME__?.widget; } catch { identity = null; }
             if (identity === id) { booted = true; finishLaunch({phase: 'loaded'}); setAway(false); note.hidden = true; sendTheme(); sendFold(); post('active', {active: true}); return; }
@@ -316,7 +331,7 @@
             if (type === 'preference-error') showStatus({text: payload?.message || words.preferences, tone: 'error'});
             if (type === 'chrome') showChrome(payload);
             if (type === 'notice') showStatus(payload);
-            if (type === 'sheet') setSheet(payload?.open === true);
+            if (type === 'sheet') { setSheet(payload?.open === true); sheetMoved({open: payload?.open === true, fromBar: payload?.fromBar}); }
             // A tool may send params as it finishes loading, before anyone touched it. With the bridge, work comes
             // through dirty, so its params are not counted; a frame without the bridge can not say, so they are.
             const work = ['dirty', 'media-loaded'].includes(type) || (type === 'params' && !reportsWork());
