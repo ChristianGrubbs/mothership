@@ -136,10 +136,11 @@ browserTest('book pose keeps Home\'s dialogs and tool workspace off the fold', a
     }
 });
 
-browserTest('laptop pose keeps Home\'s dialogs, tool workspace and phone sheet inside the lower segment', async () => {
+browserTest('laptop pose keeps Home\'s dialogs and tool workspace inside the lower segment', async () => {
     const browser = await launchBrowser({playwrightPath});
     try {
-        const names = ['upload', 'calendar', 'event editor', 'iPhone app', 'phone sheet', 'tool workspace'];
+        // At this width Home has no phone sheet: its rows scroll to the cards on the page.
+        const names = ['upload', 'calendar', 'event editor', 'iPhone app', 'tool workspace'];
         const flat = await mount(browser, {width: LAPTOP.width, height: LAPTOP.height});
         const resting = await boxes(flat.page, names);
         for (const [name, {box}] of Object.entries(resting)) assert.ok(box[1] < 433 && box[3] > 434, `${name} crosses the middle when nothing is folded: ${box}`);
@@ -163,6 +164,28 @@ browserTest('laptop pose keeps Home\'s dialogs, tool workspace and phone sheet i
             }
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), LAPTOP.width);
             assert.deepEqual(errors, []);
+        }
+    } finally {
+        await browser.close();
+    }
+});
+
+// The phone sheet exists only up to 640px wide, narrower than a folding phone opened. A narrower stacked screen still
+// gets it in the lower segment.
+browserTest('a phone-width screen folded like a laptop opens the phone sheet in the lower segment', async () => {
+    const browser = await launchBrowser({playwrightPath});
+    try {
+        const narrow = {width: 600, height: 800};
+        for (const gap of [0, 40]) {
+            const top = Math.floor((narrow.height - gap) / 2) + gap;
+            const {page, errors} = await mount(browser, {...narrow, segments: [[0, 0, narrow.width, top - gap], [0, top, narrow.width, narrow.height - top]]});
+            assert.equal(await page.evaluate(() => document.documentElement.dataset.fold), 'rows');
+            const {box, controls} = (await boxes(page, ['phone sheet']))['phone sheet'];
+            assert.ok(box[1] >= top && box[3] <= narrow.height && box[0] >= 0 && box[2] <= narrow.width, `phone sheet with a ${gap}px fold: ${box}`);
+            const close = controls[0];
+            assert.ok(close[1] >= top && close[3] <= narrow.height, `Close is in the lower segment with a ${gap}px fold: ${close}`);
+            assert.deepEqual(errors, []);
+            await page.close();
         }
     } finally {
         await browser.close();
