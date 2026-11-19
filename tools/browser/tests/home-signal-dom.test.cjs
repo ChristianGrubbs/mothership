@@ -13,17 +13,20 @@ const today={date:'2026-09-11',status:'ok',updatedAt:Date.now()-3600000,
     days:[{date:'2026-09-11',count:2},...past]};
 const day={date:'2026-09-10',complete:true,repos:[repo('c/yesterday',{onList:false})]};
 
-async function fixturePage(browser,{trending='success',reducedMotion='no-preference',stories=['1','2','3','4'],viewport={width:1280,height:1000}}={}){
+async function fixturePage(browser,{trending='success',reducedMotion='no-preference',stories=['1','2','3','4'],viewport={width:1280,height:1000},description=null}={}){
     const page=await browser.newPage({viewport,reducedMotion});
     await page.clock.install();
     await page.setContent(`<!doctype html>${homeApp({superuser:true})}`);
-    await page.addStyleTag({content:homeStyles});
+    // The app shell sizes every box by its border, and Home's widths rely on that.
+    await page.addStyleTag({content:`*,::before,::after{box-sizing:border-box}${homeStyles}`});
     await page.addScriptTag({content:homeAnswersSource});
+    const answer=description?{...today,repos:[{...today.repos[0],description}]}:today;
     await page.evaluate(({trending,today,day,stories})=>{
         const response=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json'}});
         window.__fixture={trending,today,stories,requests:[],release:{},forceMode:'forced'};
         window.fetch=async url=>{
             const address=String(url),fixture=window.__fixture;fixture.requests.push(address);
+            if(address.includes('/service/rss/v1/stories'))await fixture.holdStories;
             if(address.includes('/service/rss/v1/stories'))return response({stories:fixture.stories.map(id=>({id,title:`Story ${id}`,url:`https://example.com/${id}`,source:'Fixture',publishedAt:Date.now()-60000}))});
             if(address.includes('refresh=1')){
                 if(fixture.forceMode==='hold')return new Promise(resolve=>{fixture.releaseForced=failed=>resolve(failed?response({message:'GitHub Trending could not be reached. Please try again shortly.'},502):response({...fixture.today,forced:true,refreshedAt:Date.now(),throttledUntil:Date.now()+600000}));});
@@ -37,7 +40,7 @@ async function fixturePage(browser,{trending='success',reducedMotion='no-prefere
             if(held)return new Promise(resolve=>{fixture.release[held[1]]=message=>resolve(response({message},503));});
             return response(window.__homeAnswer(address)??{});
         };
-    },{trending,today,day,stories});
+    },{trending,today:answer,day,stories});
     for(const content of homeScripts)await page.addScriptTag({content});
     return page;
 }
@@ -256,13 +259,65 @@ browserTest('nothing moves when nothing changed, and a changed Trending list wai
 browserTest('on a phone the Signal sheet fits the screen however long a description runs',async()=>{
     const browser=await launch();
     try{
-        const page=await fixturePage(browser,{reducedMotion:'reduce',viewport:{width:390,height:844}});
-        await page.evaluate(()=>{const fixture=window.__fixture;fixture.today={...fixture.today,repos:[{...fixture.today.repos[0],description:'A very long description that never wraps and would otherwise push the whole card past the edge of the phone screen'}]};});
+        const description='A very long description that never wraps and would otherwise push the whole card past the edge of the phone screen';
+        const page=await fixturePage(browser,{reducedMotion:'reduce',viewport:{width:390,height:844},description});
         await page.locator('[data-glance-open="signal"]').click();
         const card=page.locator('[data-signal]');
-        await card.locator('.hm-repo').first().waitFor();
+        await card.getByText(description).waitFor();
         const fit=await page.locator('[data-side-sheet]').evaluate(sheet=>({scroll:sheet.scrollWidth,client:sheet.clientWidth}));
         assert.equal(fit.scroll,fit.client,'the sheet does not scroll sideways');
+        await page.close();
+    }finally{await browser.close();}
+});
+
+browserTest('a poll never takes keyboard focus away from the row being read',async()=>{
+    const browser=await launch();
+    try{
+        const page=await fixturePage(browser);
+        const card=page.locator('[data-signal]');
+        await card.getByText('b/two',{exact:true}).waitFor();
+        await settle(page);
+        const polls=()=>page.evaluate(()=>window.__fixture.requests.filter(address=>address.includes('/service/rss/')).length);
+        const poll=async()=>{const before=await polls();await pollSignal(page);await page.waitForFunction(count=>window.__fixture.requests.filter(address=>address.includes('/service/rss/')).length>count,before);await page.evaluate(()=>new Promise(resolve=>setTimeout(resolve,50)));};
+
+        await card.locator('.hm-story').first().focus();
+        await poll();
+        assert.equal(await page.evaluate(()=>document.activeElement.textContent.includes('Story 1')),true,'an unchanged poll keeps focus on the story');
+        await page.evaluate(()=>{window.__fixture.stories=['5','1','2','3'];});
+        await poll();
+        assert.equal(await page.evaluate(()=>document.activeElement.textContent.includes('Story 1')),true,'new stories wait and focus stays');
+        assert.equal(await card.getByRole('button',{name:/1 new story/}).count(),1);
+
+        await card.locator('.hm-repo').first().focus();
+        await poll();
+        assert.equal(await page.evaluate(()=>document.activeElement.dataset.trendRepo),'0','an unchanged poll keeps focus on the repository');
+        await page.close();
+    }finally{await browser.close();}
+});
+
+browserTest('a read already under way never replaces what Refresh just fetched',async()=>{
+    const browser=await launch();
+    try{
+        const page=await fixturePage(browser,{reducedMotion:'reduce'});
+        const card=page.locator('[data-signal]');
+        await card.getByText('b/two',{exact:true}).waitFor();
+        const reads=()=>page.evaluate(()=>window.__fixture.requests.filter(address=>address.endsWith('/service/trending/v1/trending')).length);
+        const before=await reads();
+        await page.evaluate(()=>{const fixture=window.__fixture;fixture.holdStories=new Promise(resolve=>{fixture.releaseStories=resolve;});});
+        await pollSignal(page);
+        await page.waitForFunction(count=>window.__fixture.requests.filter(address=>address.endsWith('/service/trending/v1/trending')).length>count,before);
+
+        await page.evaluate(()=>{const fixture=window.__fixture;fixture.holdStories=null;fixture.today={...fixture.today,repos:[{...fixture.today.repos[0],repo:'n/ewer',url:'https://github.com/n/ewer'}]};});
+        await card.locator('[data-trending-refresh]').click();
+        await card.getByText('n/ewer',{exact:true}).waitFor();
+
+        await page.evaluate(()=>window.__fixture.releaseStories());
+        await page.evaluate(()=>new Promise(resolve=>setTimeout(resolve,100)));
+        await page.mouse.move(2,2);
+        await page.evaluate(()=>document.activeElement.blur());
+        await page.evaluate(()=>new Promise(resolve=>setTimeout(resolve,100)));
+        assert.equal(await card.getByText('n/ewer',{exact:true}).count(),1,'the refreshed list stays');
+        assert.equal(await card.getByText('b/two',{exact:true}).count(),0,'the older answer is dropped');
         await page.close();
     }finally{await browser.close();}
 });

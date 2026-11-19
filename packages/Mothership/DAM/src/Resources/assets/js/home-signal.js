@@ -80,7 +80,12 @@
         });
         const keys = new Set(rows.map(row => row.key));
         const leaving = [...current].filter(([key]) => !keys.has(key)).map(([, element]) => element);
-        list.replaceChildren(...nodes);
+        const focusedKey = list.contains(document.activeElement) ? document.activeElement.closest('[data-key]')?.dataset.key : undefined;
+        // A row already in its place is left alone, because taking a focused row out of the page drops the reader's focus.
+        nodes.forEach((element, index) => { if (list.children[index] !== element) list.insertBefore(element, list.children[index] ?? null); });
+        while (list.children.length > nodes.length) list.lastElementChild.remove();
+        const focused = focusedKey === undefined ? null : nodes[rows.findIndex(row => row.key === focusedKey)];
+        if (focused && document.activeElement !== focused) focused.focus({preventScroll: true});
         const fresh = rows.filter(row => !current.has(row.key));
         if (!moving || fresh.length > QUIET_ARRIVALS) return;
 
@@ -113,7 +118,7 @@
         const $ = selector => card.querySelector(selector);
         const admin = root.dataset.superuser === '1';
         const feed = {stories: [], waiting: [], answeredAt: null, failedAt: null, empty: false, loaded: false};
-        const trend = {today: null, pending: null, error: null, days: new Map(), dayErrors: new Map(), selected: null, loadingDay: null, all: false, busy: false, swap: 0};
+        const trend = {today: null, pending: null, error: null, days: new Map(), dayErrors: new Map(), selected: null, loadingDay: null, all: false, busy: false, swap: 0, run: 0};
         let noteTimer = null, labelTimer = null, dialogRun = 0;
 
         let dialog = root.querySelector('[data-trend-dialog]');
@@ -283,6 +288,7 @@
         async function forceRefresh() {
             if (trend.busy) return;
             trend.busy = true;
+            trend.run++;
             setNote();
             setRefreshState('busy');
             let finalState = 'rest';
@@ -305,6 +311,7 @@
                 setNote({text: error.message, error: true});
             }
             trend.busy = false;
+            trend.run++;
             if (signal.aborted || !root.isConnected) return;
             setRefreshState(finalState);
             paintTrend({animate: true});
@@ -365,6 +372,8 @@
 
         async function load({reveal = false} = {}) {
             const stories = request(`/service/rss/v1/stories?limit=${STORY_LIMIT}`);
+            // A read that was already under way when Refresh ran is older than Refresh's answer, so it is dropped.
+            const trendRun = trend.run;
             const trending = request('/service/trending/v1/trending').then(result => ({result})).catch(error => ({error}));
             const first = !feed.loaded;
             let arrivals = false;
@@ -387,7 +396,7 @@
             const answer = await trending;
             if (signal.aborted || !root.isConnected) return;
             feed.loaded = true;
-            const moved = receiveTrending(answer);
+            const moved = trendRun === trend.run && receiveTrending(answer);
             paintSlot();
             paintBody({first, arrivals});
             if (first) paintTrend({first: true});
