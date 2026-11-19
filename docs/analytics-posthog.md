@@ -179,14 +179,16 @@ Every export carries `internal_actor`, true only for admin ids listed in `DAM_AN
 test traffic: the project's test-account filter must be the event property `internal_actor` is not `true`.
 The list is deployment configuration in `app.env`; changing it needs a stack recreate like any other value.
 
-Tool funnel: tools open from the Tools page, and the tool frame sends `home.launch.attempted` →
-`home.launch.loaded` on the surface `tools`. Use `widget_id`, `launch_id`, `journey_id`, `duration_ms`, and
-`environment` to segment. Loaded means document bootstrap only, not task success. `home.launch.slow` is
-nonterminal; `failed` and `abandoned` explain unsuccessful launches. Home's Tools shelf, which sent
-`home.feature.exposed` and opened tools in a popup on the surface `home`, is gone. The funnel's first step,
-`home.feature.exposed`, pauses until the Tools page emits the exposure; until then the funnel starts at
-`home.launch.attempted`. Home sends `home.feature.activated` only for its own cards and links. Earlier events keep
-their meaning.
+Tool funnel: tools open from the Tools page. The Tools page sends `home.feature.exposed` → the tool frame sends
+`home.launch.attempted` → `home.launch.loaded`, all on the surface `tools`. The Tools page counts a tool once per
+visit, after half its tile has been on screen for a second while the page is visible, with Home's props
+(`widget_id`, `cols` and `rows` of 1, `visible_ms`); a tile still to be set up is not a link and is never counted.
+Use `widget_id`, `launch_id`, `journey_id`, `duration_ms`, and `environment` to segment. Loaded means document
+bootstrap only, not task success. `home.launch.slow` is nonterminal; `failed` and `abandoned` explain unsuccessful
+launches. Home's Tools shelf, which sent `home.feature.exposed` and opened tools in a popup on the surface `home`, is
+gone, so exposures on `home` stop with its removal and exposures on `tools` start with this page; between the two
+the funnel started at `home.launch.attempted`. Home sends `home.feature.activated` only for its own cards and links.
+Earlier events keep their meaning.
 Confirmed app-use events must be added at the application's actual completion boundary; do not relabel loaded as
 success. Existing upload successes are real server outcomes.
 
@@ -202,8 +204,7 @@ no refreshes between them, mean the client is consenting again rather than refre
 and callbacks are never recorded.
 
 Dashboard acceptance: production-only attempts-to-loaded and p50/p95 load duration by tool; slow/failure/abandon
-counts by tool/error; distinct successful operation conversions; exposure-to-attempt by tool once the Tools page
-emits the exposure. Compare the
+counts by tool/error; distinct successful operation conversions; exposure-to-attempt by tool on the surface `tools`. Compare the
 same date windows and device cohorts. Event delivery and dashboard creation must be checked in project 677447
 after deployment; local tests with HTTP fakes are not that proof.
 
