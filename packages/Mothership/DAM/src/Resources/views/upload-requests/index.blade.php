@@ -17,11 +17,12 @@
         @include('dam::upload-requests.modal')
 
         <script type="text/x-template" id="v-dam-upload-requests-template">
-            <div>
+            <div data-fold-list data-fold-split>
                 <x-admin::layouts.page-header
                     :title="trans('dam::app.admin.upload-requests.title')"
                     :description="trans('dam::app.admin.upload-requests.description')"
                     group="away"
+                    data-fold-lead
                 >
                     @if (bouncer()->hasPermission('dam.upload_requests.create'))
                         <x-slot:actions>
