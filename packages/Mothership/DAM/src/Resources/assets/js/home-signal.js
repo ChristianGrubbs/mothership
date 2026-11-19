@@ -178,10 +178,10 @@
         const latest = () => trend.pending || trend.today;
         const outOfDate = () => Boolean(trend.error) || ['error', 'stale'].includes(latest()?.status);
 
-        function repoRow({repo, index, live}) {
+        function repoRow({repo, live}) {
             const off = live && repo.onList === false;
             const stars = repo.starsToday != null ? `<span class="hm-mono">+${esc(compact.format(Number(repo.starsToday) || 0))}</span>` : '';
-            return `<button type="button" class="hm-repo${off ? ' is-off' : ''}" data-trend-repo="${index}" aria-haspopup="dialog"><span><b>${esc(repo.repo)}</b><span>${off ? 'No longer on the list · ' : ''}${esc(repo.description || 'No description provided.')}</span></span>${stars}</button>`;
+            return `<button type="button" class="hm-repo${off ? ' is-off' : ''}" data-trend-repo aria-haspopup="dialog"><span><b>${esc(repo.repo)}</b><span>${off ? 'No longer on the list · ' : ''}${esc(repo.description || 'No description provided.')}</span></span>${stars}</button>`;
         }
 
         function writeTrendBody({animate = false, first = false} = {}) {
@@ -196,7 +196,7 @@
             if (!repos.length) { say(trend.selected ? 'No repositories were recorded that day.' : 'No repositories yet today. The list updates every two hours.'); return; }
             if (!$('[data-trend-list]')) body.innerHTML = '<div class="hm-repos" data-trend-list></div>';
             const list = $('[data-trend-list]'), shown = trend.all ? repos : repos.slice(0, TRENDING_LIMIT);
-            placeRows({list, rows: shown.map((repo, index) => ({key: repo.repo, html: repoRow({repo, index, live: !trend.selected})})), animate});
+            placeRows({list, rows: shown.map(repo => ({key: repo.repo, html: repoRow({repo, live: !trend.selected})})), animate});
             if (first) [...list.children].forEach((row, index) => rise(row, {delay: staggered(index + STORY_LIMIT)}));
             all.hidden = repos.length <= TRENDING_LIMIT;
             all.textContent = trend.all ? 'Show fewer' : `Show all ${repos.length.toLocaleString()}`;
@@ -323,7 +323,8 @@
         }
 
         function openRepo(button) {
-            const view = trendView(), repo = view?.repos?.[Number(button.dataset.trendRepo)];
+            // The row names its repository, so a row still fading out can never open whatever replaced it.
+            const repo = trendView()?.repos?.find(item => item.repo === button.dataset.key);
             if (!repo) return;
             const live = !trend.selected;
             const url = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+$/.test(String(repo.url ?? '')) ? repo.url : `https://github.com/${repo.repo}`;

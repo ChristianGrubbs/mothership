@@ -68,7 +68,7 @@ browserTest('a Trending repository opens its details and keeps a feed from writi
         assert.match(await link.getAttribute('rel'),/noopener/);
         await dialog.getByRole('button',{name:'Close',exact:true}).click();
         await page.waitForFunction(()=>!document.querySelector('[data-trend-dialog]').open);
-        await page.waitForFunction(()=>document.activeElement?.dataset.trendRepo==='0');
+        await page.waitForFunction(()=>document.activeElement?.dataset.key==='b/two');
         assert.equal(await page.evaluate(()=>window.__owned),undefined);
 
         await card.locator('.hm-repo.is-off').click();
@@ -117,6 +117,27 @@ browserTest('Trending browses past days, caches them and never shows a late fail
         await page.waitForTimeout(150);
         assert.match(await card.textContent(),/Sep 8 failed/);
         assert.doesNotMatch(await card.textContent(),/Sep 9 failed/);
+        await page.close();
+    }finally{await browser.close();}
+});
+
+browserTest('a repository row fading out never opens the day that replaced it',async()=>{
+    const browser=await launch();
+    try{
+        const page=await fixturePage(browser);
+        const card=page.locator('[data-signal]'),select=card.locator('[data-trend-day]');
+        await card.getByText('b/two',{exact:true}).waitFor();
+        await select.selectOption('2026-09-10');
+        await card.getByText('c/yesterday',{exact:true}).waitFor();
+        await select.selectOption('');
+        await card.getByText('b/two',{exact:true}).waitFor();
+        await settle(page);
+        const opened=await page.evaluate(()=>{
+            const picker=document.querySelector('[data-trend-day]'),outgoing=document.querySelector('[data-signal] .hm-repo');
+            picker.value='2026-09-10';picker.dispatchEvent(new Event('change',{bubbles:true}));outgoing.click();
+            return document.querySelector('[data-trend-dialog]').open;
+        });
+        assert.equal(opened,false,'the outgoing row is not on the day now selected');
         await page.close();
     }finally{await browser.close();}
 });
@@ -290,7 +311,7 @@ browserTest('a poll never takes keyboard focus away from the row being read',asy
 
         await card.locator('.hm-repo').first().focus();
         await poll();
-        assert.equal(await page.evaluate(()=>document.activeElement.dataset.trendRepo),'0','an unchanged poll keeps focus on the repository');
+        assert.equal(await page.evaluate(()=>document.activeElement.dataset.key),'b/two','an unchanged poll keeps focus on the repository');
         await page.close();
     }finally{await browser.close();}
 });
