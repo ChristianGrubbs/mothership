@@ -484,8 +484,10 @@
         height: 44px;
     }
 
-    /* The slider's extra 16 px reach over its name and its hint, so each hint stays beside its own track. */
+    /* The slider's extra 16 px reach over its name and its hint, so each hint stays beside its own track. The slider sits
+       above them, so the hint, which follows it, can't take a touch at the bottom of its press area. */
     .sfx-slider input[type="range"] {
+        position: relative;
         margin-block: -8px;
     }
 

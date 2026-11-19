@@ -606,7 +606,7 @@ async function saveTakes(page, count) {
     await page.getByRole('option').nth(count - 1).waitFor({ state: 'attached' });
 }
 
-browserTest('on a touch screen the segment, Simple and Advanced, the sliders and the selected sound\'s buttons are 44 px targets', async () => {
+browserTest('on a touch screen the segment, Simple and Advanced, the sliders and the selected sound\'s buttons are 44 px targets, and a hint can\'t take its slider\'s touches', async () => {
     const browser = await launch();
     try {
         const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, reducedMotion: 'reduce' });
@@ -628,6 +628,16 @@ browserTest('on a touch screen the segment, Simple and Advanced, the sliders and
         const sliders = await heights('.sfx-slider input[type="range"]');
         assert.ok(sliders.length >= 3, `Shape's sliders are shown: ${sliders.length}`);
         assert.deepEqual(short(sliders), [], 'the sliders');
+        // Each hint lies under the bottom of its slider's press area; a touch there still takes the slider.
+        const edges = await page.locator('.sfx-slider').evaluateAll(rows => rows.filter(row => row.checkVisibility()).map(row => {
+            const input = row.querySelector('input[type="range"]'), hint = row.querySelector('.sfx-hint');
+            input.scrollIntoView({ block: 'center', behavior: 'instant' });
+            const box = input.getBoundingClientRect(), x = box.left + box.width / 2, y = box.bottom - 2;
+            const under = hint && hint.textContent.trim() ? hint.getBoundingClientRect() : null;
+            return { name: row.textContent.trim().slice(0, 30), overHint: Boolean(under) && under.top <= y && under.left <= x && x <= under.right, taken: document.elementFromPoint(x, y) === input };
+        }));
+        assert.ok(edges.filter(edge => edge.overHint).length >= 3, `hints lie under the sliders' bottom edges: ${JSON.stringify(edges)}`);
+        assert.deepEqual(edges.filter(edge => !edge.taken), [], 'a touch at a slider\'s bottom edge takes the slider');
 
         await page.locator('[data-view-opt="effects"]').click();
         await saveTakes(page, 1);

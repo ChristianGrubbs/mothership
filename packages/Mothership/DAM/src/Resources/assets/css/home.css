@@ -460,12 +460,18 @@ body:has([data-mothership-home]) .ap-fab:hover,body:has([data-mothership-home]) 
     .hm-tr-all{min-height:44px}
     .agh-settings :is(.agh-button,.agh-trend-day,.agh-cal-done){min-width:44px;min-height:44px}
     .agh-settings :is(input:not([type=checkbox],[type=radio],[type=file]),select){min-height:44px}
+    /* Safari keeps a native select or date field at its own height whatever min-height says, so under touch they drop
+       the native look; a small caret still marks each one as opening a list or a calendar. */
+    .agh-settings :is(select,input[type=date],input[type=datetime-local]){-webkit-appearance:none;appearance:none;padding-inline-end:28px;background-image:linear-gradient(45deg,transparent 50%,var(--agh-muted) 50%),linear-gradient(135deg,var(--agh-muted) 50%,transparent 50%);background-position:calc(100% - 15px) 50%,calc(100% - 10px) 50%;background-size:5px 5px;background-repeat:no-repeat}
+    .agh-settings :is(input[type=date],input[type=datetime-local])::-webkit-calendar-picker-indicator{opacity:0}
+    .agh-settings :is(input[type=date],input[type=datetime-local])::-webkit-date-and-time-value{text-align:start}
     .agh-cal-row,.agh-cal-check{min-height:44px}
     .agh-cal-check{align-items:center}
     .agh-cal-x{display:inline-grid;place-items:center;min-width:44px;min-height:44px;padding:0}
     /* A task row keeps its mouse layout: the done box's press area reaches 14 px past each side of the box, and delete's
-       reaches 20 px past its end, so the picker stays beside the title and delete stays beside the buttons. */
-    .agh-settings .agh-cal-done{margin-inline:-14px}
+       reaches 20 px past its end, so the picker stays beside the title and delete stays beside the buttons. The done label
+       sits above the title, which follows it, so a touch on the reach that lies over the title still ticks the task. */
+    .agh-settings .agh-cal-done{position:relative;margin-inline:-14px}
     .agh-cal-x{margin-inline-end:-20px}
     /* Unlink takes the thumbnail's top corner, 44 px, and shows without a hover, which a touch screen has none of; its
        mark stays a small circle. */

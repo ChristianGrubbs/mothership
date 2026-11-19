@@ -86,9 +86,11 @@ const controls = (page, scope) => page.evaluate(scope => [...document.querySelec
         return box.width && box.height && getComputedStyle(element).visibility !== 'hidden' && !element.closest('[hidden]');
     })
     .map(element => {
-        const box = element.getBoundingClientRect();
+        const box = element.getBoundingClientRect(), style = getComputedStyle(element);
         const name = (element.getAttribute('aria-label') || element.textContent || element.getAttribute('placeholder') || element.name || '').trim().replace(/\s+/g, ' ').slice(0, 32);
-        return {name: `${element.tagName.toLowerCase()} "${name}"`, width: box.width, height: box.height};
+        // A select or date field: its appearance, and whether a caret is drawn on it.
+        const look = element.matches('select, input[type=date], input[type=datetime-local]') ? `${style.appearance} ${style.backgroundImage === 'none' ? 'bare' : 'caret'}` : null;
+        return {name: `${element.tagName.toLowerCase()} "${name}"`, width: box.width, height: box.height, look};
     }), scope);
 
 const under44 = list => list.filter(control => control.width < 44 || control.height < 44).map(control => `${control.name} ${control.width.toFixed(1)}x${control.height.toFixed(1)}`);
@@ -131,6 +133,11 @@ browserTest('on a touch screen every control on Home, in its phone sheet and in 
             assert.ok(found.calendar.length >= 9 && found.event.length >= 20 && found.picker.length >= 5 && found.editor.length >= 9, `${pose}: each part shows its controls`);
             assert.ok(found.page.some(control => /Try again/.test(control.name)) || found.sheet?.some(control => /Try again/.test(control.name)), `${pose}: Signal's Try again is measured`);
             for (const [part, list] of Object.entries(found)) assert.deepEqual(under44(list), [], `${pose} ${part}`);
+            // Safari draws a native select or date field at its own height whatever min-height says (Chromium honours
+            // it), so the calendar's drop the native look under touch, with a caret in its place.
+            const looks = ['calendar', 'event', 'picker', 'editor'].flatMap(part => found[part].filter(control => control.look).map(control => `${part} ${control.name}: ${control.look}`));
+            assert.ok(looks.length >= 7, `${pose}: the pickers, Assign to, Due date, Kind, Starts and Ends are measured: ${looks.join(' | ')}`);
+            assert.deepEqual(looks.filter(look => !look.endsWith(': none caret')), [], `${pose}: selects and date fields`);
             assert.deepEqual(errors, []);
             await context.close();
         }
@@ -157,7 +164,7 @@ browserTest('on a tabletop fold by touch, Trending\'s Retry, Refresh, day and Sh
     }
 });
 
-browserTest('a task\'s done label is its press area: a touch beside the box ticks it, and the row keeps its mouse layout', async () => {
+browserTest('a task\'s done label is its press area: a touch beside the box, even over the title, ticks it, and the row keeps its mouse layout', async () => {
     const browser = await launchBrowser({playwrightPath});
     try {
         const {page, context, errors} = await mount(browser, POSES.outer);
@@ -173,6 +180,11 @@ browserTest('a task\'s done label is its press area: a touch beside the box tick
         // A point inside the label but clear of the box itself.
         const x = box.x + 2, y = box.y + 2;
         assert.ok(x < mark.x || y < mark.y, `the point ${x},${y} is beside the box at ${mark.x},${mark.y}`);
+        // The label's right edge lies over the title, which follows it in the row: a touch there still takes the label.
+        const title = await page.locator('[data-task="1"] .agh-cal-task-title').boundingBox();
+        const edge = {x: box.x + box.width - 2, y: box.y + box.height / 2};
+        assert.ok(edge.x > title.x && edge.y > title.y && edge.y < title.y + title.height, `the title lies under the label's right edge: ${JSON.stringify({edge, title})}`);
+        assert.ok(await page.evaluate(([px, py]) => Boolean(document.elementFromPoint(px, py)?.closest('.agh-cal-done')), [edge.x, edge.y]), 'a touch at the label\'s right edge takes the label');
         await page.touchscreen.tap(x, y);
         await page.waitForFunction(() => window.__requests.some(entry => entry.startsWith('PATCH ') && entry.endsWith('/calendar/tasks/1')), null, {timeout: 5000});
         assert.deepEqual(errors, []);
@@ -195,6 +207,8 @@ browserTest('with a mouse, Home and its calendar keep their compact sizes', asyn
         await page.locator('[data-task="1"] .agh-cal-done').waitFor();
         const [label, mark] = await page.locator('[data-task="1"] .agh-cal-done').evaluate(node => [node.getBoundingClientRect(), node.firstElementChild.getBoundingClientRect()].map(box => [box.width, box.height]));
         assert.deepEqual(label, mark, 'the done label is only as big as its box');
+        const looks = await page.locator('[data-cal-dialog]').evaluate(dialog => [...dialog.querySelectorAll('select, input[type=date]')].map(node => getComputedStyle(node).appearance));
+        assert.ok(looks.length >= 4 && looks.every(look => look !== 'none'), `with a mouse the selects and Due date keep their native look: ${looks}`);
         assert.equal(await height('[data-cal-dialog] [data-cal-unlink]'), 18);
         assert.deepEqual(errors, []);
         await context.close();
