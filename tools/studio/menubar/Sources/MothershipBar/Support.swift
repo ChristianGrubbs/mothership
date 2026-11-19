@@ -19,6 +19,17 @@ struct BarConfig: Codable, Sendable {
     var umbrelCapacityFile: String?
     var craftTool: CraftToolConfig?
     var deployGuard: DeployGuardConfig?
+    /// How to restart a stopped bridge. Nil leaves the watcher off.
+    var bridgeWatch: BridgeWatchConfig?
+}
+
+/// What each bridge's own manager needs. The app only ever runs that manager's `up`.
+struct BridgeWatchConfig: Codable, Sendable {
+    var python: String
+    /// The deployed checkout that holds the managers.
+    var source: String
+    /// The folder that holds each bridge's installed state.
+    var nativeServices: String
 }
 
 /// The ArtCraft update tool. It owns every change to the apps, the engines and the server.
