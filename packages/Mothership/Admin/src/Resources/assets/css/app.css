@@ -2849,8 +2849,162 @@ a.bridge-tool-tile:hover .bridge-tool-well {
     white-space: nowrap;
 }
 
+.bridge-toolbar-status.is-error {
+    color: var(--alert-text);
+}
+
+.bridge-toolbar-status a {
+    color: var(--focus-ring);
+    font-weight: 500;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.bridge-toolbar-act {
+    flex: none;
+    white-space: nowrap;
+}
+
+/* Reload is its glyph at every size (the button keeps its name for a screen reader). */
 .bridge-toolbar-reload {
     flex: none;
+    width: 40px;
+    padding: 0;
+    border-radius: 50%;
+}
+
+.bridge-toolbar-reload span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+/* The tool's saved sets: the open one's name in the bar, the rest in a menu under it. */
+.bridge-toolset {
+    position: relative;
+    flex: 0 1 220px;
+    min-width: 96px;
+}
+
+.bridge-toolset[hidden],
+.bridge-toolset-menu[hidden],
+.bridge-toolbar-act[hidden],
+.bridge-toolfoot[hidden],
+.bridge-toolfoot > [hidden] {
+    display: none;
+}
+
+.bridge-toolset-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    height: 40px;
+    padding: 0 10px 0 14px;
+    border-radius: 12px;
+    background: var(--ctl);
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.bridge-toolset-btn:hover {
+    background: var(--well);
+}
+
+.bridge-toolset-btn span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bridge-toolset-btn svg {
+    flex: none;
+    color: var(--ink-2);
+}
+
+.bridge-toolset-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 30;
+    width: 320px;
+    max-height: min(420px, calc(100dvh - 88px));
+    padding: 6px;
+    overflow-y: auto;
+    border-radius: 16px;
+    background: var(--card);
+    box-shadow: var(--lift), inset 0 0 0 1px var(--edge);
+}
+
+.bridge-toolset-menu button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 44px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    color: var(--ink);
+    font-size: 14px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.bridge-toolset-menu button:hover,
+.bridge-toolset-menu button:focus-visible {
+    background: var(--well);
+}
+
+/* The open set carries a tick and the words beside it, never a colour alone. */
+.bridge-toolset-menu [role="menuitemradio"]::before {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    content: "";
+}
+
+.bridge-toolset-menu [aria-checked="true"]::before {
+    background: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.bridge-toolset-menu button span {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.bridge-toolset-menu small {
+    flex: none;
+    color: var(--ink-2);
+    font-size: 12px;
+}
+
+.bridge-toolset-menu hr {
+    margin: 6px 4px;
+    border: 0;
+    border-top: 1px solid var(--line);
+}
+
+/* Book pose: the menu keeps to the leading screen, clear of the fold. */
+html[data-fold="columns"] .bridge-toolset-menu {
+    position: fixed;
+    top: calc(env(safe-area-inset-top) + 70px);
+    left: 12px;
+    width: min(320px, calc(var(--seg-a-width) - 24px));
+}
+
+/* Export and Save to Library sit under the tool only on the phone form; the bar holds them everywhere else. */
+.bridge-toolfoot {
+    display: none;
 }
 
 /* The question asked before work is lost: a band under the bar, so the tool stays in view while it is answered. */
@@ -2938,26 +3092,105 @@ a.bridge-tool-tile:hover .bridge-tool-well {
     gap: 10px;
 }
 
-@media (max-width: 719px) {
+/* Under 1024 the bar has no spare width for the status line, so it takes a line of its own under the controls. The
+   name and the set menu share what the controls leave; each cuts off rather than push a control out. */
+@media (max-width: 1023px) {
     .bridge-toolbar {
-        height: 56px;
-        padding: 0 12px;
+        display: grid;
+        grid-template-columns: auto minmax(0, max-content) minmax(0, max-content) minmax(0, 1fr) auto auto auto;
+        gap: 0;
+        height: auto;
+        padding-block: 12px;
     }
 
-    /* On a phone Reload is its glyph (the button keeps its name for a screen reader), so the tool's name has room. */
+    .bridge-toolbar > * {
+        grid-row: 1;
+    }
+
+    .bridge-toolbar-name {
+        grid-column: 2;
+        margin-left: 10px;
+    }
+
+    .bridge-toolset {
+        grid-column: 3;
+        min-width: 0;
+        margin-left: 10px;
+    }
+
+    .bridge-toolbar > [data-tool-export] {
+        grid-column: 5;
+        margin-left: 10px;
+    }
+
+    .bridge-toolbar > [data-tool-library] {
+        grid-column: 6;
+        margin-left: 10px;
+    }
+
     .bridge-toolbar-reload {
+        grid-column: 7;
+        margin-left: 10px;
+    }
+
+    .bridge-toolbar-status {
+        grid-row: 2;
+        grid-column: 1 / -1;
+        text-align: left;
+        white-space: normal;
+    }
+
+    .bridge-toolbar-status:not(:empty) {
+        padding-top: 8px;
+    }
+}
+
+@media (max-width: 719px) {
+    /* Export gives way to its glyph first, so the filled action keeps its words. */
+    .bridge-toolbar > [data-tool-export] {
         width: 40px;
         padding: 0;
         border-radius: 50%;
     }
 
-    .bridge-toolbar-reload span {
+    .bridge-toolbar > [data-tool-export] span {
         position: absolute;
         width: 1px;
         height: 1px;
         overflow: hidden;
         clip-path: inset(50%);
         white-space: nowrap;
+    }
+}
+
+/* A short window keeps the bar to 56 px, so the tool keeps the height. */
+@media (max-height: 500px) and (max-width: 1023px) {
+    .bridge-toolbar {
+        padding-block: 8px;
+    }
+}
+
+/* The phone form. 580 px is where the longest question (two lines at 16rem) still fits beside its two buttons, so a
+   wider window, an unfolded phone held upright or a closed one on its side, keeps the one-row band. */
+@media (max-width: 579px) {
+    .bridge-toolbar {
+        padding: 8px 12px;
+    }
+
+    .bridge-toolbar > .bridge-toolbar-act {
+        display: none;
+    }
+
+    /* The bar is too narrow to hang the menu from the button: it spans the window under the bar. */
+    .bridge-toolset {
+        position: static;
+    }
+
+    .bridge-toolset-menu {
+        top: calc(env(safe-area-inset-top) + 62px);
+        right: 12px;
+        left: 12px;
+        width: auto;
     }
 
     .bridge-toolask {
@@ -2970,6 +3203,20 @@ a.bridge-tool-tile:hover .bridge-tool-well {
 
     .bridge-toolask-actions > * {
         flex: 1;
+    }
+
+    .bridge-toolfoot {
+        display: flex;
+        flex: none;
+        gap: 10px;
+        padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+        border-top: 1px solid var(--line);
+        background: var(--ground);
+    }
+
+    .bridge-toolfoot > * {
+        flex: 1;
+        min-width: 0;
     }
 }
 
