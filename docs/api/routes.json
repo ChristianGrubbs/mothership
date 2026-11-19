@@ -7695,6 +7695,36 @@
         "source": "packages/Mothership/SphereSeam/src/Http/Controllers/SphereSeamController.php"
     },
     {
+        "id": "GET * /admin/tools",
+        "method": "GET",
+        "domain": "*",
+        "uri": "/admin/tools",
+        "name": "admin.tools.index",
+        "action": "Mothership\\DAM\\Http\\Controllers\\ToolsController@index",
+        "middleware": [
+            "web",
+            "admin",
+            "dam"
+        ],
+        "wheres": {},
+        "source": "packages/Mothership/DAM/src/Http/Controllers/ToolsController.php"
+    },
+    {
+        "id": "GET * /admin/tools/{widget}",
+        "method": "GET",
+        "domain": "*",
+        "uri": "/admin/tools/{widget}",
+        "name": "admin.tools.show",
+        "action": "Mothership\\DAM\\Http\\Controllers\\ToolsController@show",
+        "middleware": [
+            "web",
+            "admin",
+            "dam"
+        ],
+        "wheres": {},
+        "source": "packages/Mothership/DAM/src/Http/Controllers/ToolsController.php"
+    },
+    {
         "id": "GET * /admin/viewed-notifications/{id}",
         "method": "GET",
         "domain": "*",
@@ -16114,6 +16144,36 @@
         ],
         "wheres": {},
         "source": "packages/Mothership/SphereSeam/src/Http/Controllers/SphereSeamController.php"
+    },
+    {
+        "id": "HEAD * /admin/tools",
+        "method": "HEAD",
+        "domain": "*",
+        "uri": "/admin/tools",
+        "name": "admin.tools.index",
+        "action": "Mothership\\DAM\\Http\\Controllers\\ToolsController@index",
+        "middleware": [
+            "web",
+            "admin",
+            "dam"
+        ],
+        "wheres": {},
+        "source": "packages/Mothership/DAM/src/Http/Controllers/ToolsController.php"
+    },
+    {
+        "id": "HEAD * /admin/tools/{widget}",
+        "method": "HEAD",
+        "domain": "*",
+        "uri": "/admin/tools/{widget}",
+        "name": "admin.tools.show",
+        "action": "Mothership\\DAM\\Http\\Controllers\\ToolsController@show",
+        "middleware": [
+            "web",
+            "admin",
+            "dam"
+        ],
+        "wheres": {},
+        "source": "packages/Mothership/DAM/src/Http/Controllers/ToolsController.php"
     },
     {
         "id": "HEAD * /admin/viewed-notifications/{id}",

@@ -538,6 +538,8 @@ return [
     'admin.settings.groups.list'                     => 'listing',
     'admin.settings.groups.store'                    => 'mutation',
     'admin.settings.groups.update'                   => 'mutation',
+    'admin.tools.index'                              => 'metadata',
+    'admin.tools.show'                               => 'metadata',
     'dam.analytics.ingest'                           => 'public',
     'dam.collections.slug'                           => 'public',
     'dam.embed.media'                                => 'public',
