@@ -96,17 +96,6 @@
     }
 }
 
-/* A phone's width: two large cards or three compact ones to a row, not one huge one. */
-@container (max-width: 420px) {
-    .sp-cards {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .sp-cards[data-density="compact"] {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-}
-
 /* Cards: picture, title, category and ratio. The chosen card has an ink ring and a ✓; the favourite is ☆ or ★. */
 .sp-cards {
     display: grid;
@@ -122,6 +111,18 @@
 .sp-cards[data-density="list"] {
     grid-template-columns: minmax(0, 1fr);
     gap: 2px;
+}
+
+/* A phone's width: two large cards or three compact ones to a row, not one huge one. After the rules above, which
+   it must win over; the list stays one column. */
+@container (max-width: 420px) {
+    .sp-cards[data-density="comfortable"] {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .sp-cards[data-density="compact"] {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
 }
 
 .sp-card {
@@ -1112,6 +1113,8 @@
     #sp-clear {
         display: inline-flex;
         align-items: center;
+        justify-content: center;
+        min-width: 44px;
         min-height: 44px;
     }
 

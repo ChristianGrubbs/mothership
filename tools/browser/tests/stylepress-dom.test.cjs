@@ -122,6 +122,23 @@ browserTest('on a narrow screen Styles opens as a sheet, picking a style closes 
     }
 });
 
+browserTest('on a phone the sheet shows two large cards, three compact ones or one list row across', async () => {
+    const browser = await launch();
+    try {
+        const { tab, errors } = await open(browser, { width: 375, height: 812 });
+        await tab.click('#sp-change-style');
+        const columns = {};
+        for (const density of ['comfortable', 'compact', 'list']) {
+            await tab.click(`.sp-density [data-density="${density}"]`);
+            columns[density] = await tab.locator('#sp-cards').evaluate((cards) => getComputedStyle(cards).gridTemplateColumns.split(' ').length);
+        }
+        assert.deepEqual(columns, { comfortable: 2, compact: 3, list: 1 });
+        assert.deepEqual(errors, []);
+    } finally {
+        await browser.close();
+    }
+});
+
 browserTest('one action is filled: Generate when generation is connected, Copy prompt when it is not', async () => {
     const browser = await launch();
     try {
