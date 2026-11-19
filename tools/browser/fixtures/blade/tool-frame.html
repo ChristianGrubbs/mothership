@@ -1,4 +1,4 @@
-<div v-pre="" class="bridge-toolframe" data-tool-frame="" data-tool="sound-effects" data-tool-title="Sound Effect Maker" data-tool-url="http://mothership.test/admin/home/tools/sound-effects/index.html" data-tools-url="http://mothership.test/admin/tools" data-home-base="http://mothership.test/admin/home" data-user="1" data-words="{&quot;back&quot;:&quot;Back&quot;,&quot;reload&quot;:&quot;Reload&quot;,&quot;cancel&quot;:&quot;Cancel&quot;,&quot;close&quot;:&quot;Close&quot;,&quot;discard-close&quot;:&quot;Discard and close&quot;,&quot;discard-reload&quot;:&quot;Discard and reload&quot;,&quot;ask-close&quot;:&quot;Close Sound Effect Maker?&quot;,&quot;ask-close-work&quot;:&quot;Close Sound Effect Maker? Work you have not exported is discarded.&quot;,&quot;ask-reload&quot;:&quot;Reload Sound Effect Maker? Work you have not exported is discarded.&quot;,&quot;opening&quot;:&quot;Opening Sound Effect Maker\u2026&quot;,&quot;reloading&quot;:&quot;Reloading Sound Effect Maker\u2026&quot;,&quot;slow&quot;:&quot;Sound Effect Maker is taking longer than usual to open.&quot;,&quot;failed&quot;:&quot;Sound Effect Maker could not open. Reload it, or go back and check that you are still signed in.&quot;,&quot;file&quot;:&quot;Sound Effect Maker opened a file here. Reload brings the tool back.&quot;,&quot;preferences&quot;:&quot;Your settings for Sound Effect Maker could not be saved.&quot;}">
+<div v-pre="" class="bridge-toolframe" data-tool-frame="" data-tool="sound-effects" data-tool-title="Sound Effect Maker" data-tool-url="http://mothership.test/admin/home/tools/sound-effects/index.html" data-tools-url="http://mothership.test/admin/tools" data-home-base="http://mothership.test/admin/home" data-user="1" data-words="{&quot;back&quot;:&quot;Back&quot;,&quot;reload&quot;:&quot;Reload&quot;,&quot;cancel&quot;:&quot;Cancel&quot;,&quot;close&quot;:&quot;Close&quot;,&quot;discard-close&quot;:&quot;Discard and close&quot;,&quot;discard-reload&quot;:&quot;Discard and reload&quot;,&quot;ask-close&quot;:&quot;Close Sound Effect Maker?&quot;,&quot;ask-close-work&quot;:&quot;Close Sound Effect Maker? Work you have not exported is discarded.&quot;,&quot;ask-reload&quot;:&quot;Reload Sound Effect Maker? Work you have not exported is discarded.&quot;,&quot;opening&quot;:&quot;Opening Sound Effect Maker\u2026&quot;,&quot;reloading&quot;:&quot;Reloading Sound Effect Maker\u2026&quot;,&quot;slow&quot;:&quot;Sound Effect Maker is taking longer than usual to open.&quot;,&quot;failed&quot;:&quot;Sound Effect Maker could not open. Reload it, or go back and check that you are still signed in.&quot;,&quot;file&quot;:&quot;Sound Effect Maker opened a file here. Reload brings the tool back.&quot;,&quot;preferences&quot;:&quot;Your settings for Sound Effect Maker could not be saved.&quot;,&quot;sets&quot;:&quot;Saved&quot;,&quot;sets-open&quot;:&quot;open now&quot;}">
         <header class="bridge-toolbar">
             <a href="http://mothership.test/admin/tools" class="bridge-btn-card bridge-toolbar-round" aria-label="Back to Tools" title="Back to Tools" data-tool-back="" data-no-ajax-nav=""><svg class="bridge-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
 </a>
@@ -6,8 +6,24 @@
             <h1 class="bridge-toolbar-name">Sound Effect Maker</h1>
 
             
+            <div class="bridge-toolset" data-tool-sets="" hidden="">
+                <button type="button" class="bridge-toolset-btn" data-tool-sets-btn="" aria-haspopup="menu" aria-expanded="false" aria-controls="tool-sets-menu">
+                    <span data-tool-set-name=""></span>
+                    <svg class="bridge-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"></path></svg>
+                </button>
+
+                <div class="bridge-toolset-menu" id="tool-sets-menu" role="menu" data-tool-sets-menu="" hidden=""></div>
+            </div>
+
             <p class="bridge-toolbar-status" role="status" data-tool-status=""></p>
 
+            <button type="button" class="bridge-btn-card bridge-toolbar-act" data-tool-export="" hidden="">
+                <svg class="bridge-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg>
+                <span>Export</span>
+            </button>
+
+                            <button type="button" class="bridge-btn-act bridge-toolbar-act" data-tool-library="" hidden="">Save to Library</button>
+            
             <button type="button" class="bridge-btn-card bridge-toolbar-reload" data-tool-reload="" aria-label="Reload">
                 <svg class="bridge-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path></svg>
                 <span>Reload</span>
@@ -43,4 +59,14 @@
                 </div>
             </div>
         </main>
+
+        
+        <footer class="bridge-toolfoot" data-tool-foot="" hidden="">
+            <button type="button" class="bridge-btn-card" data-tool-export="" hidden="">
+                <svg class="bridge-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg>
+                <span>Export</span>
+            </button>
+
+                            <button type="button" class="bridge-btn-act" data-tool-library="" hidden="">Save to Library</button>
+                    </footer>
     </div>

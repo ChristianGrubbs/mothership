@@ -172,6 +172,10 @@ return [
                     'failed'         => ':tool could not open. Reload it, or go back and check that you are still signed in.',
                     'file'           => ':tool opened a file here. Reload brings the tool back.',
                     'preferences'    => 'Your settings for :tool could not be saved.',
+                    'export'         => 'Export',
+                    'save-library'   => 'Save to Library',
+                    'sets'           => 'Saved',
+                    'sets-open'      => 'open now',
                 ],
             ],
             'trash' => [

@@ -11061,6 +11061,15 @@
     "reviewed": true
   },
   {
+    "id": "POST * /admin/tools/{widget}/library",
+    "kind": "internal",
+    "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/ToolsController.php"
+    ],
+    "reviewed": true
+  },
+  {
     "id": "POST * /broadcasting/auth",
     "kind": "authentication",
     "reason": "Framework authentication/session infrastructure; see the API usage guide.",

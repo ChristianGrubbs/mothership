@@ -98,6 +98,15 @@ The documented local run uses SQLite. A change that touches raw SQL, JSON column
 ROUTE_INVENTORY_WRITE=1 vendor/bin/pest tests/Feature/DocumentationRoutesTest.php
 ```
 
+A new route or table is tracked in more places than that one, and CI fails on each one you miss. After `docs/api/routes.json`, for a new DAM route classify it by hand in `packages/Mothership/DAM/tests/Fixtures/route-inventory.php`, then regenerate the API inventory in this order:
+
+```bash
+python3 tools/docs/classify_routes.py
+python3 tools/docs/build_api.py
+```
+
+The first writes `docs/api/classifications.json`; the second writes `docs/api/openapi.json` and `docs/api/coverage.json`. The second stops with `source review is stale` while `docs/api/source-review.json` predates the PHP sources. Refreshing that file is a maintainer's sign-off that the contracts were reviewed again, so do not refresh it to get past the error. CI's `build_api.py --check` builds without it, and fails only when the two committed files differ from that build. A new DAM table goes in `Mothership\DAM\Support\DamTables::ALL`.
+
 If you changed a Blade template, a stylesheet or bundled JavaScript, rebuild the committed bundles and commit whatever the script changes. Nothing rebuilds them on deploy, so a stale bundle ships as it is. Run this on the host, from the repository root, with Node 22:
 
 ```bash

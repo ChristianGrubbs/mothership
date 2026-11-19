@@ -17,7 +17,7 @@
  * and exported as these two props. A value outside its list rejects the event like any other undeclared prop.
  */
 
-$surfaces = ['library', 'modal', 'details', 'share', 'home', 'hub', 'upload', 'api', 'reports', 'transfers', 'pwa', 'other'];
+$surfaces = ['library', 'modal', 'details', 'share', 'home', 'hub', 'upload', 'api', 'reports', 'transfers', 'pwa', 'tools', 'other'];
 // Which server path settled an upload; each path emits the same attempt and one terminal event per upload_id.
 $uploadPaths = ['chunked', 'direct', 'folder', 'reupload', 'hub', 'portal', 'api'];
 $filters = ['file_name', 'extension', 'file_type', 'tag', 'uploaded_by', 'stack', 'stack_key', 'unavailable', 'created_at', 'updated_at', 'property', 'media_type', 'subfolders', 'sort', 'clear'];

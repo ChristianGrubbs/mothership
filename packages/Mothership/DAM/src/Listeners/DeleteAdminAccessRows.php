@@ -30,5 +30,7 @@ class DeleteAdminAccessRows
         // P4 D2: dam_collections.owner_id is NO ACTION here for the same reason; elsewhere it is SET NULL, and a
         // collection without an owner is managed by full admins.
         DB::table('dam_collections')->where('owner_id', $adminId)->update(['owner_id' => null]);
+        // dam_tool_saves.admin_id likewise: the record of which tool made a file stays, without the person.
+        DB::table('dam_tool_saves')->where('admin_id', $adminId)->update(['admin_id' => null]);
     }
 }
