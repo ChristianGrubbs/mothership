@@ -84,6 +84,99 @@ const navBody = `<style>.row{display:flex}.pad{padding:16px}.min{min-width:220px
 </div>
 <script>${js}</script>`;
 
+// A list page (Shared links' grid form) in the shell: a top bar above the page's one scroller, the page head and the grid's
+// toolbar with its filter drawer, then the rows. Rows sit in a positioned layer, as the list's sticky parts do.
+const listBody = `<style>body{margin:0}.top{position:relative;z-index:20;height:60px}main{height:525px;overflow-y:auto;padding:12px 16px;box-sizing:border-box}
+.panel{position:fixed;top:0;bottom:0;right:0;width:350px;z-index:10001;background:#fff}.rows>div{position:relative;height:90px}.rows button{width:100%}${css}</style>
+<header class="top" style="display:flex;justify-content:flex-end"><button>Account</button></header>
+<main id="main-content">
+  <div data-fold-list data-fold-split>
+    <div class="bridge-page-head" style="display:flex"><h1 style="margin:0">Shared links</h1><button>New</button></div>
+    <div class="bridge-list-grid"><div>
+      <div class="datagrid-toolbar" style="display:flex;flex-wrap:wrap;gap:8px"><div style="display:flex;gap:8px"><input aria-label="Search" style="width:260px"><button>Filter</button></div>
+        <div><div style="display:flex;gap:8px"><button>10</button><p style="margin:0;max-width:44px">Per Page</p><input aria-label="Page" style="width:46px"><span>of 3</span><button>First</button><button>Previous</button><button>Next</button><button>Last</button></div></div></div>
+      <div style="display:flex;margin-top:16px"><div class="table-responsive rows" style="width:100%">${Array.from({length: 12}, (_, i) => `<div class="bridge-list-row"><button>Link ${i}</button></div>`).join('')}</div></div>
+    </div></div>
+  </div>
+</main>
+<script>${js}</script>`;
+
+browserTest('a list page puts its head and toolbar on the leading segment and its rows on the trailing one', async () => {
+    const browser = await launchBrowser({playwrightPath: process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH});
+    const box = (page, selector) => page.evaluate(selector => { const {left, right, top, bottom} = document.querySelector(selector).getBoundingClientRect(); return {left, right, top, bottom}; }, selector);
+    try {
+        const flat = await open(browser, false, {html: listBody});
+        assert.equal(await flat.evaluate(() => getComputedStyle(document.querySelector('[data-fold-list]')).display), 'block');
+        assert.ok((await onFold(flat)).length > 0, 'the fixture must put controls across the middle when nothing is folded');
+
+        const page = await open(browser, true, {html: listBody});
+        assert.deepEqual(await onFold(page), []);
+        for (const selector of ['.bridge-page-head', '.datagrid-toolbar']) assert.ok((await box(page, selector)).right <= 455, selector);
+        assert.ok((await box(page, '.table-responsive')).left >= 495);
+        assert.equal(await page.evaluate(() => document.querySelector('main').scrollWidth - document.querySelector('main').clientWidth), 0);
+
+        // The rows scroll past; the toolbar stays in reach.
+        await page.evaluate(() => { document.querySelector('main').scrollTop = 400; });
+        const [toolbar, main] = [await box(page, '.datagrid-toolbar'), await box(page, 'main')];
+        assert.ok(toolbar.top >= main.top && toolbar.bottom <= main.bottom, `toolbar ${JSON.stringify(toolbar)}`);
+
+        // The open filter drawer covers the top bar and the rows, though its toolbar is a sticky layer of its own.
+        await page.evaluate(() => { const panel = document.createElement('div'); panel.className = 'panel'; panel.dataset.drawerPanel = ''; panel.innerHTML = '<button>Apply</button>'; document.querySelector('.datagrid-toolbar').append(panel); });
+        assert.deepEqual(await page.evaluate(() => [[760, 30], [760, 300]].map(([x, y]) => Boolean(document.elementFromPoint(x, y).closest('[data-drawer-panel]')))), [true, true]);
+    } finally {
+        await browser.close();
+    }
+});
+
+// Closing the device from book pose puts the page on the outer display (382 x 580, one segment), and opening it puts it
+// back. The row being read keeps its place on screen both ways, though the page head moves from beside the rows to above
+// them, and the head's sticky layer stops the browser's own scroll anchoring from doing it.
+browserTest('a list page keeps the row being read on screen from book to the outer display and back', async () => {
+    const browser = await launchBrowser({playwrightPath: process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH});
+    try {
+        const page = await browser.newPage({viewport: {width: 951, height: 585}});
+        await page.addInitScript(rects => { window.foldRects = rects; Object.defineProperty(window, 'viewport', {configurable: true,
+            get: () => ({segments: window.foldRects ? window.foldRects.map(rect => new DOMRect(...rect)) : [new DOMRect(0, 0, innerWidth, innerHeight)]})}); }, book(951));
+        // The head stays beside the rows as they scroll, as Upload requests' head does ([data-fold-lead]).
+        const html = listBody.replace('<div class="bridge-page-head"', '<div class="bridge-page-head" data-fold-lead');
+        await page.route('http://mothership.test/**', route => route.fulfill({contentType: 'text/html', body: `<!doctype html><html><body>${html}</body></html>`}));
+        await page.goto('http://mothership.test/');
+        const settle = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 50)))));
+        const read = () => page.evaluate(() => {
+            const main = document.querySelector('main').getBoundingClientRect();
+            const row = document.querySelector('[data-read]').getBoundingClientRect();
+            return {fold: document.documentElement.dataset.fold ?? null, onScreen: row.top >= main.top && row.bottom <= main.bottom, offset: Math.round(row.top - main.top)};
+        });
+        await settle();
+
+        // Partway down the rows in book pose, the first row wholly below the top of the scroller is the one being read.
+        await page.evaluate(() => {
+            const main = document.querySelector('main');
+            main.scrollTop = 400;
+            const top = main.getBoundingClientRect().top;
+            [...main.querySelectorAll('.bridge-list-row')].find(row => row.getBoundingClientRect().top >= top + 40).dataset.read = '';
+        });
+        const start = await read();
+        assert.equal(start.fold, 'columns');
+
+        await page.evaluate(() => { window.foldRects = null; });
+        await page.setViewportSize({width: 382, height: 580});
+        await settle();
+        const closed = await read();
+        assert.equal(closed.fold, null);
+        assert.ok(closed.onScreen && Math.abs(closed.offset - start.offset) <= 2, `closed: ${JSON.stringify({start, closed})}`);
+
+        await page.evaluate(rects => { window.foldRects = rects; }, book(951));
+        await page.setViewportSize({width: 951, height: 585});
+        await settle();
+        const back = await read();
+        assert.equal(back.fold, 'columns');
+        assert.ok(back.onScreen && Math.abs(back.offset - start.offset) <= 2, `back in book: ${JSON.stringify({start, closed, back})}`);
+    } finally {
+        await browser.close();
+    }
+});
+
 browserTest('the Directory column shrinks below its desktop minimum rather than cross the fold', async () => {
     const browser = await launchBrowser({playwrightPath: process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH});
     try {
@@ -126,16 +219,17 @@ browserTest('a fold that arrives after the resize still reaches an open page, th
 
         return page;
     }
-    // The segments change and nothing else does, then the segment media queries change.
-    const segmentsChange = async (page, rects) => {
-        const queries = await page.evaluate(rects => {
+    // The segments change and nothing else does, then the one segment media query for that axis changes, as in Safari:
+    // book moves only the horizontal query, tabletop only the vertical one.
+    const segmentsChange = async (page, rects, axis) => {
+        const fired = await page.evaluate(([rects, axis]) => {
             window.foldRects = rects;
-            for (const list of window.segmentLists) list.dispatchEvent(new Event('change'));
-            return window.segmentLists.map(list => list.media);
-        }, rects);
+            const lists = window.segmentLists.filter(list => list.media.includes(axis));
+            for (const list of lists) list.dispatchEvent(new Event('change'));
+            return lists.length;
+        }, [rects, axis]);
+        assert.equal(fired, 1, `the page listens to the ${axis} segment query`);
         await settle(page);
-
-        return queries;
     };
     try {
         const freshFlat = await state(await openLive({width: 951, height: 585}, null));
@@ -145,11 +239,11 @@ browserTest('a fold that arrives after the resize still reaches an open page, th
         // Open flat to book at the same size: the segments arrive with no resize.
         const page = await openLive({width: 951, height: 585}, null);
         assert.deepEqual(await state(page), freshFlat);
-        assert.deepEqual((await segmentsChange(page, book(951))).sort(), ['(horizontal-viewport-segments: 2)', '(vertical-viewport-segments: 2)']);
+        await segmentsChange(page, book(951), 'horizontal');
         assert.deepEqual(await state(page), freshBook);
 
         // Book to open flat.
-        await segmentsChange(page, null);
+        await segmentsChange(page, null, 'horizontal');
         assert.deepEqual(await state(page), freshFlat);
 
         // Tabletop to closed on its side: the resize comes while the two segments are still reported, then they go.
@@ -157,7 +251,7 @@ browserTest('a fold that arrives after the resize still reaches an open page, th
         assert.equal((await state(tabletop)).fold, 'rows');
         await tabletop.setViewportSize({width: 678, height: 340});
         await settle(tabletop);
-        await segmentsChange(tabletop, null);
+        await segmentsChange(tabletop, null, 'vertical');
         assert.deepEqual(await state(tabletop), await state(await openLive({width: 678, height: 340}, null)));
     } finally {
         await browser.close();

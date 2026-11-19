@@ -264,3 +264,39 @@ html[data-fold="rows"] .bridge-toolnote {
 html[data-fold="columns"] .bridge-toolask p { max-width: calc(var(--seg-a-width) - 2rem); }
 html[data-fold="columns"][dir="rtl"] .bridge-toolask p { max-width: calc(var(--seg-b-width) - 2rem); }
 html[data-fold="columns"][dir="rtl"] .bridge-toolask-actions { margin-left: 0; margin-right: auto; }
+
+/* Shared links, Tag review and Upload requests. Book: the page head and its toolbars on the leading segment, the list on
+   the trailing one, because a fold along a list can not be scrolled off. The page keeps its one scroller, and the last
+   toolbar stays in reach while the list moves. */
+html[data-fold="columns"] [data-fold-list][data-fold-split] {
+    display: grid;
+    grid-template-columns: calc(var(--fold-start, 50%) - 1rem) calc(var(--fold-gap, 0px) + 2rem) minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    align-items: start;
+}
+html[data-fold="columns"] [data-fold-list][data-fold-split] > *,
+html[data-fold="columns"] [data-fold-list][data-fold-split] .datagrid-toolbar { grid-column: 1; min-width: 0; }
+/* Shared links: the grid component's wrappers give way, so its toolbar and its table are placed as the page's own parts. */
+html[data-fold="columns"] [data-fold-list][data-fold-split] > .bridge-list-grid,
+html[data-fold="columns"] [data-fold-list][data-fold-split] > .bridge-list-grid > div { display: contents; }
+html[data-fold="columns"] [data-fold-list][data-fold-split] > .bridge-list,
+html[data-fold="columns"] [data-fold-list][data-fold-split] > .bridge-list-grid > div > :not(.datagrid-toolbar) {
+    grid-column: 3;
+    grid-row: 1 / -1;
+    min-width: 0;
+    margin-top: 0;
+}
+html[data-fold="columns"] [data-fold-list][data-fold-split] > [data-fold-lead],
+html[data-fold="columns"] [data-fold-list][data-fold-split] .datagrid-toolbar {
+    position: sticky;
+    top: 0;
+    grid-row: 2 / -1;
+}
+html[data-fold="columns"] [data-fold-list][data-fold-split] > .bridge-page-head[data-fold-lead] { grid-row: 1 / -1; }
+/* A sticky box is a stacking layer of its own, so the filter drawer the toolbar holds rises with it while the drawer is open. */
+html[data-fold="columns"] [data-fold-list][data-fold-split] .datagrid-toolbar:has([data-drawer-panel]) { z-index: 10001; }
+html[data-fold="columns"] [data-fold-list][data-fold-split] > .bridge-page-head,
+html[data-fold="columns"] [data-fold-list][data-fold-split] .datagrid-toolbar > div:last-child > div:last-child { flex-wrap: wrap; }
+html[data-fold="columns"] [data-fold-list][data-fold-split] .datagrid-toolbar p { max-width: none; white-space: nowrap; }
+/* The keyboard hint has no row of its own beside a toolbar that stays in reach. */
+html[data-fold="columns"] [data-fold-list][data-fold-split] > .bridge-list-hint { display: none; }
