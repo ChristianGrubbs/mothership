@@ -120,17 +120,21 @@ browserTest('an empty set shows its heading and every way to start whole on the 
             assert.deepEqual(cut, [], `${label}: nothing cut by the stage`);
             return stage;
         };
-        // The outer display upright, with the page's foot and without it: the buttons wrap to a second row.
+        // Generate… joins the ways to start where the page offers AI; the tool shows it then, as here.
+        const offerGenerate = async page => { await page.locator('[data-ai-open]').evaluateAll(buttons => buttons.forEach(button => { button.hidden = false; })); await settled(page); };
+        // The outer display upright, with the page's foot and without it: the buttons wrap to a second row, or a third.
         for (const [width, height] of [[382, 463], [382, 524]]) {
             const { page, errors } = await open(browser, { width, height });
             await whole(page, `${width} x ${height}`);
+            await offerGenerate(page);
+            await whole(page, `${width} x ${height} with Generate…`);
             assert.deepEqual(errors, []);
             await page.close();
         }
         let { page, errors } = await open(browser, { width: 669, height: 761 });
         await fold(page, 'rows', 286, 326);
-        await settled(page);
-        assert.ok((await whole(page, 'tabletop')).bottom <= 286, 'the stage ends above the fold');
+        await offerGenerate(page);
+        assert.ok((await whole(page, 'tabletop with Generate…')).bottom <= 286, 'the stage ends above the fold');
         assert.deepEqual(await across(page, 'y', 286, 326), [], 'nothing to tap on the fold');
         await page.close();
         ({ page, errors } = await open(browser, { width: 1440, height: 900, touch: false }));
