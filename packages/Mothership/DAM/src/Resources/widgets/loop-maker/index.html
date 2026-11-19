@@ -2,91 +2,127 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#f6f7f8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Loop Maker · The Mothership</title>
+    <link rel="stylesheet" href="../_kit/tool-kit.css">
     <link rel="stylesheet" href="style.css">
     <script src="lame.min.js"></script>
     <script src="loop-core.js"></script>
     <script src="app.js" defer></script>
 </head>
 <body>
-    <main class="shell">
-        <header class="page-head">
-            <p class="eyebrow">THE MOTHERSHIP · AUDIO</p>
-            <h1>Loop Maker</h1>
-            <p>Pick a stretch of an instrumental, match its end to its start, and export a loop that sits under repeating video.</p>
-            <ol class="workflow" aria-label="Loop Maker workflow">
-                <li><b>1</b><span><strong>Choose</strong><small>Local audio</small></span></li>
-                <li><b>2</b><span><strong>Shape</strong><small>Region and seam</small></span></li>
-                <li><b>3</b><span><strong>Export</strong><small>WAV or MP3</small></span></li>
-            </ol>
-        </header>
+    <!-- The tool's name, Export and "Save to Library" are drawn by the bar of the page that frames the tool (app.js tells
+         it what to show); [data-own-bar] stands in where no bar is drawn, as in Home's panel or from disk. -->
+    <main class="lm" data-lm data-loaded="false">
+        <section class="tk-pane lm-empty" data-empty aria-labelledby="lm-drop-title">
+            <label class="lm-drop" data-drop-zone>
+                <span class="lm-drop-icon" aria-hidden="true"></span>
+                <strong class="lm-drop-title" id="lm-drop-title" data-drop-title>Drop an audio file here</strong>
+                <span class="tk-note lm-drop-note">MP3, WAV, M4A or OGG, up to 250 MB. The track stays on this device.</span>
+                <span class="tk-btn is-act choose-file">Choose audio file</span>
+                <input class="tk-hidden" type="file" accept="audio/*">
+            </label>
+            <button class="tk-btn lm-demo" type="button" data-demo>Load a demo track</button>
+            <p class="lm-error" role="status" aria-live="polite" data-upload-status></p>
+        </section>
 
-        <label class="drop-zone" data-drop-zone>
-            <span class="drop-icon" aria-hidden="true"></span>
-            <strong data-drop-title>Drop an audio file here</strong>
-            <span>or click to choose one — MP3, WAV, M4A, or OGG. Nothing leaves your device.</span>
-            <span class="choose-file">Choose audio file</span>
-            <input type="file" accept="audio/*">
-        </label>
-        <button class="text-button" type="button" data-demo>Load a demo track</button>
-        <p class="upload-status" role="status" aria-live="polite" data-upload-status></p>
-
-        <section class="editor" data-editor hidden>
-            <div class="file-bar">
-                <div><strong data-file-name></strong><span data-file-meta></span></div>
-                <label class="replace-button">Replace track<input type="file" accept="audio/*"></label>
+        <section class="tk-pane lm-stage" data-editor aria-labelledby="lm-file-name" hidden>
+            <div class="lm-own" data-own-bar hidden>
+                <button class="tk-btn is-small" type="button" data-open-export>Export…</button>
+                <button class="tk-btn is-small is-act" type="button" data-open-library hidden>Save to Library…</button>
             </div>
-            <div class="wave-wrap">
-                <canvas data-wave></canvas>
+            <div class="lm-file">
+                <div class="lm-file-text">
+                    <h2 id="lm-file-name" data-file-name></h2>
+                    <p class="tk-mono lm-file-meta" data-file-meta></p>
+                </div>
+                <label class="tk-btn is-small lm-replace">Replace track<input class="tk-hidden" type="file" accept="audio/*"></label>
+            </div>
+            <div class="lm-wave">
+                <canvas data-wave aria-hidden="true"></canvas>
                 <canvas data-overlay aria-label="Audio waveform and selected loop region"></canvas>
             </div>
-            <div class="timeline-help"><span>0:00.00</span><span>Drag the region to move it · drag either edge to resize · Space plays · ← → nudges the start</span><span data-duration></span></div>
-            <div class="transport" aria-label="Playback controls">
-                <div class="transport-actions">
-                    <button class="primary" type="button" data-play>Play loop</button>
-                    <button type="button" data-hear-seam>Hear the seam</button>
-                    <button type="button" data-find-best>Find best seam</button>
+            <div class="lm-ruler tk-mono"><span>0:00.00</span><span class="lm-help">Drag the region to move it · drag either edge to resize · Space plays · ← → nudges the start</span><span data-duration></span></div>
+            <div class="lm-transport" role="group" aria-label="Playback controls">
+                <div class="lm-actions transport-actions">
+                    <button class="tk-btn lm-play" type="button" data-play><svg viewBox="0 0 24 24" aria-hidden="true"><polygon class="lm-glyph-play" points="6 3 20 12 6 21 6 3"/><rect class="lm-glyph-stop" x="5" y="5" width="14" height="14" rx="2"/></svg><span data-play-label>Play loop</span></button>
+                    <button class="tk-btn" type="button" data-hear-seam>Hear the seam</button>
+                    <button class="tk-btn" type="button" data-find-best>Find best seam</button>
                 </div>
-                <div class="transport-readout">
-                    <span class="clock" data-clock>0:00.00 / 0:00.00</span>
-                    <span class="score"><i data-score-dot></i>Seam match <strong data-seam-score>0% · rough</strong></span>
+                <div class="lm-readout">
+                    <p class="lm-stat"><span>Playing</span><strong class="tk-mono" data-clock>0:00.00 / 0:00.00</strong></p>
+                    <p class="lm-stat"><span>Seam match</span><strong class="tk-mono" data-seam-score>0% · rough</strong></p>
                 </div>
             </div>
-
-            <section class="settings-section">
-                <div class="section-head"><div><h2>Loop region</h2><p>Choose where the loop starts, its duration, and how the end blends back into the start.</p></div><label class="switch-label">Smart seam<input type="checkbox" aria-label="Smart seam" checked><span></span></label></div>
-                <p class="hint" data-seam-hint>Load a track to measure the seam.</p>
-                <div class="control-grid">
-                    <label>Start <output data-start-output></output><input type="range" data-start min="0" step="0.01"></label>
-                    <label>Loop length <output data-length-output></output><input type="range" data-length min="0.25" step="0.01"></label>
-                    <label>Crossfade <output data-crossfade-output></output><input type="range" data-crossfade min="0" step="0.01"></label>
-                </div>
-            </section>
-
-            <section class="settings-section">
-                <div class="section-head"><div><h2>Fades</h2><p>Shape the exported file. Leave both at zero for an uninterrupted repeat.</p></div></div>
-                <div class="control-grid two">
-                    <label>Fade in <output data-fade-in-output></output><input type="range" data-fade-in min="0" step="0.01"></label>
-                    <label>Fade out <output data-fade-out-output></output><input type="range" data-fade-out min="0" step="0.01"></label>
-                </div>
-            </section>
-
-            <section class="settings-section">
-                <div class="section-head"><div><h2>Export</h2><p>Save one seamless pass or repeat it to match a video duration.</p></div></div>
-                <div class="export-grid">
-                    <label>File length<select aria-label="File length" data-export-mode><option value="once">One pass of the loop</option><option value="fill">Repeat to fill a duration</option></select></label>
-                    <label data-fill-wrap hidden>Duration<input aria-label="Target duration" data-fill value="3:00" placeholder="m:ss"></label>
-                    <label>Format<select aria-label="Format" data-format><option value="wav" selected>WAV · lossless</option><option value="mp3-128">MP3 · 128 kbps</option><option value="mp3-192">MP3 · 192 kbps</option><option value="mp3-320">MP3 · 320 kbps</option></select></label>
-                    <label class="check">Loudness<span><input type="checkbox" data-normalize> Normalize to −1 dB</span></label>
-                </div>
-                <p class="hint" data-format-hint>WAV wraps sample-exactly; MP3 players add a short gap at the join because the encoder pads the file, so pick MP3 only when size matters.</p>
-                <div class="export-bar"><span><small>Ready to export</small><strong data-export-summary></strong></span><button class="primary" type="button" data-export>Download MP3</button></div>
-                <p class="notice" role="status" data-status></p>
-            </section>
+            <p class="lm-line" role="status" data-tool-status></p>
         </section>
-        <footer class="legal">MP3 encoding uses the open-source <a href="https://lame.sourceforge.net/" target="_blank" rel="noopener noreferrer">LAME encoder</a> under the LGPL.</footer>
+
+        <section class="tk-pane lm-controls" data-controls aria-label="Loop settings" hidden>
+            <section class="lm-group" aria-labelledby="lm-region-title">
+                <div class="lm-group-head">
+                    <h2 class="tk-head" id="lm-region-title">Loop region</h2>
+                    <label class="tk-check lm-smart"><input type="checkbox" aria-label="Smart seam" checked><span>Smart seam</span></label>
+                </div>
+                <p class="tk-note lm-hint" data-seam-hint>Load a track to measure the seam.</p>
+                <div class="lm-sliders">
+                    <div class="lm-slider"><div class="lm-slider-top"><label for="lm-start">Start</label><output class="tk-mono" for="lm-start" data-start-output></output></div><input id="lm-start" type="range" data-start min="0" step="0.01"></div>
+                    <div class="lm-slider"><div class="lm-slider-top"><label for="lm-length">Loop length</label><output class="tk-mono" for="lm-length" data-length-output></output></div><input id="lm-length" type="range" data-length min="0.25" step="0.01"></div>
+                    <div class="lm-slider"><div class="lm-slider-top"><label for="lm-crossfade">Crossfade</label><output class="tk-mono" for="lm-crossfade" data-crossfade-output></output></div><input id="lm-crossfade" type="range" data-crossfade min="0" step="0.01"></div>
+                </div>
+            </section>
+            <section class="lm-group" aria-labelledby="lm-shape-title">
+                <h2 class="tk-head" id="lm-shape-title">Fades and loudness</h2>
+                <p class="tk-note lm-hint">Fades shape the saved file once. Leave both at zero for an unbroken repeat.</p>
+                <div class="lm-sliders">
+                    <div class="lm-slider"><div class="lm-slider-top"><label for="lm-fade-in">Fade in</label><output class="tk-mono" for="lm-fade-in" data-fade-in-output></output></div><input id="lm-fade-in" type="range" data-fade-in min="0" step="0.01"></div>
+                    <div class="lm-slider"><div class="lm-slider-top"><label for="lm-fade-out">Fade out</label><output class="tk-mono" for="lm-fade-out" data-fade-out-output></output></div><input id="lm-fade-out" type="range" data-fade-out min="0" step="0.01"></div>
+                </div>
+                <label class="tk-check lm-normalize"><input type="checkbox" data-normalize><span><b>Normalize to −1 dB</b><small>Raises a quiet loop without clipping. Play hears it too.</small></span></label>
+            </section>
+            <p class="tk-note lm-credit">MP3 encoding uses the open-source <a href="https://lame.sourceforge.net/" target="_blank" rel="noopener noreferrer">LAME encoder</a> under the LGPL.</p>
+        </section>
+
+        <dialog class="tk-sheet" data-sheet="export" aria-labelledby="lm-export-title">
+            <div class="tk-sheet-head"><h2 id="lm-export-title">Export</h2></div>
+            <div class="tk-sheet-body lm-sheet-body">
+                <label class="tk-field">File length
+                    <select class="tk-select" aria-label="File length" data-export-mode><option value="once">One pass of the loop</option><option value="fill">Repeat to fill a duration</option></select>
+                </label>
+                <label class="tk-field" data-fill-wrap hidden>Duration
+                    <input class="tk-input" aria-label="Target duration" data-fill value="3:00" placeholder="m:ss" inputmode="decimal" autocomplete="off" spellcheck="false">
+                </label>
+                <label class="tk-field">Format
+                    <select class="tk-select" aria-label="Format" data-format><option value="wav" selected>WAV · lossless</option><option value="mp3-128">MP3 · 128 kbps</option><option value="mp3-192">MP3 · 192 kbps</option><option value="mp3-320">MP3 · 320 kbps</option></select>
+                </label>
+                <p class="tk-note" data-format-hint>WAV repeats sample for sample. MP3 players add a short gap at the join because the encoder pads the file, so pick MP3 only when size matters.</p>
+                <p class="lm-summary"><span>Writes</span><strong class="tk-mono" data-export-summary></strong></p>
+            </div>
+            <div class="tk-sheet-foot">
+                <p class="tk-status" role="status" data-status></p>
+                <button class="tk-btn" type="button" data-sheet-close>Close</button>
+                <button class="tk-btn is-act" type="button" data-export>Download WAV</button>
+            </div>
+        </dialog>
+
+        <dialog class="tk-sheet" data-sheet="library" aria-labelledby="lm-library-title">
+            <div class="tk-sheet-head"><h2 id="lm-library-title">Save to Library</h2></div>
+            <div class="tk-sheet-body lm-sheet-body">
+                <div class="lm-what" data-library-what>
+                    <p class="tk-field">What is saved</p>
+                    <p class="lm-summary"><strong data-library-file></strong><span class="tk-mono" data-library-summary></span></p>
+                    <p class="tk-note">Its length and format are the ones set in Export.</p>
+                </div>
+                <label class="tk-field" data-folder-field>Folder
+                    <select class="tk-select" data-folder></select>
+                </label>
+                <p class="tk-empty" data-folder-empty hidden>There is no folder you can save into. Ask an administrator for a folder you may upload to.</p>
+            </div>
+            <div class="tk-sheet-foot">
+                <p class="tk-status" role="status"></p>
+                <button class="tk-btn" type="button" data-sheet-close>Cancel</button>
+                <button class="tk-btn is-act" type="button" data-library-go>Save</button>
+            </div>
+        </dialog>
     </main>
 </body>
 </html>

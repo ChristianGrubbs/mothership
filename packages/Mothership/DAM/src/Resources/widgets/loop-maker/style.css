@@ -1,136 +1,559 @@
-:root {
-    color-scheme: light;
-    --paper: #fff;
-    --wash: #f6f7f8;
-    --ink: #101114;
-    --soft: #5b5f66;
-    --line: #c9cdd0;
-    --crimson: #bc232c;
-    --crimson-dark: #a51d25;
-    --crimson-soft: #f8e4e5;
-    --success: #5b7a3f;
-    --warning: #c89b1f;
-    --shadow: 0 18px 48px -40px rgba(16, 17, 20, .55);
-    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: var(--wash);
+/* Loop Maker, on the tool kit (../_kit/tool-kit.css). With no track open: one pane, the drop zone. With a track, from
+   960 px of the tool's own width: the stage (the track, its wave, the transport) beside the controls, each scrolling
+   by itself; under 960 they scroll as one. The track is the person's content and takes no accent. Blue is focus, the
+   one filled control and a native tick; red is a failure, always with its sign. */
+/* Positioned, so the kit's visually hidden file inputs are held inside the tool. */
+.lm {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    height: 100%;
+    min-height: 0;
+}
+
+.lm[data-loaded="false"] {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.lm .tk-pane {
+    padding: 20px 20px 32px;
+}
+
+/* No track: the drop zone has a look of its own, and its one filled control. */
+.lm-empty {
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    gap: 6px;
+}
+
+.lm-drop {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: min(560px, 100%);
+    min-height: 280px;
+    padding: 32px 24px;
+    border: 1.5px dashed var(--ink-3);
+    border-radius: 16px;
+    background: var(--well);
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .15s, background-color .15s;
+}
+
+.lm-drop:hover {
+    border-color: var(--ink-2);
+}
+
+.lm-drop.drag {
+    border-color: var(--ink);
+    background: var(--ctl);
+}
+
+.lm-drop[aria-busy="true"] {
+    cursor: progress;
+}
+
+.lm-drop:has(input:focus-visible) {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.lm-drop-icon {
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    margin-bottom: 2px;
+    border-radius: 50%;
+    background: var(--card);
+    box-shadow: var(--lift), inset 0 0 0 1px var(--edge);
+}
+
+.lm-drop-icon::before {
+    content: "";
+    width: 24px;
+    height: 24px;
+    background: var(--ink-2);
+    mask: url("assets/upload.svg") center / contain no-repeat;
+}
+
+.lm-drop-title {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -.01em;
+}
+
+.lm-drop-note {
+    max-width: 44ch;
+    text-wrap: pretty;
+}
+
+.lm-drop .tk-btn {
+    height: 44px;
+    margin-top: 8px;
+    padding: 0 20px;
+}
+
+.lm-demo {
+    height: 44px;
+    margin-top: 6px;
+    background: none;
+    box-shadow: none;
+    color: var(--ink-2);
+}
+
+.lm-demo:hover {
+    background: var(--ctl);
     color: var(--ink);
 }
 
-* { box-sizing: border-box; }
-[hidden] { display: none !important; }
-body { margin: 0; background: var(--wash); }
-button, input, select { font: inherit; }
-button, select, label { -webkit-tap-highlight-color: transparent; }
-.shell { width: min(100%, 1120px); margin: auto; padding: clamp(28px, 4vw, 52px) clamp(20px, 4vw, 42px) 80px; }
-.page-head { margin-bottom: 28px; }
-.eyebrow { margin: 0; color: var(--crimson); font-size: 11px; font-weight: 750; letter-spacing: .14em; }
-.page-head h1 { margin: 6px 0 10px; font-family: "Inter", -apple-system, sans-serif; font-size: clamp(34px, 5vw, 48px); letter-spacing: -.04em; line-height: 1; }
-.page-head > p:not(.eyebrow) { max-width: 66ch; margin: 0; color: var(--soft); font-size: clamp(15px, 2vw, 17px); line-height: 1.5; }
-.workflow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 660px; margin: 25px 0 0; padding: 0; list-style: none; }
-.workflow li { position: relative; display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--soft); }
-.workflow li:not(:last-child)::after { content: ""; height: 1px; flex: 1; margin: 0 12px; background: var(--line); }
-.workflow b { display: grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: 50%; background: var(--crimson-soft); color: var(--crimson); font-size: 12px; }
-.workflow span { display: grid; }
-.workflow strong { color: var(--ink); font-size: 13px; }
-.workflow small { margin-top: 1px; font-size: 11px; white-space: nowrap; }
-.drop-zone { display: flex; min-height: 290px; flex-direction: column; align-items: center; justify-content: center; gap: 10px; border: 1.5px dashed var(--line); border-radius: 18px; background: var(--paper); box-shadow: var(--shadow); cursor: pointer; text-align: center; padding: 36px; color: var(--soft); transition: border-color .18s, background .18s, transform .18s; }
-.drop-zone:hover { border-color: var(--crimson); transform: translateY(-1px); }
-.drop-zone.drag { border-color: var(--crimson); background: #fdf5f5; }
-.drop-zone strong { color: var(--ink); font-size: clamp(20px, 3vw, 25px); letter-spacing: -.02em; }
-.drop-zone > span:not(.drop-icon, .choose-file) { max-width: 54ch; font-size: 14px; line-height: 1.5; }
-.drop-zone input, .file-bar input { display: none; }
-.drop-icon { display: grid; place-items: center; width: 58px; height: 58px; margin-bottom: 3px; border-radius: 50%; background: var(--crimson-soft); }
-.drop-icon::before { content: ""; width: 27px; height: 27px; background: var(--crimson); mask: url("assets/upload.svg") center / contain no-repeat; }
-.choose-file, .replace-button { display: inline-grid; place-items: center; min-height: 44px; border-radius: 999px; font-weight: 700; cursor: pointer; }
-.choose-file { margin-top: 8px; padding: 0 20px; background: var(--crimson); color: #fff; }
-.replace-button { padding: 0 16px; border: 1px solid var(--line); color: var(--ink); }
-.text-button { display: inline-grid; min-height: 44px; place-items: center; border: 0; background: transparent; color: var(--crimson); font-weight: 700; cursor: pointer; padding: 8px 4px; }
-.upload-status { min-height: 20px; margin: 0 0 6px; color: var(--crimson); font-size: 13px; }
-.editor { border-radius: 16px; }
-.file-bar, .transport, .export-bar { display: flex; align-items: center; gap: 14px; background: var(--paper); border: 1px solid rgba(16, 17, 20, .12); }
-.file-bar { justify-content: space-between; padding: 14px 18px; border-radius: 16px 16px 0 0; border-bottom: 0; }
-.file-bar > div { display: flex; flex-direction: column; min-width: 0; }
-.file-bar strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.file-bar span { color: var(--soft); font-size: 13px; margin-top: 3px; }
-.wave-wrap { position: relative; height: clamp(190px, 28vw, 270px); background: var(--paper); border-inline: 1px solid rgba(16, 17, 20, .12); }
-canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
-.timeline-help { display: flex; justify-content: space-between; gap: 16px; padding: 8px 18px 12px; background: var(--paper); color: var(--soft); font-size: 12px; }
-.timeline-help span:nth-child(2) { text-align: center; }
-.transport { justify-content: space-between; flex-wrap: wrap; padding: 15px 18px; border-radius: 0 0 16px 16px; }
-.transport-actions, .transport-readout { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
-.transport-readout { justify-content: flex-end; margin-left: auto; }
-.transport button, .export-bar button { min-height: 44px; border: 1.5px solid var(--ink); border-radius: 999px; background: transparent; padding: 0 18px; color: var(--ink); font-weight: 700; cursor: pointer; }
-.primary { border-color: var(--crimson) !important; background: var(--crimson) !important; color: #fff !important; }
-.primary:hover { background: var(--crimson-dark) !important; }
-button:disabled { cursor: progress; opacity: .62; }
-.clock { font: 500 13px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--soft); }
-.score { display: flex; align-items: center; gap: 7px; font-size: 13px; white-space: nowrap; }
-.score i { width: 8px; height: 8px; border-radius: 50%; background: var(--crimson); }
-.settings-section { margin-top: 24px; padding: clamp(18px, 3vw, 26px); border: 1px solid rgba(16, 17, 20, .1); border-radius: 16px; background: var(--paper); box-shadow: var(--shadow); }
-.section-head { display: flex; justify-content: space-between; align-items: start; gap: 24px; padding-bottom: 14px; border-bottom: 1px solid rgba(16, 17, 20, .12); }
-.section-head h2 { margin: 0; font-size: 20px; letter-spacing: -.02em; }
-.section-head p { margin: 4px 0 0; color: var(--soft); font-size: 13px; line-height: 1.45; }
-.switch-label { display: flex; min-height: 44px; align-items: center; gap: 9px; font-size: 14px; font-weight: 700; white-space: nowrap; cursor: pointer; }
-.switch-label input { position: absolute; opacity: 0; }
-.switch-label span { position: relative; width: 42px; height: 24px; border-radius: 99px; background: var(--line); }
-.switch-label span::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px #0003; transition: transform .18s; }
-.switch-label input:checked + span { background: var(--crimson); }
-.switch-label input:checked + span::after { transform: translateX(18px); }
-.hint { margin: 16px 0 0; padding: 12px 15px; border-radius: 10px; background: var(--wash); color: var(--soft); font-size: 13px; line-height: 1.4; }
-.control-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px; margin-top: 20px; }
-.control-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.control-grid label { display: grid; grid-template-columns: 1fr auto; gap: 10px; color: var(--ink); font-size: 14px; font-weight: 700; }
-.control-grid output { color: var(--soft); font: 500 13px ui-monospace, SFMono-Regular, Menlo, monospace; }
-.control-grid input { grid-column: 1 / -1; width: 100%; min-height: 28px; accent-color: var(--crimson); cursor: ew-resize; }
-.export-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 14px; margin-top: 20px; }
-.export-grid > label { display: flex; min-width: 0; flex-direction: column; gap: 7px; font-size: 13px; font-weight: 700; }
-.export-grid select, .export-grid input { width: 100%; min-height: 44px; padding: 8px 11px; border: 1.5px solid var(--line); border-radius: 9px; background: var(--paper); color: var(--ink); }
-.export-grid .check span { display: flex; min-height: 44px; align-items: center; gap: 8px; font-weight: 500; }
-.export-grid .check input { width: 20px; min-height: auto; height: 20px; accent-color: var(--crimson); }
-.export-bar { justify-content: space-between; margin-top: 20px; padding: 14px 16px; border-radius: 13px; background: var(--wash); color: var(--soft); font-size: 13px; }
-.export-bar > span { display: grid; gap: 2px; }
-.export-bar small { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
-.export-bar strong { color: var(--ink); font: 600 13px ui-monospace, SFMono-Regular, Menlo, monospace; }
-.notice { min-height: 21px; margin: 10px 0 -8px; color: var(--crimson); font-size: 13px; }
-.legal { margin-top: 30px; color: var(--soft); font-size: 11px; text-align: center; }
-.legal a { color: inherit; text-underline-offset: 2px; }
-:focus-visible { outline: 3px solid rgba(188, 35, 44, .28); outline-offset: 3px; }
-@media (max-width: 960px) {
-    .control-grid { gap: 18px; }
-    .export-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .transport-readout { width: 100%; justify-content: space-between; margin-left: 0; }
+.lm-error,
+.lm-line {
+    max-width: 560px;
+    color: var(--alert-text);
+    font-size: 13.5px;
+    font-weight: 500;
+    text-align: center;
+    text-wrap: pretty;
 }
-@media (max-width: 640px) {
-    .shell { padding: 26px 16px 56px; }
-    .workflow { margin-top: 20px; }
-    .workflow li { gap: 6px; }
-    .workflow li:not(:last-child)::after { margin: 0 6px; }
-    .workflow small { display: none; }
-    .drop-zone { min-height: 245px; padding: 28px 18px; border-radius: 15px; }
-    .file-bar { align-items: flex-start; gap: 10px; padding: 13px 14px; }
-    .file-bar > div { max-width: calc(100% - 118px); }
-    .replace-button { min-height: 42px; padding-inline: 13px; font-size: 13px; }
-    .timeline-help span:nth-child(2) { display: none; }
-    .transport { padding: 14px; }
-    .transport-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
-    .transport-actions .primary { grid-column: 1 / -1; }
-    .transport button { padding-inline: 12px; }
-    .section-head { gap: 12px; }
-    .control-grid, .control-grid.two, .export-grid { grid-template-columns: 1fr; gap: 18px; }
-    .export-bar { align-items: stretch; flex-direction: column; }
-    .export-bar button { width: 100%; }
+
+.lm-error:empty,
+.lm-line:empty {
+    display: none;
 }
-@media (max-width: 420px) {
-    .workflow strong { font-size: 12px; }
-    .transport-actions { grid-template-columns: 1fr; }
-    .transport-actions .primary { grid-column: auto; }
-    .transport-readout { align-items: flex-start; flex-direction: column; }
-    .section-head { align-items: flex-start; flex-direction: column; }
+
+.lm-error::before,
+.lm-line.is-error::before {
+    content: "✕ ";
 }
-@media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+
+.lm-line {
+    max-width: none;
+    color: var(--ink-2);
+    text-align: start;
 }
-@media (prefers-color-scheme: dark) {
-    :root[data-theme="dark"] { --paper: #1b1d20; --wash: #101114; --ink: #f6f7f8; --soft: #b7bcc0; --line: #4a4e54; --crimson-soft: #431c21; --shadow: none; color-scheme: dark; }
-    .drop-zone.drag { background: #2a181b; }
+
+.lm-line.is-error {
+    color: var(--alert-text);
+}
+
+/* The stage. Its rows lay out by its own width, which a folded screen makes narrow on a wide page. */
+.lm-stage {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    container-type: inline-size;
+}
+
+.lm-own {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.lm-file {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.lm-file-text {
+    min-width: 0;
+}
+
+.lm-file h2 {
+    overflow: hidden;
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.lm-file-meta {
+    margin-top: 3px;
+    color: var(--ink-2);
+}
+
+.lm-replace {
+    cursor: pointer;
+}
+
+.lm-replace:has(input:focus-visible) {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+/* Beside the controls the wave takes the stage's spare height, so the transport sits under it, not mid-pane. */
+.lm-wave {
+    position: relative;
+    flex: 1 1 320px;
+    min-height: 200px;
+    max-height: 640px;
+    overflow: hidden;
+    border-radius: 12px;
+    background: var(--well);
+}
+
+.lm-wave canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+}
+
+.lm-ruler {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: -6px;
+    color: var(--ink-2);
+}
+
+.lm-help {
+    font-family: var(--font-ui);
+    font-size: 12.5px;
+    letter-spacing: 0;
+    text-align: center;
+    text-wrap: balance;
+}
+
+.lm-transport {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px 24px;
+}
+
+.lm-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.lm-actions .tk-btn {
+    height: 44px;
+}
+
+.lm-actions .tk-btn:disabled {
+    cursor: progress;
+}
+
+.lm-play svg {
+    fill: currentColor;
+    stroke: none;
+}
+
+.lm-play .lm-glyph-stop,
+.lm-play[data-playing="true"] .lm-glyph-play {
+    display: none;
+}
+
+.lm-play[data-playing="true"] .lm-glyph-stop {
+    display: inline;
+}
+
+/* The two figures: each the largest text in its place, its name over it in the quieter style. */
+.lm-readout {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 28px;
+}
+
+.lm-stat {
+    display: grid;
+    gap: 2px;
+}
+
+.lm-stat > span {
+    color: var(--ink-2);
+    font-size: 12.5px;
+    font-weight: 500;
+}
+
+.lm-stat strong {
+    font-size: 17px;
+    font-weight: 400;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+[data-seam-score] b {
+    font-size: 20px;
+    font-weight: 500;
+}
+
+[data-seam-score] span {
+    color: var(--ink-2);
+    font-size: 13px;
+}
+
+/* The controls. */
+.lm-group + .lm-group {
+    margin-top: 24px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+}
+
+.lm-group-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.lm-group-head .tk-head {
+    margin: 0 4px;
+}
+
+.lm-group > .tk-head {
+    margin-top: 0;
+}
+
+.lm-smart {
+    flex: none;
+    font-size: 13.5px;
+    font-weight: 500;
+}
+
+.lm-hint {
+    margin: 4px 4px 14px;
+    text-wrap: pretty;
+}
+
+.lm-sliders {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+    gap: 12px 24px;
+    padding: 0 4px;
+}
+
+.lm-slider {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.lm-slider-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.lm-slider-top label {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.lm-slider output {
+    color: var(--ink-2);
+    white-space: nowrap;
+}
+
+.lm-slider input[type="range"] {
+    width: 100%;
+    height: 28px;
+    margin: 0;
+    cursor: ew-resize;
+}
+
+.lm-normalize {
+    align-items: flex-start;
+    margin: 12px 4px 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+}
+
+.lm-normalize input {
+    margin-top: 2px;
+}
+
+.lm-normalize > span {
+    display: grid;
+    gap: 2px;
+}
+
+.lm-normalize b {
+    font-weight: 500;
+}
+
+.lm-normalize small {
+    line-height: 1.45;
+    text-wrap: pretty;
+}
+
+.lm-credit {
+    margin: 28px 4px 0;
+    font-size: 12px;
+}
+
+.lm-credit a {
+    color: inherit;
+    text-underline-offset: 2px;
+}
+
+/* The two sheets. */
+.lm-sheet-body {
+    display: grid;
+    gap: 14px;
+}
+
+.lm-sheet-body .tk-note {
+    text-wrap: pretty;
+}
+
+.lm-summary {
+    display: grid;
+    gap: 2px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: var(--well);
+}
+
+.lm-summary > span:first-child {
+    color: var(--ink-2);
+    font-size: 12.5px;
+    font-weight: 500;
+}
+
+.lm-summary strong {
+    overflow-wrap: anywhere;
+}
+
+.lm-summary .tk-mono {
+    color: var(--ink-2);
+}
+
+.lm-what {
+    display: grid;
+    gap: 6px;
+}
+
+@media (pointer: coarse) {
+    .lm .tk-btn {
+        height: 44px;
+    }
+}
+
+/* One scroller: the stage, then the controls under it. */
+@media (max-width: 959px) {
+    .lm {
+        display: block;
+        overflow-x: hidden;
+        overflow-y: auto;
+    }
+
+    .lm[data-loaded="false"] {
+        display: grid;
+    }
+
+    .lm .tk-pane {
+        overflow: visible;
+    }
+
+    .lm .tk-pane + .tk-pane {
+        border-top: 1px solid var(--line);
+        border-left: 0;
+    }
+
+    .lm-wave {
+        flex: none;
+        height: clamp(180px, 36vh, 320px);
+        min-height: 0;
+    }
+}
+
+/* A narrow stage: Play on a row of its own, the other two sharing the next; the help line goes (the manual has it). */
+@container (max-width: 519px) {
+    .lm-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: 100%;
+    }
+
+    .lm-actions .lm-play {
+        grid-column: 1 / -1;
+    }
+
+    .lm-actions .tk-btn {
+        padding: 0 10px;
+    }
+
+    .lm-help {
+        display: none;
+    }
+}
+
+@media (max-width: 479px) {
+    .lm .tk-pane {
+        padding: 16px 16px 28px;
+    }
+
+    .lm-drop {
+        min-height: 240px;
+        padding: 28px 18px;
+    }
+
+    .lm-wave {
+        height: 180px;
+    }
+}
+
+/* A folded screen (the kit says how a tool learns of it), nothing on the fold. Open like a book: the stage left of the
+   fold, the controls right of it, and with no track the drop zone on the left. Held like a laptop: the stage above the
+   fold, where it is watched, and the controls below it, near the hand; with no track the drop zone below. */
+:root[data-fold] .lm {
+    display: grid;
+    overflow: hidden;
+}
+
+:root[data-fold="columns"] .lm {
+    grid-template-columns: var(--fold-start) minmax(0, 1fr);
+    column-gap: calc(var(--fold-end) - var(--fold-start));
+}
+
+:root[data-fold="rows"] .lm {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: var(--fold-start) minmax(0, 1fr);
+    row-gap: calc(var(--fold-end) - var(--fold-start));
+}
+
+:root[data-fold="rows"] .lm-empty,
+:root[data-fold="rows"] .lm-controls {
+    grid-row: 2;
+}
+
+:root[data-fold] .lm .tk-pane {
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+:root[data-fold] .lm .tk-pane + .tk-pane {
+    border: 0;
+}
+
+:root[data-fold] .lm-drop {
+    min-height: 200px;
+}
+
+/* On a fold the stage is one screen tall: the wave takes what the other rows leave, and gives up height before the
+   transport does. Above a tabletop fold that can be little. */
+:root[data-fold] .lm-wave {
+    flex: 1 1 0;
+    height: auto;
+    min-height: 140px;
+    max-height: 360px;
+}
+
+:root[data-fold="rows"] .lm-wave {
+    min-height: 96px;
 }
