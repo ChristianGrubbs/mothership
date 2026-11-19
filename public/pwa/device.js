@@ -66,15 +66,35 @@
         }
     };
 
+    // A list page ([data-fold-list]) keeps the row being read in view when the pose changes: folding moves things a little
+    // and never rearranges them (HIG). Book pose sets the page head beside the rows, which stops the browser's own scroll
+    // anchoring, so the first row in view is noted just before the switch and put back at the same offset after it.
+    const holdRow = () => {
+        const list = document.querySelector('[data-fold-list]');
+        let scroller = list?.parentElement;
+        while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+        if (!scroller) return null;
+        const offset = row => row.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+        const row = [...list.querySelectorAll('.bridge-list-row, .bridge-review-item')].find(item => offset(item) + item.offsetHeight > 0);
+        if (!row) return null;
+        const before = offset(row);
+
+        // A frame later, so it tops up whatever the browser's own anchoring managed instead of adding to it.
+        return () => requestAnimationFrame(() => { scroller.scrollTop += offset(row) - before; });
+    };
+
     const apply = () => {
         queued = false;
         const previous = fold?.mode ?? null;
         fold = readFold();
+        const changed = (fold?.mode ?? null) !== previous;
+        const restoreRow = changed ? holdRow() : null;
         // Layouts that choose a column count in script (Home) re-render when the pose changes.
-        if ((fold?.mode ?? null) !== previous) dispatchEvent(new CustomEvent('mothership:fold', { detail: { mode: fold?.mode ?? null } }));
+        if (changed) dispatchEvent(new CustomEvent('mothership:fold', { detail: { mode: fold?.mode ?? null } }));
         if (!fold) {
             clearRoot();
             measureSplits();
+            restoreRow?.();
             observer?.disconnect();
             observer = null;
 
@@ -89,6 +109,7 @@
         const trailing = fold.mode === 'columns' && root.dir === 'rtl' ? fold.a : fold.b;
         for (const key of VARS) root.style.setProperty(`--seg-trailing-${key}`, px(trailing[key]));
         measureSplits();
+        restoreRow?.();
         // Vue renders the Library and dialogs after this runs, so split targets that appear later are measured too.
         if (!observer && 'MutationObserver' in window) {
             observer = new MutationObserver(schedule);

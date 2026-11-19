@@ -95,7 +95,7 @@ const listBody = `<style>body{margin:0}.top{position:relative;z-index:20;height:
     <div class="bridge-list-grid"><div>
       <div class="datagrid-toolbar" style="display:flex;flex-wrap:wrap;gap:8px"><div style="display:flex;gap:8px"><input aria-label="Search" style="width:260px"><button>Filter</button></div>
         <div><div style="display:flex;gap:8px"><button>10</button><p style="margin:0;max-width:44px">Per Page</p><input aria-label="Page" style="width:46px"><span>of 3</span><button>First</button><button>Previous</button><button>Next</button><button>Last</button></div></div></div>
-      <div style="display:flex;margin-top:16px"><div class="table-responsive rows" style="width:100%">${Array.from({length: 12}, (_, i) => `<div><button>Link ${i}</button></div>`).join('')}</div></div>
+      <div style="display:flex;margin-top:16px"><div class="table-responsive rows" style="width:100%">${Array.from({length: 12}, (_, i) => `<div class="bridge-list-row"><button>Link ${i}</button></div>`).join('')}</div></div>
     </div></div>
   </div>
 </main>
@@ -123,6 +123,55 @@ browserTest('a list page puts its head and toolbar on the leading segment and it
         // The open filter drawer covers the top bar and the rows, though its toolbar is a sticky layer of its own.
         await page.evaluate(() => { const panel = document.createElement('div'); panel.className = 'panel'; panel.dataset.drawerPanel = ''; panel.innerHTML = '<button>Apply</button>'; document.querySelector('.datagrid-toolbar').append(panel); });
         assert.deepEqual(await page.evaluate(() => [[760, 30], [760, 300]].map(([x, y]) => Boolean(document.elementFromPoint(x, y).closest('[data-drawer-panel]')))), [true, true]);
+    } finally {
+        await browser.close();
+    }
+});
+
+// Closing the device from book pose puts the page on the outer display (382 x 580, one segment), and opening it puts it
+// back. The row being read keeps its place on screen both ways, though the page head moves from beside the rows to above
+// them, and the head's sticky layer stops the browser's own scroll anchoring from doing it.
+browserTest('a list page keeps the row being read on screen from book to the outer display and back', async () => {
+    const browser = await launchBrowser({playwrightPath: process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH});
+    try {
+        const page = await browser.newPage({viewport: {width: 951, height: 585}});
+        await page.addInitScript(rects => { window.foldRects = rects; Object.defineProperty(window, 'viewport', {configurable: true,
+            get: () => ({segments: window.foldRects ? window.foldRects.map(rect => new DOMRect(...rect)) : [new DOMRect(0, 0, innerWidth, innerHeight)]})}); }, book(951));
+        // The head stays beside the rows as they scroll, as Upload requests' head does ([data-fold-lead]).
+        const html = listBody.replace('<div class="bridge-page-head"', '<div class="bridge-page-head" data-fold-lead');
+        await page.route('http://mothership.test/**', route => route.fulfill({contentType: 'text/html', body: `<!doctype html><html><body>${html}</body></html>`}));
+        await page.goto('http://mothership.test/');
+        const settle = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 50)))));
+        const read = () => page.evaluate(() => {
+            const main = document.querySelector('main').getBoundingClientRect();
+            const row = document.querySelector('[data-read]').getBoundingClientRect();
+            return {fold: document.documentElement.dataset.fold ?? null, onScreen: row.top >= main.top && row.bottom <= main.bottom, offset: Math.round(row.top - main.top)};
+        });
+        await settle();
+
+        // Partway down the rows in book pose, the first row wholly below the top of the scroller is the one being read.
+        await page.evaluate(() => {
+            const main = document.querySelector('main');
+            main.scrollTop = 400;
+            const top = main.getBoundingClientRect().top;
+            [...main.querySelectorAll('.bridge-list-row')].find(row => row.getBoundingClientRect().top >= top + 40).dataset.read = '';
+        });
+        const start = await read();
+        assert.equal(start.fold, 'columns');
+
+        await page.evaluate(() => { window.foldRects = null; });
+        await page.setViewportSize({width: 382, height: 580});
+        await settle();
+        const closed = await read();
+        assert.equal(closed.fold, null);
+        assert.ok(closed.onScreen && Math.abs(closed.offset - start.offset) <= 2, `closed: ${JSON.stringify({start, closed})}`);
+
+        await page.evaluate(rects => { window.foldRects = rects; }, book(951));
+        await page.setViewportSize({width: 951, height: 585});
+        await settle();
+        const back = await read();
+        assert.equal(back.fold, 'columns');
+        assert.ok(back.onScreen && Math.abs(back.offset - start.offset) <= 2, `back in book: ${JSON.stringify({start, closed, back})}`);
     } finally {
         await browser.close();
     }
