@@ -241,13 +241,16 @@ browserTest('on a narrow stage the preview frames the plaque close up; a wide st
         assert.ok(toggle.width >= 44 && toggle.height >= 44, `the switch is a 44 px target on touch: ${toggle.width} x ${toggle.height}`);
         // From the keyboard: Space on the focused switch turns it off and does not start playback.
         await page.locator('[data-action="close-up"]').focus();
+        // The switch is painted on the next animation frame, so wait for its state rather than read it at once.
+        const pressedBecomes = value => page.waitForFunction(v => document.querySelector('[data-action="close-up"]').getAttribute('aria-pressed') === v, value, { timeout: 3000 }).catch(() => {});
         await page.keyboard.press('Space');
-        await page.waitForTimeout(100);
+        await pressedBecomes('false');
         assert.equal(await page.locator('[data-action="close-up"]').getAttribute('aria-pressed'), 'false', 'Space turns close-up off');
         assert.equal(await page.locator('[data-play-label]').textContent(), 'Play', 'and does not play');
         const whole = await drawn(page);
         assert.ok(whole.plaque < narrow.plaque * 0.7, `the whole frame shows when asked: ${whole.plaque}`);
         await page.keyboard.press('Enter');
+        await pressedBecomes('true');
         assert.equal(await page.locator('[data-action="close-up"]').getAttribute('aria-pressed'), 'true', 'Enter turns it back on');
 
         // The Output pane sets the frame, so it shows the whole frame unless close-up is asked for there.
