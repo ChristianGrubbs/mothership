@@ -1458,8 +1458,11 @@ a.bridge-list-name:hover {
     min-width: 0;
 }
 
-/* The tick box of a row or of the whole list: a 24 px glyph in a 44 px target, pulled back so the glyph lines up. */
+/* The tick box of a row or of the whole list: a 24 px glyph in a 44 px target, pulled back so the glyph lines up.
+   It is positioned so its hidden checkbox stays inside the page's scroller. Left to the page, the checkbox made the
+   whole document scroll, and a tap on a tick box could carry the top bar and the selection bar off a small screen. */
 .bridge-list-check {
+    position: relative;
     display: grid;
     flex: none;
     place-items: center;
