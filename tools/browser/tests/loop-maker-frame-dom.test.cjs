@@ -126,6 +126,36 @@ browserTest('Loop Maker tells the bar what it offers, and its Export and Save to
     } finally { await browser.close(); }
 });
 
+browserTest('Loop Maker sends one file however fast Save is pressed, and frees Save when the loop cannot be made', async () => {
+    const browser = await launch();
+    try {
+        const { page, errors } = await open(browser, { bridge: { bar: true } });
+        await loadDemo(page);
+        await page.evaluate(() => window.__press('library'));
+        await page.locator('[data-folder] option').nth(1).waitFor({ state: 'attached' });
+
+        // Two presses in one turn, before the file is made: one file goes to the Library.
+        await page.evaluate(() => { const go = document.querySelector('[data-library-go]'); go.click(); go.click(); });
+        await page.waitForFunction(() => window.__told.notices.length > 0);
+        assert.equal(await page.evaluate(() => window.__told.saves.length), 1);
+
+        // MP3 with no encoder: nothing is sent, the sheet says why, and Save takes the focus to try again.
+        await page.evaluate(() => window.__press('export'));
+        await page.locator('[data-format]').selectOption('mp3-128');
+        await page.evaluate(() => { window.__lame = window.lamejs; window.lamejs = undefined; window.__press('library'); });
+        await page.locator('[data-library-go]').click();
+        await page.locator('[data-sheet="library"] .tk-status.is-error').filter({ hasText: 'MP3 encoder unavailable' }).waitFor();
+        assert.equal(await page.evaluate(() => document.activeElement.matches('[data-library-go]:not(:disabled)')), true);
+        assert.equal(await page.evaluate(() => window.__told.saves.length), 1);
+
+        await page.evaluate(() => { window.lamejs = window.__lame; });
+        await page.locator('[data-library-go]').click();
+        await page.waitForFunction(() => window.__told.notices.length === 2);
+        assert.deepEqual(await page.evaluate(() => window.__told.saves[1]), { names: ['demo-loop.mp3'], types: ['audio/mpeg'], folder: '7' });
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); }
+});
+
 browserTest('Loop Maker without a bar draws its own Export, fills only the next step, and says a bad duration in both sheets', async () => {
     const browser = await launch();
     try {

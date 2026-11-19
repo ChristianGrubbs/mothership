@@ -385,14 +385,14 @@
     async function saveToLibrary() {
         if (saving) return;
         const folder = $('[data-folder]').value;
-        let file;
-        // The file is made here, from the loop as it is when Save is pressed, before anything is sent.
-        try { file = await makeFile(); } catch (error) { setLibrary({ message: error.message || 'The loop could not be made.', error: true }); return; }
+        // Held from the press, so a second press while the file is made sends nothing more.
         saving = true;
         failure = '';
         setLibrary();
-        let failed = null;
+        let file = null, failed = null;
         try {
+            // The file is made here, from the loop as it is when Save is pressed, before anything is sent.
+            file = await makeFile();
             const saved = await frame.save({ files: [file], folder });
             state.folder = folder;
             savePrefs();
@@ -407,7 +407,7 @@
             saving = false;
         }
         if (!failed) { setLibrary(); return; }
-        const message = failed.message || 'The file could not be saved. Try again.';
+        const message = failed.message || (file ? 'The file could not be saved. Try again.' : 'The loop could not be made.');
         if (nodes.librarySheet.open) {
             setLibrary({ message, error: true });
             // Save was disabled while it ran, which dropped the focus; give it back so Enter tries again.
