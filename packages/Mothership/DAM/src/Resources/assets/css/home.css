@@ -247,19 +247,59 @@ a.hm-pic:active{transform:scale(.985)}
 .hm-axis{margin-top:6px;color:var(--ink-2);font-size:12px;text-align:right}
 .hm-story{display:block;padding:11px 0;color:inherit}
 .hm-story+.hm-story{border-top:1px solid var(--line)}
-.hm-story b{display:-webkit-box;overflow:hidden;font-size:15px;font-weight:600;line-height:1.35;letter-spacing:-.008em;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+/* One-line descriptions never wrap, so the card is held to its column or it would push a phone sheet sideways. */
+.hm-signal{max-width:100%}
+.hm-sig-head{min-height:32px}
+.hm-sig-slot{display:flex;align-items:center;min-width:0}
+.hm-sw{display:inline-block}
+/* Every story row is the same height, so a new row can dock in without the card changing size. */
+.hm-story b{display:-webkit-box;overflow:hidden;min-height:2.7em;font-size:15px;font-weight:600;line-height:1.35;letter-spacing:-.008em;-webkit-box-orient:vertical;-webkit-line-clamp:2}
 .hm-story:hover b{text-decoration:underline;text-underline-offset:3px}
-.hm-story>span{display:block;margin-top:3px;color:var(--ink-2);font-size:13.5px}
-.hm-newrow{display:flex;align-items:center;gap:10px;width:100%;height:38px;margin:2px 0 6px;padding:0 12px;border:0;border-radius:10px;background:var(--well);color:var(--ink);font:500 13.5px/1 var(--font-ui);cursor:pointer}
-.hm-newrow span:nth-of-type(1){flex:1;text-align:left}
+.hm-story>span{display:block;overflow:hidden;margin-top:3px;color:var(--ink-2);font-size:13.5px;text-overflow:ellipsis;white-space:nowrap}
+.hm-newrow{position:relative;display:inline-flex;align-items:center;gap:9px;height:32px;padding:0 10px 0 12px;border:0;border-radius:10px;background:var(--well);color:var(--ink);font:500 13.5px/1 var(--font-ui);white-space:nowrap;cursor:pointer}
+.hm-newrow:hover{background:var(--ctl)}
 .hm-newrow .hm-mono{color:var(--ink-2)}
 .hm-tr{display:flex;justify-content:space-between;margin:14px 0 4px;padding-top:12px;border-top:1px solid var(--line);color:var(--ink-2);font-family:var(--font-mono);font-size:12px;font-weight:400;text-transform:uppercase}
-.hm-repo{display:flex;align-items:center;gap:12px;padding:8px 0;color:inherit}
+.hm-repo{display:flex;align-items:center;gap:12px;width:100%;padding:8px 0;border:0;border-radius:8px;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.hm-repo:focus-visible,.hm-newrow:focus-visible,.hm-tr-btn:focus-visible,.hm-tr-all:focus-visible,.hm-day select:focus-visible{outline:2px solid var(--act);outline-offset:2px}
 .hm-repo>span:first-child{flex:1;min-width:0}
 .hm-repo b{display:block;overflow:hidden;font-size:13.5px;font-weight:500;text-overflow:ellipsis;white-space:nowrap}
 .hm-repo:hover b{text-decoration:underline;text-underline-offset:3px}
 .hm-repo b+span{display:block;overflow:hidden;color:var(--ink-2);font-size:12.5px;text-overflow:ellipsis;white-space:nowrap}
 .hm-repo .hm-mono{flex:none;color:var(--ink-2)}
+.hm-repo.is-off b{color:var(--ink-2);font-weight:400}
+.hm-tr-note{padding:8px 0;color:var(--ink-2);font-size:13.5px}
+.hm-tr-all{display:block;min-height:32px;padding:0;border:0;background:none;color:var(--ink);font:500 13px/1 var(--font-ui);text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px;cursor:pointer}
+.hm-tr-all:hover{text-decoration-color:currentColor}
+.hm-tr-foot{display:flex;align-items:center;gap:10px;min-height:32px;margin-top:6px}
+.hm-day{position:relative;display:inline-flex;align-items:center;min-width:0}
+.hm-day[hidden],.hm-tr-soon[hidden],.hm-tr-btn[hidden],.hm-tr-all[hidden]{display:none}
+.hm-day select{height:32px;max-width:140px;padding:0 28px 0 11px;border:0;border-radius:10px;background:var(--well);color:var(--ink);font:500 13px/1 var(--font-ui);cursor:pointer;appearance:none}
+.hm-day .hm-ic{position:absolute;right:8px;width:14px;height:14px;color:var(--ink-2);pointer-events:none;transform:rotate(90deg)}
+.hm-tr-soon{min-width:0;color:var(--ink-2);font-size:12.5px;line-height:1.3}
+/* The labels share one cell, so the widest sets the width and the button never changes size. */
+.hm-tr-btn{display:inline-grid;flex:none;align-items:center;justify-items:center;height:32px;margin-left:auto;padding:0 12px;border:0;border-radius:10px;background:var(--well);color:var(--ink);font:500 13px/1 var(--font-ui);cursor:pointer}
+.hm-tr-btn:hover{background:var(--ctl)}
+.hm-tr-btn[aria-disabled=true]{cursor:default}
+.hm-tr-btn>span{grid-area:1/1;visibility:hidden}
+.hm-tr-btn[data-state=rest]>[data-l=rest],.hm-tr-btn[data-state=busy]>[data-l=busy],.hm-tr-btn[data-state=done]>[data-l=done]{visibility:visible}
+.hm-tr-btn[aria-busy=true]>[data-l=busy]{animation:hm-breathe 2.6s cubic-bezier(.45,0,.55,1) infinite}
+@keyframes hm-breathe{0%,100%{opacity:.55}38%{opacity:1}}
+.hm-tr-status{min-height:18px;margin-top:4px;color:var(--ink-2);font-size:13px;line-height:18px}
+.hm-tr-status.is-error{color:var(--ink)}
+.hm-tr-status.is-error::before{content:"";display:inline-block;width:7px;height:7px;margin-right:8px;border-radius:50%;background:var(--alert);vertical-align:1px}
+.hm-trend{width:min(460px,calc(100vw - 32px));max-height:calc(100dvh - 32px);margin:auto;padding:22px;overflow:auto;border:0;border-radius:18px;background:var(--card);box-shadow:var(--lift);color:var(--ink)}
+.hm-trend::backdrop{background:rgba(0,0,0,.5)}
+.hm-trend-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.hm-trend-head .hm-mono{color:var(--ink-2)}
+.hm-trend h2{margin-top:6px;font-size:20px;font-weight:600;line-height:1.25;letter-spacing:-.015em;overflow-wrap:anywhere}
+.hm-trend-x{flex:none;width:40px;padding:0}
+.hm-trend-desc{margin-top:12px;font-size:15px;line-height:1.45;overflow-wrap:anywhere}
+.hm-trend-facts{display:flex;flex-wrap:wrap;gap:14px 32px;margin:16px 0 0;padding-top:14px;border-top:1px solid var(--line)}
+.hm-trend-facts dt{color:var(--ink-2)}
+.hm-trend-facts dd{margin:5px 0 0;font-size:17px;font-weight:500;letter-spacing:-.01em}
+.hm-trend-seen{margin-top:14px;color:var(--ink-2);font-size:13.5px;line-height:1.4}
+.hm-trend-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:10px;margin-top:20px}
 .hm-figs{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:2px}
 .hm-figs b{display:block;font-size:30px;font-weight:500;line-height:1;letter-spacing:-.04em}
 .hm-figs span{display:block;margin-top:8px;color:var(--ink-2)}
@@ -312,6 +352,13 @@ a.hm-pic:active{transform:scale(.985)}
     .hm-divider span{grid-column:2}
     .hm-issue{flex-wrap:wrap}
     .hm-tool-list{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+    /* Signal's small controls reach 44px on a phone, and 16px text keeps the phone from zooming into the menu. */
+    .hm-newrow::after{content:"";position:absolute;inset:-6px 0}
+    .hm-day select{height:44px;font-size:16px}
+    .hm-tr-btn,.hm-tr-all{min-height:44px}
+    .hm-tr-btn{height:44px;font-size:16px}
+    .hm-trend-actions .hm-btn{flex:1 1 auto;min-height:44px}
+    .hm-trend-x{width:44px;height:44px}
 }
 /* The assistant's button stays quiet on Home: blue belongs to the one next step. */
 body:has([data-mothership-home]) .ap-fab{background:var(--card);color:var(--ink);border:1px solid var(--edge);box-shadow:0 2px 10px rgba(0,0,0,.22)}
@@ -319,4 +366,5 @@ body:has([data-mothership-home]) .ap-fab:hover,body:has([data-mothership-home]) 
 @media (prefers-reduced-motion:reduce){
     .hm-btn,.hm-tool,.hm-pic,.hm-pic::after{transition:none}
     .hm-pic.is-wait .hm-ic{animation:none}
+    .hm-tr-btn[aria-busy=true]>[data-l=busy]{animation:none}
 }

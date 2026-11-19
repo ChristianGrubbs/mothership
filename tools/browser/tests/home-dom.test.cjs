@@ -9,7 +9,7 @@ const browserTest=playwrightPath?test:test.skip;
 async function fixturePage(browser,{superuser=true}={}){
     const page=await browser.newPage({viewport:{width:1280,height:900},reducedMotion:'reduce'});
     await page.clock.install();
-    await page.setContent(homeApp({superuser}));
+    await page.setContent(`<!doctype html>${homeApp({superuser})}`);
     await page.addScriptTag({content:homeAnswersSource});
     await page.evaluate(()=>{
         const response=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json'}});
@@ -41,6 +41,7 @@ browserTest('Signal lists stories, holds new ones behind a row and shows them wh
         await card.getByRole('link',{name:/First headline/}).waitFor();
         assert.equal(await card.locator('.hm-story').first().getAttribute('target'),'_blank');
         // Rows hold still while someone reads them.
+        await card.hover();
         await page.evaluate(()=>{window.__feed.mode='second';});
         await pollSignal(page);
         await card.getByRole('button',{name:/1 new story/}).waitFor();
@@ -78,6 +79,7 @@ browserTest('a feed cannot write a script link or markup into Signal',async()=>{
         const page=await fixturePage(browser);
         const card=page.locator('[data-signal]');
         await card.getByRole('link',{name:/First headline/}).waitFor();
+        await card.hover();
         await page.evaluate(()=>{window.__feed.mode='unsafe';});
         await pollSignal(page);
         await card.locator('[data-signal-show]').click();

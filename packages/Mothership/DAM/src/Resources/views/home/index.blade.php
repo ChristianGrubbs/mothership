@@ -108,6 +108,7 @@
         <style>{!! file_get_contents(base_path('packages/Mothership/DAM/src/Resources/assets/css/home.css')) !!}</style>
         <script>{!! file_get_contents(base_path('packages/Mothership/DAM/src/Resources/assets/js/home-state.js')) !!}</script>
         <script>{!! file_get_contents(base_path('packages/Mothership/DAM/src/Resources/assets/js/home-calendar.js')) !!}</script>
+        <script>{!! file_get_contents(base_path('packages/Mothership/DAM/src/Resources/assets/js/home-signal.js')) !!}</script>
         <script>{!! file_get_contents(base_path('packages/Mothership/DAM/src/Resources/assets/js/home-bridge.js')) !!}</script>
         <script>{!! file_get_contents(base_path('packages/Mothership/DAM/src/Resources/assets/js/home.js')) !!}</script>
     @endpush

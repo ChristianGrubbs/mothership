@@ -10,7 +10,7 @@ const assets=path.resolve(__dirname,'../../../../packages/Mothership/DAM/src/Res
 const attribute=value=>String(value).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 
 // Home's scripts in the order the page loads them. home.js starts the page, so it comes last.
-const homeScripts=['js/home-state.js','js/home-bridge.js','js/home.js'].map(file=>fs.readFileSync(path.join(assets,file),'utf8'));
+const homeScripts=['js/home-state.js','js/home-signal.js','js/home-bridge.js','js/home.js'].map(file=>fs.readFileSync(path.join(assets,file),'utf8'));
 const homeStyles=fs.readFileSync(path.join(assets,'css/home.css'),'utf8');
 
 /**
