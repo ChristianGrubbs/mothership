@@ -55,7 +55,7 @@ browserTest('Loop Maker loads audio, exposes seam controls, and exports a real W
     try {
         const page = await browser.newPage({ acceptDownloads: true });
         await page.goto(`${server.base}/loop-maker/index.html`);
-        await page.getByRole('heading', { name: 'Loop Maker' }).waitFor();
+        await page.getByRole('button', { name: 'Load a demo track' }).waitFor();
         await page.locator('input[type="file"]').first().setInputFiles({ name: 'broken.mp3', mimeType: 'audio/mpeg', buffer: Buffer.from('not audio') });
         await page.getByRole('status').filter({ hasText: "Couldn't read that file" }).waitFor();
         await page.locator('input[type="file"]').first().setInputFiles({ name: 'fixture.wav', mimeType: 'audio/wav', buffer: waveFixture() });
@@ -64,6 +64,8 @@ browserTest('Loop Maker loads audio, exposes seam controls, and exports a real W
         assert.match(await page.locator('[data-seam-score]').innerText(), /^\d+% · (clean|fair|rough)$/);
         assert.equal(await page.getByLabel('Smart seam').isChecked(), true);
         assert.equal(await page.getByRole('link', { name: 'LAME encoder' }).getAttribute('href'), 'https://lame.sourceforge.net/');
+        // Opened from disk there is no bar, so the tool's own Export opens the sheet that holds the file's choices.
+        await page.getByRole('button', { name: 'Export…' }).click();
         await page.getByLabel('File length').selectOption('fill');
         await page.getByLabel('Target duration').fill('not a duration');
         assert.match(await page.locator('[data-status]').innerText(), /seconds or m:ss/);
@@ -107,6 +109,7 @@ browserTest('Loop Maker preserves digital silence instead of introducing clipped
         await page.goto(`${server.base}/loop-maker/index.html`);
         await page.locator('input[type="file"]').first().setInputFiles({ name: 'silence.wav', mimeType: 'audio/wav', buffer: waveFixture({ amplitude: 0 }) });
         await page.locator('[data-editor]').waitFor();
+        await page.getByRole('button', { name: 'Export…' }).click();
         await page.getByLabel('Format').selectOption('wav');
         const pending = page.waitForEvent('download', { timeout: 3_000 });
         await page.getByRole('button', { name: 'Download WAV' }).click();

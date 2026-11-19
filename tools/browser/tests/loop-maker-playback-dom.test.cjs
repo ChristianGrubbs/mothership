@@ -248,6 +248,7 @@ browserTest('the exported WAV wraps from its last sample back into its first as 
         await page.locator('[data-editor]').waitFor();
         await setRange(page, '[data-length]', '2');
         await setRange(page, '[data-crossfade]', '0.3');
+        await page.getByRole('button', { name: 'Export…' }).click();
 
         const [download] = await Promise.all([
             page.waitForEvent('download'),
