@@ -495,3 +495,71 @@ browserTest('on a fold the panes and a sheet keep clear of the strip', async () 
         await page.close();
     } finally { await browser.close(); }
 });
+
+// Saves `count` fresh takes, one generator after another, so the Saved sounds sheet has rows to show.
+async function saveTakes(page, count) {
+    const generators = page.locator('[data-gen]');
+    const kinds = await generators.count();
+    for (let i = 0; i < count; i++) {
+        await generators.nth(i % kinds).click();
+        await page.locator('[data-sfx]').focus();
+        await page.keyboard.press('s');
+    }
+    await page.locator('[data-open-saved]').click();
+    await page.getByRole('option').nth(count - 1).waitFor({ state: 'attached' });
+}
+
+browserTest('on a touch screen the segment, Simple and Advanced, and the selected sound\'s buttons are 44 px targets', async () => {
+    const browser = await launch();
+    try {
+        const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, reducedMotion: 'reduce' });
+        await page.goto(pageUrl);
+        await page.locator('[data-name]').filter({ hasNotText: /^Sound$/ }).waitFor();
+        assert.ok(await page.evaluate(() => matchMedia('(pointer: coarse)').matches), 'the page sees a touch screen');
+        const heights = selector => page.locator(selector).evaluateAll(nodes => nodes.filter(node => node.checkVisibility())
+            .map(node => ({ name: node.textContent.trim(), height: node.getBoundingClientRect().height })));
+        const short = list => list.filter(target => target.height < 44);
+
+        const segment = await heights('.sfx-seg .tk-seg-opt');
+        assert.equal(segment.length, 2, 'Effects and Shape are shown');
+        assert.deepEqual(short(segment), []);
+        await page.locator('[data-view-opt="shape"]').click();
+        const mode = await heights('.sfx-mode .tk-seg-opt');
+        assert.equal(mode.length, 2, 'Simple and Advanced are shown');
+        assert.deepEqual(short(mode), []);
+        assert.deepEqual(short(await heights('.sfx-own .tk-btn')), [], 'the way to the sheets');
+
+        await page.locator('[data-view-opt="effects"]').click();
+        await saveTakes(page, 1);
+        const tools = await heights('.sfx-tools .tk-btn');
+        assert.ok(tools.length >= 5, 'the selected sound\'s buttons are shown');
+        assert.deepEqual(short(tools), []);
+        await page.close();
+    } finally { await browser.close(); }
+});
+
+browserTest('held sideways on a short screen, the Saved sounds sheet shows its rows and still reaches its toolbar', async () => {
+    const browser = await launch();
+    try {
+        // An iPhone Duo's outer display on its side, as a browser window and as Safari, and a phone on its side.
+        for (const [width, height] of [[594, 312], [678, 340], [844, 390]]) {
+            const page = await browser.newPage({ viewport: { width, height }, hasTouch: true, reducedMotion: 'reduce' });
+            await page.goto(pageUrl);
+            await page.locator('[data-name]').filter({ hasNotText: /^Sound$/ }).waitFor();
+            await saveTakes(page, 8);
+            await settled(page);
+            const body = page.locator('[data-sheet="saved"] .tk-sheet-body');
+            const shown = await body.evaluate(node => {
+                const view = node.getBoundingClientRect();
+                return [...node.querySelectorAll('[role="option"]')].filter(row => {
+                    const box = row.getBoundingClientRect();
+                    return box.top >= view.top && box.bottom <= view.bottom;
+                }).length;
+            });
+            assert.ok(shown >= 2, `${width} x ${height}: ${shown} whole rows in view`);
+            await page.getByRole('button', { name: 'Delete' }).scrollIntoViewIfNeeded();
+            assert.ok(await page.getByRole('button', { name: 'Delete' }).isVisible(), `${width} x ${height}: the toolbar is reached by scrolling`);
+            await page.close();
+        }
+    } finally { await browser.close(); }
+});
