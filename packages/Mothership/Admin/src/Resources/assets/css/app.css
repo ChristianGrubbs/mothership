@@ -3255,6 +3255,48 @@ html[data-fold="rows"] .bridge-toolset-menu {
     }
 }
 
+/* A touch screen gets 44 px targets (Apple's HIG): every control in the bar and under the tool. The bar gives up the
+   same 4 px of its padding, so it stays 64 px (56 px on a phone or a short window) and the tool keeps its height. */
+@media (pointer: coarse) {
+    .bridge-toolbar-round,
+    .bridge-toolbar-reload,
+    .bridge-toolbar-act,
+    .bridge-toolset-btn,
+    .bridge-toolfoot > * {
+        height: 44px;
+    }
+
+    .bridge-toolbar-round,
+    .bridge-toolbar-reload {
+        width: 44px;
+    }
+}
+
+@media (pointer: coarse) and (max-width: 1023px) {
+    .bridge-toolbar {
+        padding-block: 10px 9px;
+    }
+}
+
+@media (pointer: coarse) and (max-width: 719px) {
+    .bridge-toolbar > [data-tool-export] {
+        width: 44px;
+    }
+}
+
+@media (pointer: coarse) and (max-height: 500px) and (max-width: 1023px), (pointer: coarse) and (max-width: 579px) {
+    .bridge-toolbar {
+        padding-block: 6px 5px;
+    }
+}
+
+/* The set menu still starts 58 px down, as the tabletop rule above counts on, now that the button is 4 px taller. */
+@media (pointer: coarse) and (min-width: 580px) {
+    .bridge-toolset-menu {
+        top: calc(100% + 4px);
+    }
+}
+
 /* The split-flap board: a lit object, dark in both themes. */
 .bridge-board {
     --fl: #232323;

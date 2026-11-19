@@ -51,8 +51,8 @@ const withBridge=()=>{
         async save({files,folder}){window.__told.saves.push({names:files.map(file=>file.name.split('.').pop()),folder});return {count:files.length,url:'/admin/dam/assets/1'};},
     };
 };
-const open=async(browser,{bridge=false,width=1440,height=900}={})=>{
-    const page=await browser.newPage({viewport:{width,height},reducedMotion:'reduce'});
+const open=async(browser,{bridge=false,width=1440,height=900,touch=false}={})=>{
+    const page=await browser.newPage({viewport:{width,height},hasTouch:touch,reducedMotion:'reduce'});
     const errors=[];
     page.on('pageerror',error=>errors.push(error.message));
     if(bridge)await page.addInitScript(withBridge);
@@ -82,6 +82,27 @@ browserTest('alone, the tool shows its own way to its sheets and offers no Save 
         assert.equal(await sheetOpen(page,'export'),false);
         assert.deepEqual(errors,[]);
         await page.close();
+    } finally { await browser.close(); }
+});
+
+// Apple's HIG asks for 44 pt targets: under touch the segment's tabs, each swatch and the hex that copies it are 44 px.
+// A mouse keeps the smaller ones.
+browserTest('on a touch screen the tabs, each swatch and the hex that copies it are 44 px targets',async()=>{
+    const browser=await launch();
+    try{
+        for(const touch of [true,false]){
+            const {page,errors}=await open(browser,{width:390,height:844,touch});
+            assert.equal(await page.evaluate(()=>matchMedia('(pointer: coarse)').matches),touch);
+            const sizes=await page.evaluate(()=>Object.fromEntries(['.ps-seg .tk-seg-opt','.ps-chip','.ps-hex'].map(selector=>[selector,
+                [...document.querySelectorAll(selector)].filter(node=>node.checkVisibility()).map(node=>{const box=node.getBoundingClientRect();return {width:box.width,height:box.height};})])));
+            for(const [selector,boxes] of Object.entries(sizes)){
+                assert.ok(boxes.length>0,`${selector} is shown`);
+                if(touch)assert.deepEqual(boxes.filter(box=>box.height<44||(selector==='.ps-chip'&&box.width<44)),[],`${selector} under touch`);
+                else assert.ok(boxes.every(box=>box.height<44),`${selector} keeps its size under a mouse`);
+            }
+            assert.deepEqual(errors,[]);
+            await page.close();
+        }
     } finally { await browser.close(); }
 });
 
