@@ -244,6 +244,14 @@
             const calendar = !root.querySelector('[data-calendar-open]').hidden;
             section.hidden = section.dataset.empty !== '0' && !calendar;
             root.querySelector('[data-cargo-empty]').hidden = section.dataset.empty !== '1';
+            window.MothershipHomeState.showCentre(root);
+        },
+
+        // Home is one column, its side, while the centre has nothing for the person: no board (a role without the
+        // Library), nothing that needs them and no Cargo. The bridge and home.js each call this after painting a part.
+        showCentre(root) {
+            const empty = ['[data-board-object]', '[data-needs]', '[data-cargo-section]'].every(part => root.querySelector(part).hidden);
+            root.querySelector('[data-grid]').toggleAttribute('data-solo', empty);
         },
     };
 })();

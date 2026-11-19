@@ -15,7 +15,9 @@ Top to bottom:
    has no files but offers Calendar. Tools are not on Home; they open from the Tools page
    ([tools-page](tools-page.md)). **Add your iPhone**, at the foot of the Docked card (for a role without the
    Library, which has no Docked card, at the foot of Away from ship), opens the Add to Home Screen steps for the
-   installable web app; there is no native iOS app.
+   installable web app; there is no native iOS app. While the centre has nothing for the person (no board, nothing
+   that needs them, no Cargo: a role without the Library), Home is its side column alone, in one column at every pose
+   (`showCentre()` in `home-state.js`).
 3. **Send files to a person**, under Apps, when Transfers is available to the account (`TransferSession::clientConfig`).
    It subscribes to `window.MothershipTransfers` and offers one Send button per connected device.
 4. **Recent uploads**: eight newest listable files, starred files beneath.

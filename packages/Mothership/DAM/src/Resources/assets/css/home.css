@@ -96,6 +96,11 @@ body:has([data-mothership-home]) .bridge-top-upload>span{position:absolute;width
 .hm-layout{display:grid;grid-template-columns:minmax(0,1fr) 344px;column-gap:28px;align-items:start}
 .hm-centre{min-width:0}
 .hm-side{display:flex;flex-direction:column;gap:16px;min-width:0}
+/* While the centre has nothing for the person (a role without the Library, home-state.js), Home is its side column
+   alone, at a readable width, at every pose. Its cards are on the page, so a phone needs no glance rows or sheet. */
+.hm-layout[data-solo]{grid-template-columns:minmax(0,640px);justify-content:center}
+.hm-layout[data-solo]>.hm-centre{display:none}
+.hm-layout[data-solo]>.hm-side{display:flex;flex-direction:column;align-items:stretch;margin-top:0}
 .hm-mono{font-family:var(--font-mono);font-size:12px;line-height:1.35;letter-spacing:.01em;text-transform:uppercase;font-weight:400}
 .hm-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .hm-sp{flex:1}
@@ -231,7 +236,9 @@ button.hm-sec-link{display:inline-block;flex:none;padding:0;white-space:nowrap;b
 button.hm-sec-link .hm-ic{display:inline-block;margin-right:6px;vertical-align:-3px}
 .hm-sec-link.is-quiet{color:var(--ink-2);font-weight:500}
 .hm-sec-link.is-quiet:hover{color:var(--ink)}
-.hm-sec-link.is-quiet:not([hidden])+.hm-sec-link{margin-left:0}
+/* Calendar and Open in Library are one group at the end of Cargo's head, so a narrow head wraps them together. */
+.hm-sec-acts{display:flex;align-items:baseline;gap:12px;margin-left:auto}
+.hm-sec-acts .hm-sec-link{margin-left:0}
 .hm-foot{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
 .hm-foot h3{margin-bottom:8px;color:var(--ink-2)}
 .hm-foot-link{display:inline-flex;align-items:center;gap:8px;min-height:32px;padding:0;border:0;background:none;color:var(--ink-2);font:500 14px/1.2 var(--font-ui);cursor:pointer}
@@ -390,6 +397,10 @@ button.hm-sec-link .hm-ic{display:inline-block;margin-right:6px;vertical-align:-
     .hm-glance{display:none}
     html[data-fold="columns"] .hm-layout{grid-template-columns:calc(var(--seg-a-right) - 114px) minmax(0,1fr);column-gap:calc(var(--fold-gap,0px) + 28px)}
     html[data-fold="columns"][dir="rtl"] .hm-layout{grid-template-columns:calc(100vw - var(--seg-b-left) - 114px) minmax(0,1fr)}
+    /* Alone, the side column takes the leading half, the centre's: it rests off the fold, and folding moves nothing. */
+    .hm-layout[data-solo]{grid-template-columns:calc(50vw - 114px);justify-content:start}
+    html[data-fold="columns"] .hm-layout[data-solo]{grid-template-columns:calc(var(--seg-a-right) - 114px)}
+    html[data-fold="columns"][dir="rtl"] .hm-layout[data-solo]{grid-template-columns:calc(100vw - var(--seg-b-left) - 114px)}
 }
 /* A short screen, such as a folding phone's outer display: the board and deck lose air, so the next step stays above
    the notice. */

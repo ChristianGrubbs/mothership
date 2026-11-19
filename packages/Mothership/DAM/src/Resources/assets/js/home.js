@@ -21,6 +21,7 @@
         const cargoSection=root.querySelector('[data-cargo-section]');cargoSection.hidden=true;delete cargoSection.dataset.empty;
         root.querySelector('[data-cargo-empty]').hidden=true;
         root.querySelector('[data-phone-elsewhere]').hidden=true;
+        grid.removeAttribute('data-solo');
         root.querySelectorAll('[data-cal-dialog],[data-access-menu]').forEach(element=>element.remove());
         root.querySelectorAll('dialog[open]').forEach(dialog=>dialog.removeAttribute('open'));
         $('[data-status]').textContent = '';
@@ -124,6 +125,9 @@
         let calendarMounted=false;
         function showCalendar(filter){const api=calendarApi();if(!api)return;if(!calendarMounted){api.mount(root.querySelector('[data-slot="coming"] [data-id="calendar"]'));calendarMounted=true;}if(filter)api.show(filter);if(!calendarDialog.open)calendarDialog.showModal();}
         calendarDialog.addEventListener('click',event=>{if(event.target.closest('[data-calendar-close]'))calendarDialog.close();},{signal});
+        // Calendar is its only opener. Safari on iPhone does not focus a tapped button, so the dialog cannot leave the
+        // focus where it found it: it gives it to Calendar, as the iPhone and upload dialogs give it to theirs.
+        calendarDialog.addEventListener('close',()=>{const opener=$('[data-calendar-open]');if(opener&&!opener.hidden)opener.focus();},{signal});
 
         // The iPhone app is the installed web app: Add your iPhone, at the foot of Docked, opens the three steps.
         const phoneDialog=$('[data-phone-dialog]');let phoneOpener=null;

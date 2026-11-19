@@ -43,10 +43,13 @@
                     <div class="hm-sec" id="hm-cargo">
                         <h2>Cargo</h2>
                         <span class="hm-mono">What landed, newest first</span>
-                        <button type="button" class="hm-sec-link is-quiet" data-calendar-open hidden><svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4z M4 10h16 M8 3v5 M16 3v5"/></svg>Calendar</button>
-                        @if (bouncer()->hasPermission('dam.assets'))
-                            <a class="hm-sec-link" href="{{ route('admin.dam.assets.index') }}">Open in Library <svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v10M7 17 17 7"/></svg></a>
-                        @endif
+                        {{-- One group, so a narrow head wraps Calendar and Open in Library together. --}}
+                        <span class="hm-sec-acts">
+                            <button type="button" class="hm-sec-link is-quiet" data-calendar-open hidden><svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4z M4 10h16 M8 3v5 M16 3v5"/></svg>Calendar</button>
+                            @if (bouncer()->hasPermission('dam.assets'))
+                                <a class="hm-sec-link" href="{{ route('admin.dam.assets.index') }}">Open in Library <svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v10M7 17 17 7"/></svg></a>
+                            @endif
+                        </span>
                     </div>
                     <ol class="hm-log" data-m="arrive" data-cargo></ol>
                     <p class="hm-empty hm-cargo-empty" data-cargo-empty hidden>Nothing has landed in your Library yet.</p>

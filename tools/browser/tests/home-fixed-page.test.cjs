@@ -238,6 +238,57 @@ browserTest('a role without the Library gets no board, an honest count of what i
     }finally{await browser.close();}
 });
 
+// The centre has nothing for a role without the Library, so Home is its side column alone: one centred column, or
+// the leading half where the screen can fold (900 to 1023 px), and on a phone its cards are on the page.
+browserTest('a role without the Library gets Home as one column at every pose, never beside a blank one',async()=>{
+    const browser=await launchBrowser({playwrightPath});
+    const locked=()=>window.__homeSummary({lead:{available:false,reason:'not-permitted'},board:{available:false,reason:'not-permitted'},away:{shares:{available:false,count:null,reason:'not-permitted'},upload_requests:{available:false,count:null,reason:'not-permitted'}}});
+    try{
+        const {page,errors}=await mount(browser,{fixture:{library:false},summary:locked});
+        await page.waitForFunction(()=>document.querySelector('[data-glance]').children.length>0);
+        const layout=()=>page.evaluate(()=>{
+            const span=node=>{const box=node.getBoundingClientRect();return box.width&&box.height?[Math.round(box.left),Math.round(box.right)]:null;};
+            return {grid:span(document.querySelector('[data-grid]')),centre:span(document.querySelector('.hm-centre')),away:span(document.querySelector('[data-away]')),phones:[...document.querySelectorAll('[data-phone-open]')].filter(node=>node.checkVisibility()).length};
+        });
+        for(const [width,height] of [[1440,900],[951,543],[820,1180],[594,368],[390,844]]){
+            await page.setViewportSize({width,height});
+            const {grid,centre,away,phones}=await layout();
+            assert.equal(centre,null,`no centre column at ${width}`);
+            assert.ok(away,`Away from ship is on the page at ${width}`);
+            assert.equal(phones,1,`one Add your iPhone at ${width}`);
+            if(width>=900&&width<=1023)assert.ok(away[1]<=width/2,`at ${width} it keeps the leading half, off the fold: ${away}`);
+            else assert.ok(Math.abs(away[0]+away[1]-grid[0]-grid[1])<=2&&away[1]-away[0]<=640,`at ${width} it is one centred column: ${away} in ${grid}`);
+        }
+        // Folded like a book, the leading half ends where the first segment does.
+        await page.setViewportSize({width:951,height:585});
+        await page.evaluate(()=>{document.documentElement.dataset.fold='columns';document.documentElement.style.setProperty('--seg-a-right','440px');});
+        assert.ok((await layout()).away[1]<=440,'the column ends before the fold');
+        assert.deepEqual(errors,[]);
+        await page.close();
+    }finally{await browser.close();}
+});
+
+// Safari on iPhone does not focus a tapped button, so the dialog cannot hand the focus back to the element that had it.
+browserTest('closing the calendar gives the focus to Calendar, though the tap that opened it never focused it',async()=>{
+    const browser=await launchBrowser({playwrightPath});
+    const calendar={...tool('calendar','Calendar'),kind:'widget',url:null};
+    try{
+        // The dialog is Home's own; the calendar module that fills it is home-fold-dialogs' to load, so a stand-in fills in.
+        const {page,errors}=await mount(browser,{catalog:[calendar],prepare:()=>{window.MothershipHomeCalendar={create:()=>({mount(){},show(){}})};}});
+        const opener=page.locator('#hm-cargo [data-calendar-open]'),dialog=page.locator('[data-calendar-dialog]');
+        await opener.waitFor();
+        const onCalendar=()=>page.evaluate(()=>document.activeElement?.hasAttribute('data-calendar-open')===true);
+        // A click event with no focus first: what a tap in Safari on iPhone gives.
+        await opener.dispatchEvent('click');
+        assert.equal(await dialog.evaluate(node=>node.open),true);
+        await dialog.locator('[data-calendar-close]').dispatchEvent('click');
+        assert.equal(await dialog.evaluate(node=>node.open),false);
+        assert.equal(await onCalendar(),true,'closing gives the focus to Calendar');
+        assert.deepEqual(errors,[]);
+        await page.close();
+    }finally{await browser.close();}
+});
+
 browserTest('an account whose Library has no files yet still sees Calendar, in the head of an empty Cargo',async()=>{
     const browser=await launchBrowser({playwrightPath});
     const calendar={...tool('calendar','Calendar'),kind:'widget',url:null};
@@ -285,6 +336,13 @@ browserTest('Home draws no tool to launch, puts Calendar beside Open in Library 
         await calendar.waitFor();
         const [opener,library]=await Promise.all([calendar,page.locator('#hm-cargo a.hm-sec-link')].map(locator=>locator.boundingBox()));
         assert.ok(Math.abs(opener.y+opener.height/2-(library.y+library.height/2))<1&&opener.x+opener.width<library.x,'Calendar sits just before Open in Library, on its line');
+        // A narrow head wraps the two together, never one without the other (an outer display held sideways, a phone).
+        for(const [width,height] of [[594,368],[390,844],[382,524]]){
+            await page.setViewportSize({width,height});
+            const [left,right]=await Promise.all([calendar,page.locator('#hm-cargo a.hm-sec-link')].map(locator=>locator.boundingBox()));
+            assert.ok(Math.abs(left.y+left.height/2-(right.y+right.height/2))<1&&left.x+left.width<right.x,`Calendar stays just before Open in Library at ${width}: ${JSON.stringify([left,right])}`);
+        }
+        await page.setViewportSize({width:1280,height:900});
         const saved=page.locator('[data-away] [data-section="links"]');
         await saved.waitFor();
         assert.deepEqual(await saved.locator('a').allTextContents(),['Print shop order form ↗']);

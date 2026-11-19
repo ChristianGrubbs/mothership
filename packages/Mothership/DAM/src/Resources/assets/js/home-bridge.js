@@ -276,6 +276,7 @@
             $('[data-docked]').hidden = true;
             $('[data-phone-elsewhere]').hidden = false;
             paintNeeds(); paintAway(); paintGlance();
+            state.showCentre(root);
         }
         function paintFailure(error) {
             $('[data-board]').removeAttribute('aria-busy');
