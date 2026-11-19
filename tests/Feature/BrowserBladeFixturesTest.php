@@ -109,6 +109,14 @@ function bladeFixturesRender(): array
     expect($accountMenu)->toHaveCount(1, 'the header renders one avatar dropdown with the account menu');
     $files['account-menu.html'] = $accountMenu[0];
 
+    // The tool frame page's root, as the browser receives it: tool-frame.js starts from this markup.
+    $frame = bladeFixturesDocument(test()->get(route('admin.tools.show', ['widget' => 'sound-effects']))->assertOk()->getContent());
+    $toolFrame = $frame->querySelector('[data-tool-frame]');
+    expect($toolFrame)->not->toBeNull('the tool frame page renders its root');
+    // The account's id differs from one database to the next; the tool only passes it on.
+    $toolFrame->setAttribute('data-user', '1');
+    $files['tool-frame.html'] = $frame->saveHtml($toolFrame);
+
     return array_map(fn (string $contents) => rtrim($contents)."\n", $files);
 }
 

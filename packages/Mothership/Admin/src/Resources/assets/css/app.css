@@ -1458,8 +1458,11 @@ a.bridge-list-name:hover {
     min-width: 0;
 }
 
-/* The tick box of a row or of the whole list: a 24 px glyph in a 44 px target, pulled back so the glyph lines up. */
+/* The tick box of a row or of the whole list: a 24 px glyph in a 44 px target, pulled back so the glyph lines up.
+   It is positioned so its hidden checkbox stays inside the page's scroller. Left to the page, the checkbox made the
+   whole document scroll, and a tap on a tick box could carry the top bar and the selection bar off a small screen. */
 .bridge-list-check {
+    position: relative;
     display: grid;
     flex: none;
     place-items: center;
@@ -2456,6 +2459,324 @@ a.bridge-review-name:hover {
     margin-top: 22px;
     border-radius: 14px;
     font-size: 15px;
+}
+
+/*
+ * Tools (redesign v2, Phase 5b). The Tools page is a grid of tiles, one per tool. A tool opens in the tool frame:
+ * a page of its own, with the top bar every tool shares and the tool below it.
+ */
+.bridge-tools {
+    container: tools / inline-size;
+    /* The gap under the page's header is larger than the gap between tiles, which is larger than any gap in a tile. */
+    margin-top: 28px;
+}
+
+/* The grid follows the width of its own block, so the rail being open or closed never breaks a row of tiles. */
+.bridge-tools-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+}
+
+.bridge-tools-grid > li {
+    display: grid;
+}
+
+@container tools (min-width: 440px) {
+    .bridge-tools-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@container tools (min-width: 680px) {
+    .bridge-tools-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@container tools (min-width: 960px) {
+    .bridge-tools-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+/* One anatomy for every tile: the glyph in its well, the name and one line, then when it was last used. */
+.bridge-tool-tile {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    gap: 10px;
+    min-height: 168px;
+    padding: 18px;
+    border-radius: 16px;
+    background: var(--card);
+    box-shadow: var(--lift);
+    color: var(--ink);
+}
+
+a.bridge-tool-tile:hover {
+    box-shadow: var(--lift), inset 0 0 0 1px var(--edge);
+}
+
+a.bridge-tool-tile:hover .bridge-tool-well {
+    background: var(--ctl);
+}
+
+/* On a phone a tile is a row, the glyph beside the words, so a screen holds six tools where a stack held three. */
+@container tools (max-width: 439px) {
+    .bridge-tool-tile {
+        grid-template-columns: 40px minmax(0, 1fr);
+        grid-template-rows: auto auto;
+        gap: 8px 14px;
+        min-height: 0;
+        padding: 16px;
+    }
+
+    .bridge-tool-well {
+        grid-row: 1 / span 2;
+    }
+
+    .bridge-tool-text,
+    .bridge-tool-foot {
+        grid-column: 2;
+    }
+}
+
+/* A tool this install has not set up is not a link, so it has no card under it. */
+.bridge-tool-tile.is-setup {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--edge);
+}
+
+.bridge-tool-well {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+    background: var(--well);
+}
+
+.bridge-tool-tile.is-setup .bridge-tool-well {
+    color: var(--ink-2);
+}
+
+.bridge-tool-text {
+    display: block;
+    min-width: 0;
+}
+
+.bridge-tool-name {
+    display: block;
+    font-size: 15.5px;
+    font-weight: 600;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+}
+
+.bridge-tool-line {
+    display: block;
+    margin-top: 4px;
+    color: var(--ink-2);
+    font-size: 13.5px;
+    line-height: 1.4;
+}
+
+.bridge-tool-foot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ink-2);
+}
+
+/* A lamp is never the only cue: its word sits beside it. New is a filled dot, waiting on set-up is a ring. */
+.bridge-lamp {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.bridge-lamp.is-new {
+    background: var(--new);
+}
+
+.bridge-lamp.is-idle {
+    box-shadow: inset 0 0 0 1.5px var(--ink-3);
+}
+
+/* The tool frame fills the window: the bar, the question when one is up, and the tool in what is left. */
+.bridge-toolframe {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+    background: var(--ground);
+    color: var(--ink);
+}
+
+.bridge-toolbar {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 10px;
+    height: 64px;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--line);
+}
+
+.bridge-toolbar-round {
+    flex: none;
+    width: 40px;
+    padding: 0;
+    border-radius: 50%;
+}
+
+/* The name gives way before the controls do: it cuts off, they keep their size. */
+.bridge-toolbar-name {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -.01em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bridge-toolbar-status {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--ink-2);
+    font-size: 13px;
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bridge-toolbar-reload {
+    flex: none;
+}
+
+/* The question asked before work is lost: a band under the bar, so the tool stays in view while it is answered. */
+.bridge-toolask {
+    display: flex;
+    flex: none;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 20px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--line);
+    background: var(--card);
+}
+
+.bridge-toolask[hidden],
+.bridge-toolnote[hidden],
+.bridge-toolnote-actions[hidden] {
+    display: none;
+}
+
+.bridge-toolask p {
+    flex: 1 1 16rem;
+    font-size: 14.5px;
+    font-weight: 500;
+    text-wrap: balance;
+}
+
+.bridge-toolask-actions {
+    display: flex;
+    gap: 10px;
+    margin-left: auto;
+}
+
+/* Throwing work away is the one red control on these pages. */
+.bridge-toolask .bridge-btn-act.is-discard {
+    background: #B8301F;
+    color: #FFFFFF;
+}
+
+.bridge-toolask .bridge-btn-act.is-discard:hover {
+    background: #9C2718;
+}
+
+.bridge-toolstage {
+    position: relative;
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+.bridge-toolstage iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    /* A file a tool opens here (a picture, say) is a light-scheme page in either theme. A frame of another scheme
+       would be given a white sheet behind it; matching it keeps the frame clear, so the ground shows round the file. */
+    color-scheme: light;
+}
+
+/* Opening, slow and failed are said where the tool will be. */
+.bridge-toolnote {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 16px;
+    padding: 24px;
+    background: var(--ground);
+    color: var(--ink-2);
+    font-size: 15px;
+    text-align: center;
+}
+
+.bridge-toolnote p {
+    max-width: 34rem;
+    text-wrap: balance;
+}
+
+.bridge-toolnote-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+}
+
+@media (max-width: 719px) {
+    .bridge-toolbar {
+        height: 56px;
+        padding: 0 12px;
+    }
+
+    /* On a phone Reload is its glyph (the button keeps its name for a screen reader), so the tool's name has room. */
+    .bridge-toolbar-reload {
+        width: 40px;
+        padding: 0;
+        border-radius: 50%;
+    }
+
+    .bridge-toolbar-reload span {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    .bridge-toolask {
+        padding: 12px;
+    }
+
+    .bridge-toolask-actions {
+        width: 100%;
+    }
+
+    .bridge-toolask-actions > * {
+        flex: 1;
+    }
 }
 
 /* The split-flap board: a lit object, dark in both themes. */

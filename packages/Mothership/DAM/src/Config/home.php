@@ -26,6 +26,24 @@ return [
         'calendar'         => ['title' => 'Calendar', 'description' => 'Events, games and campaigns, with their tasks and assets.', 'icon' => 'calendar', 'kind' => 'native', 'sizes' => ['wide', 'large'], 'size' => 'large', 'rows' => 4, 'permission' => 'dam.assets', 'settings' => []],
         'system-quickview' => ['title' => 'Studio & people', 'description' => 'Live load on the host Mac and who is online now.', 'icon' => 'system', 'kind' => 'native', 'sizes' => ['wide', 'large'], 'size' => 'wide', 'always_available' => true, 'settings' => []],
     ],
+    // The Tools page (docs/features/tools-page.md). `tiles` is the order tiles are drawn in and each tile's Lucide
+    // glyph (admin::bridge.icon). `added` is the day a tool arrived: its tile says "New" until the account first
+    // opens it, for `new_days` days. `setup` is the line a full admin reads on the tile of a tool this install
+    // has not set up (see `requires_config` above).
+    'tools' => [
+        'new_days' => 90,
+        'tiles'    => [
+            'plaque'           => ['glyph' => 'sticker', 'added' => '2026-11-18'],
+            'palette-studio'   => ['glyph' => 'palette', 'added' => '2026-11-18'],
+            'sound-effects'    => ['glyph' => 'audio-waveform', 'added' => '2026-11-18'],
+            'stylepress'       => ['glyph' => 'wand-sparkles'],
+            'looper'           => ['glyph' => 'repeat'],
+            'loop-maker'       => ['glyph' => 'orbit'],
+            'vectorization'    => ['glyph' => 'shapes'],
+            'sphereseam'       => ['glyph' => 'globe'],
+            'video-downloader' => ['glyph' => 'download', 'setup' => 'Off until the Studio video service address is set (MOTHERSHIP_HOME_VIDEO_API).'],
+        ],
+    ],
     // Accounts whose SIGNAL announcement strip is on until they choose otherwise (SignalAlerts). Every other account
     // is off until it opts in. An entry matches only when the account's id AND its email (trimmed, lower-cased) both
     // equal the pair, so a reused id or a changed email never inherits the default. MOTHERSHIP_SIGNAL_DEFAULT_ON is a

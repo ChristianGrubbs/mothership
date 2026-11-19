@@ -14,11 +14,7 @@ class HomeWidgetRegistry
             if (! self::configured($widget)) {
                 continue;
             }
-            $alwaysAvailable = (bool) ($widget['always_available'] ?? false);
-            if (! $alwaysAvailable && $allowedWidgetIds !== null && ! in_array($id, $allowedWidgetIds, true)) {
-                continue;
-            }
-            if (! $alwaysAvailable && isset($widget['permission']) && ! bouncer()->hasPermission($widget['permission'])) {
+            if (! self::grants($id, $widget, $allowedWidgetIds)) {
                 continue;
             }
             $widget['id'] = $id;
@@ -56,7 +52,53 @@ class HomeWidgetRegistry
         if ((bool) ($widget['always_available'] ?? false)) {
             return true;
         }
+
+        return self::grants($id, $widget, $this->roleWidgetIds());
+    }
+
+    /**
+     * The Tools page's tiles, in the page's fixed order (config `dam-home.tools.tiles`): every tool with a page of
+     * its own that this account may open. A full admin also gets the tools this install has not set up, with no
+     * address and the line that says what is missing, because only a full admin can set them up.
+     *
+     * @return list<array{id: string, title: string, description: string, glyph: string, added: ?string, url: ?string, setup: ?string}>
+     */
+    public function tools(): array
+    {
         $allowedWidgetIds = $this->roleWidgetIds();
+        $fullAdmin = auth('admin')->user()?->role?->permission_type === 'all';
+        $tiles = config('dam-home.tools.tiles', []);
+        $order = array_flip(array_keys($tiles));
+        $result = [];
+        foreach (config('dam-home.widgets', []) as $id => $widget) {
+            if ($widget['kind'] !== 'tool' || ! isset($widget['entry'])) {
+                continue;
+            }
+            $configured = self::configured($widget);
+            if ($configured ? ! self::grants($id, $widget, $allowedWidgetIds) : ! $fullAdmin) {
+                continue;
+            }
+            $result[] = [
+                'id'          => $id,
+                'title'       => $widget['title'],
+                'description' => $widget['description'],
+                'glyph'       => $tiles[$id]['glyph'] ?? 'wrench',
+                'added'       => $tiles[$id]['added'] ?? null,
+                'url'         => $configured ? route('admin.tools.show', ['widget' => $id]) : null,
+                'setup'       => $configured ? null : ($tiles[$id]['setup'] ?? null),
+            ];
+        }
+        usort($result, fn (array $a, array $b): int => ($order[$a['id']] ?? PHP_INT_MAX) <=> ($order[$b['id']] ?? PHP_INT_MAX));
+
+        return $result;
+    }
+
+    /** Whether the role list and the permission let this account have a widget that is set up. */
+    private static function grants(string $id, array $widget, ?array $allowedWidgetIds): bool
+    {
+        if ((bool) ($widget['always_available'] ?? false)) {
+            return true;
+        }
         if ($allowedWidgetIds !== null && ! in_array($id, $allowedWidgetIds, true)) {
             return false;
         }

@@ -334,6 +334,11 @@ class DAMServiceProvider extends ServiceProvider
         Route::middleware(['web', 'admin', 'dam'])->prefix(config('app.admin_url').'/home')
             ->group(__DIR__.'/../Routes/home-routes.php');
 
+        // The Tools page and the tool frame. Not under /home: the rail marks a row by address, and a page under
+        // Home's address would light Home as well.
+        Route::middleware(['web', 'admin', 'dam'])->prefix(config('app.admin_url').'/tools')
+            ->group(__DIR__.'/../Routes/tools-routes.php');
+
         RateLimiter::for('dam-share-thumb', function ($request) {
             return Limit::perMinute(1200)->by('thumb|'.$request->ip());
         });
