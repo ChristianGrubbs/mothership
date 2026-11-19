@@ -444,13 +444,16 @@
     }
     async function saveToLibrary() {
         if (saving) return;
-        const folder = $('[data-folder]').value, files = [];
+        // Both files are made from the palette as it was when Save was pressed. The picture waits on its watermark,
+        // and the sheet can be closed and the palette changed meanwhile.
+        const folder = $('[data-folder]').value, palette = { name: work.name, list: hexes() }, files = [];
+        const image = $('[data-save-image]').checked, tokens = $('[data-save-tokens]').checked;
         saving = true;
         setLibrary();
         let failed = null;
         try {
-            if ($('[data-save-image]').checked) files.push({ name: core.fileName(work.name, 'png'), blob: (await makePng()).blob });
-            if ($('[data-save-tokens]').checked) files.push({ name: core.fileName(work.name, 'json'), blob: new Blob([core.exportAs('json', work.name, hexes())], { type: 'application/json' }) });
+            if (image) files.push({ name: core.fileName(palette.name, 'png'), blob: (await makePng(palette)).blob });
+            if (tokens) files.push({ name: core.fileName(palette.name, 'json'), blob: new Blob([core.exportAs('json', palette.name, palette.list)], { type: 'application/json' }) });
             const saved = await frame.save({ files, folder });
             view.folder = folder;
             saveView();
@@ -481,11 +484,11 @@
         return watermark;
     }
     /** The palette as a picture: one band per swatch with its value, and the palette's name. */
-    async function makePng() {
+    async function makePng({ name, list } = { name: work.name, list: hexes() }) {
         const canvas = document.createElement('canvas');
         canvas.width = PNG.width; canvas.height = PNG.height;
         const context = canvas.getContext('2d');
-        const list = hexes(), width = PNG.width / list.length;
+        const width = PNG.width / list.length;
         list.forEach((hex, index) => {
             const x = Math.round(index * width), next = Math.round((index + 1) * width);
             context.fillStyle = hex;
@@ -498,7 +501,7 @@
         context.fillStyle = core.textOn(list[0]);
         context.font = '600 30px "Instrument Sans", -apple-system, "Segoe UI", sans-serif';
         context.textBaseline = 'top';
-        context.fillText(core.cleanName(work.name, 'Palette'), 32, 36, PNG.width / 2);
+        context.fillText(core.cleanName(name, 'Palette'), 32, 36, PNG.width / 2);
         const mark = await loadWatermark();
         if (mark) {
             const natural = { w: mark.naturalWidth || mark.width, h: mark.naturalHeight || mark.height };

@@ -161,6 +161,44 @@ browserTest('a save in progress holds the Library sheet, and the Library is aske
     } finally { await browser.close(); }
 });
 
+browserTest('a save sends the palette as it was when Save was pressed, however it changes while the picture is made',async()=>{
+    const browser=await launch();
+    try{
+        const {page,errors}=await open(browser,{bridge:true});
+        // The picture's encoding waits until the test lets it go; the bridge keeps each file's name and words.
+        await page.evaluate(()=>{
+            const encode=HTMLCanvasElement.prototype.toBlob;
+            HTMLCanvasElement.prototype.toBlob=function(...args){window.__drawn=()=>encode.apply(this,args);};
+            window.MothershipFrame.save=async({files})=>{window.__sent=await Promise.all(files.map(async file=>({name:file.name,text:file.name.endsWith('.json')?await file.blob.text():''})));return {count:files.length,url:null};};
+        });
+        const hexes=text=>(text.match(/#[0-9a-f]{6}/gi)||[]).map(hex=>hex.toLowerCase());
+        await page.locator('[data-name]').fill('Before');
+        await page.locator('[data-name]').press('Tab');
+        const before=hexes((await page.locator('[data-swatches]').allTextContents()).join(' '));
+        assert.ok(before.length>0);
+
+        await page.evaluate(()=>window.__press('library'));
+        await page.locator('[data-folder] option',{hasText:'Brand'}).waitFor({state:'attached'});
+        await page.locator('[data-library-go]').click();
+        await page.waitForFunction(()=>typeof window.__drawn==='function');
+        // While the picture is still being made, the sheet is closed and the palette changed.
+        await page.keyboard.press('Escape');
+        await page.locator('[data-name]').fill('After');
+        await page.locator('[data-name]').press('Tab');
+        await page.locator('[data-generate]').click();
+        await page.evaluate(()=>window.__drawn());
+        await page.waitForFunction(()=>window.__sent);
+
+        const sent=await page.evaluate(()=>window.__sent);
+        assert.deepEqual(sent.map(file=>file.name),['Before.png','Before.json']);
+        assert.match(sent[1].text,/Before/);
+        assert.doesNotMatch(sent[1].text,/After/);
+        assert.deepEqual(hexes(sent[1].text),before,'the tokens are the colours on screen when Save was pressed');
+        assert.deepEqual(errors,[]);
+        await page.close();
+    } finally { await browser.close(); }
+});
+
 browserTest('the panes follow the tool\'s width, and nothing scrolls sideways',async()=>{
     const browser=await launch();
     try{
