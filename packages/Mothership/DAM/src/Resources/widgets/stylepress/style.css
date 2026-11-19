@@ -1,0 +1,1135 @@
+/* StylePress inside the tool frame, on the kit (../_kit/tool-kit.css). Two panes: Styles, to pick a house style, and
+   Make, to say what to make with it. Under 860 px Make is the page and Styles opens as a sheet. Every colour here is a
+   kit token; the style pictures are the only other colour on the page. */
+.sp {
+    grid-template-columns: minmax(0, 1fr) 400px;
+    grid-template-rows: minmax(0, 1fr);
+}
+
+.sp-styles,
+.sp-make {
+    container-type: inline-size;
+}
+
+/* ---- Styles -------------------------------------------------------------------------------------------------- */
+.sp-styles-head {
+    align-items: center;
+    margin: 0 0 12px;
+}
+
+.sp-styles-head h2 {
+    color: var(--ink);
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -.01em;
+}
+
+.sp-head-end {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    color: var(--ink-2);
+}
+
+/* Search and the three selects: one row when the pane is wide, otherwise search, then Category, then Aspect and Sort. */
+.sp-find {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+}
+
+.sp-search,
+.sp-filter-cat {
+    grid-column: 1 / -1;
+}
+
+.sp-filter {
+    display: block;
+    min-width: 0;
+}
+
+@container (min-width: 760px) {
+    .sp-find {
+        grid-template-columns: minmax(0, 1fr) 210px 140px 200px;
+    }
+
+    .sp-search,
+    .sp-filter-cat {
+        grid-column: auto;
+    }
+}
+
+.sp-view {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 16px;
+    margin: 14px 0 16px;
+}
+
+/* Each part as wide as its word, so "Needs slots" never breaks in two. */
+.sp-tabs {
+    flex: 0 1 auto;
+    grid-auto-columns: auto;
+    white-space: nowrap;
+}
+
+.sp-view-end {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.sp-group-check {
+    font-size: 13.5px;
+}
+
+.sp-density .tk-seg-opt {
+    width: 40px;
+    padding: 0;
+}
+
+@container (max-width: 560px) {
+    .sp-tabs {
+        flex: 1 1 100%;
+    }
+}
+
+/* A phone's width: two large cards or three compact ones to a row, not one huge one. */
+@container (max-width: 420px) {
+    .sp-cards {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .sp-cards[data-density="compact"] {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+/* Cards: picture, title, category and ratio. The chosen card has an ink ring and a ✓; the favourite is ☆ or ★. */
+.sp-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+    gap: 18px 12px;
+}
+
+.sp-cards[data-density="compact"] {
+    grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+    gap: 14px 8px;
+}
+
+.sp-cards[data-density="list"] {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+}
+
+.sp-card {
+    position: relative;
+    min-width: 0;
+}
+
+.sp-pick {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    background: none;
+    color: var(--ink);
+    text-align: left;
+}
+
+.sp-thumb {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+    overflow: hidden;
+    border-radius: 12px;
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px var(--edge);
+}
+
+.sp-thumb img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.sp-thumb-none {
+    display: grid;
+    place-items: center;
+    height: 100%;
+    padding: 8px;
+    color: var(--ink-2);
+    font: 400 11px/1.4 var(--font-mono);
+    text-align: center;
+}
+
+.sp-card.is-chosen .sp-thumb {
+    box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--ink);
+}
+
+.sp-card-text {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    padding: 0 2px;
+}
+
+.sp-card-title {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 13.5px;
+    font-weight: 600;
+    line-height: 1.3;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.sp-card-meta {
+    overflow: hidden;
+    color: var(--ink-2);
+    font: 400 11px/1.4 var(--font-mono);
+    letter-spacing: -.01em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sp-check {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    display: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--card);
+    font: 700 13px/24px var(--font-ui);
+    text-align: center;
+    pointer-events: none;
+}
+
+.sp-card.is-chosen .sp-check {
+    display: block;
+}
+
+.sp-fav {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--card);
+    box-shadow: var(--lift), 0 0 0 1px var(--edge);
+    color: var(--ink);
+    font-size: 16px;
+    line-height: 1;
+}
+
+/* The press area reaches 44 px while the drawn circle stays small on the picture. */
+.sp-fav::before {
+    position: absolute;
+    inset: -6px;
+    content: "";
+}
+
+@media (hover: hover) {
+    .sp-card:not(:hover):not(:focus-within) .sp-fav[aria-pressed="false"] {
+        opacity: 0;
+    }
+}
+
+.sp-cards[data-density="compact"] .sp-card-title {
+    font-size: 12.5px;
+}
+
+.sp-cards[data-density="compact"] .sp-fav {
+    top: 6px;
+    right: 6px;
+    width: 30px;
+    height: 30px;
+    font-size: 15px;
+}
+
+.sp-cards[data-density="compact"] .sp-fav::before {
+    inset: -7px;
+}
+
+.sp-cards[data-density="compact"] .sp-check {
+    top: 6px;
+    left: 6px;
+}
+
+.sp-cards[data-density="list"] .sp-pick {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    min-height: 68px;
+    padding: 6px 52px 6px 6px;
+}
+
+.sp-cards[data-density="list"] .sp-pick:hover {
+    background: var(--well);
+}
+
+.sp-cards[data-density="list"] .sp-thumb {
+    flex: none;
+    width: 56px;
+    border-radius: 8px;
+}
+
+.sp-cards[data-density="list"] .sp-card-title {
+    -webkit-line-clamp: 1;
+}
+
+/* A 56 px tile cannot hold "Reference entry", so in a list the words move to the meta line and the tile stays plain. */
+.sp-meta-ref {
+    display: none;
+}
+
+.sp-cards[data-density="list"] .sp-meta-ref {
+    display: inline;
+}
+
+.sp-cards[data-density="list"] .sp-thumb-none {
+    overflow: hidden;
+    color: transparent;
+}
+
+.sp-cards[data-density="list"] .sp-check {
+    top: 10px;
+    left: 10px;
+    width: 20px;
+    height: 20px;
+    font-size: 11px;
+    line-height: 20px;
+}
+
+.sp-cards[data-density="list"] .sp-fav {
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+}
+
+.sp-group {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    grid-column: 1 / -1;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 6px -16px 0;
+    padding: 12px 16px 8px;
+    border-bottom: 1px solid var(--line);
+    background: var(--card);
+    font-size: 13.5px;
+    font-weight: 600;
+}
+
+.sp-group:first-child {
+    margin-top: 0;
+}
+
+.sp-group-count {
+    margin-left: 6px;
+    color: var(--ink-2);
+    font: 400 11px var(--font-mono);
+}
+
+.sp-group .tk-link {
+    font-size: 13px;
+}
+
+.sp-sentinel {
+    grid-column: 1 / -1;
+    height: 1px;
+}
+
+/* ---- Make ---------------------------------------------------------------------------------------------------- */
+.sp-make {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding-bottom: 0;
+}
+
+.sp-make .tk-head {
+    margin: 0;
+}
+
+.sp-chosen {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+}
+
+.sp-preview {
+    flex: none;
+    width: 72px;
+    height: 72px;
+    overflow: hidden;
+    border-radius: 12px;
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px var(--edge);
+}
+
+.sp-preview img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+#sp-preview-none {
+    display: grid;
+    place-items: center;
+    height: 100%;
+    padding: 6px;
+    color: var(--ink-2);
+    font: 400 10px/1.35 var(--font-mono);
+    text-align: center;
+}
+
+.sp-chosen-text {
+    display: grid;
+    flex: 1;
+    gap: 3px;
+    min-width: 0;
+}
+
+.sp-cat {
+    color: var(--ink-2);
+}
+
+.sp-title {
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: -.015em;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+.sp-change {
+    display: none;
+    justify-self: start;
+    margin-top: 6px;
+}
+
+.sp-about {
+    display: grid;
+    gap: 6px;
+}
+
+.sp-look {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--ink-2);
+    font-size: 13.5px;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+}
+
+.sp-look.is-open {
+    display: block;
+}
+
+.sp-more {
+    justify-self: start;
+    font-size: 13px;
+}
+
+.sp-sources {
+    margin-top: 4px;
+    font-size: 13px;
+}
+
+.sp-sources summary {
+    color: var(--ink);
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.sp-source-files {
+    display: grid;
+    gap: 4px;
+    margin-top: 6px;
+    overflow-wrap: anywhere;
+}
+
+.sp-about .tk-head {
+    margin-top: 12px;
+}
+
+.sp-slots {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.sp-slot {
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: var(--well);
+    font: 400 11px/1.5 var(--font-mono);
+    letter-spacing: -.01em;
+}
+
+.sp-slots-more {
+    margin-left: 4px;
+    font-size: 13px;
+}
+
+.sp-block {
+    display: grid;
+    gap: 10px;
+}
+
+.sp-textarea {
+    height: auto;
+    min-height: 116px;
+    padding: 10px 12px;
+    line-height: 1.45;
+    resize: vertical;
+}
+
+.sp-request-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 12px;
+}
+
+.sp-count {
+    color: var(--ink-2);
+}
+
+.sp-count.is-over {
+    color: var(--ink);
+    font-weight: 600;
+}
+
+.sp-mode {
+    margin-top: 2px;
+}
+
+.sp-ref-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.sp-upload:has(input:focus-visible) {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.sp-references {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 64px);
+    gap: 10px;
+}
+
+.sp-references:empty {
+    display: none;
+}
+
+.sp-ref {
+    position: relative;
+    width: 64px;
+    height: 64px;
+}
+
+.sp-ref img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 10px;
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px var(--edge);
+    object-fit: cover;
+}
+
+.sp-ref-remove {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--card);
+    box-shadow: var(--lift), 0 0 0 1px var(--edge);
+    color: var(--ink);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.sp-ref-remove::before {
+    position: absolute;
+    inset: -8px;
+    content: "";
+}
+
+.sp-settings {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
+}
+
+@container (max-width: 360px) {
+    .sp-settings {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.sp-enhancement {
+    padding: 14px;
+    border-radius: 14px;
+    background: var(--well);
+}
+
+.sp-enhancement .tk-input {
+    background: var(--card);
+    box-shadow: inset 0 0 0 1px var(--edge);
+}
+
+.sp-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* The actions stay at the foot of Make while the rest scrolls, so the next step is always in reach. */
+.sp-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    display: grid;
+    gap: 10px;
+    margin: auto -16px 0;
+    padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+    background: var(--card);
+}
+
+.sp-generate {
+    width: 100%;
+    height: 44px;
+}
+
+.sp-result {
+    margin: 0;
+}
+
+.sp-balance {
+    color: var(--ink-2);
+}
+
+.sp-progress {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sp-progress small {
+    display: block;
+    color: var(--ink-2);
+    font-size: 12.5px;
+}
+
+.sp-spinner {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--line);
+    border-top-color: var(--ink);
+    border-radius: 50%;
+    animation: sp-spin .8s linear infinite;
+}
+
+@keyframes sp-spin {
+    to {
+        transform: rotate(1turn);
+    }
+}
+
+.sp-retry {
+    margin-left: 6px;
+}
+
+.sp-output {
+    display: grid;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 14px;
+    background: var(--well);
+}
+
+.sp-output-image {
+    display: block;
+    width: 100%;
+    max-height: 360px;
+    border-radius: 10px;
+    background: var(--card);
+    object-fit: contain;
+    cursor: zoom-in;
+}
+
+.sp-output-title {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.sp-output-meta {
+    color: var(--ink-2);
+    font-size: 12.5px;
+}
+
+.sp-output-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+/* ---- Narrow: Make is the page; Styles opens as a sheet from Change style ------------------------------------ */
+@media (max-width: 859px) {
+    .sp {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .sp > .sp-styles {
+        display: none;
+    }
+
+    .sp-make {
+        border-left: 0;
+    }
+
+    .sp-change {
+        display: inline-flex;
+    }
+}
+
+.sp-browse {
+    width: min(1040px, calc(100% - 32px));
+    height: min(860px, calc(100% - 32px));
+    max-height: none;
+}
+
+.sp-browse-body {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.sp-browse-body > .sp-styles {
+    flex: 1;
+    border: 0;
+}
+
+/* The sheet's own title names it; the pane keeps its count and Clear filters. */
+.sp-browse .sp-styles-head h2 {
+    display: none;
+}
+
+@media (max-width: 719px) {
+    .sp-browse {
+        width: 100%;
+        height: calc(100% - 24px);
+    }
+}
+
+/* ---- Folds: a pane keeps whole to each side of the fold --------------------------------------------------------- */
+:root[data-fold="columns"] .sp {
+    grid-template-columns: var(--fold-start) minmax(0, 1fr);
+    column-gap: calc(var(--fold-end) - var(--fold-start));
+}
+
+:root[data-fold="columns"] .sp > .sp-styles {
+    display: block;
+}
+
+:root[data-fold="columns"] .sp-make {
+    border-left: 0;
+}
+
+:root[data-fold="columns"] .sp-change {
+    display: none;
+}
+
+/* Folded like a laptop: the styles are looked at on the upright half, the request is typed on the flat half. */
+:root[data-fold="rows"] .sp {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: var(--fold-start) minmax(0, 1fr);
+    row-gap: calc(var(--fold-end) - var(--fold-start));
+}
+
+:root[data-fold="rows"] .sp > .sp-styles {
+    display: block;
+}
+
+:root[data-fold="rows"] .sp-make {
+    border-left: 0;
+}
+
+:root[data-fold="rows"] .sp-change {
+    display: none;
+}
+
+/* The upright half is short, so the filters take one row and the styles start within the first third of it. */
+:root[data-fold="rows"] .sp > .sp-styles {
+    padding-top: 12px;
+}
+
+:root[data-fold="rows"] .sp-styles-head {
+    margin-bottom: 8px;
+}
+
+:root[data-fold="rows"] .sp-find {
+    grid-template-columns: minmax(0, 1fr) 156px 112px 148px;
+    gap: 8px;
+}
+
+:root[data-fold="rows"] .sp-search,
+:root[data-fold="rows"] .sp-filter-cat {
+    grid-column: auto;
+}
+
+:root[data-fold="rows"] .sp-view {
+    margin: 10px 0 12px;
+}
+
+/* ---- Short screens: the foot keeps Estimate, Copy prompt and Generate on one line ---------------------------- */
+@media (max-height: 520px) {
+    .sp-actions {
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        gap: 8px 10px;
+        padding-top: 10px;
+        padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    }
+
+    .sp-result,
+    .sp-balance {
+        grid-column: 1 / -1;
+    }
+}
+
+/* ---- The Library picker ------------------------------------------------------------------------------------- */
+.sp-picker {
+    width: min(1040px, calc(100% - 32px));
+    height: min(760px, calc(100% - 32px));
+    max-height: none;
+}
+
+.sp-lib {
+    display: grid;
+    flex: 1 1 auto;
+    grid-template-columns: 240px minmax(0, 1fr);
+    min-height: 0;
+}
+
+.sp-lib-tree {
+    min-height: 0;
+    padding: 10px 8px 16px;
+    border-right: 1px solid var(--line);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.sp-lib-section {
+    padding: 12px 8px 4px;
+    color: var(--ink-2);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.sp-lib-entry {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-height: 36px;
+    padding: 4px 8px 4px calc(8px + var(--depth, 0) * 14px);
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: var(--ink);
+    font-size: 13.5px;
+    text-align: left;
+}
+
+.sp-lib-entry:hover {
+    background: var(--well);
+}
+
+.sp-lib-entry.active {
+    background: var(--ctl);
+    font-weight: 600;
+}
+
+.sp-lib-toggle {
+    flex: none;
+    width: 16px;
+    color: var(--ink-2);
+    text-align: center;
+}
+
+.sp-lib-toggle.leaf {
+    visibility: hidden;
+}
+
+.sp-lib-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sp-lib-more {
+    margin: 4px 0 4px 30px;
+    font-size: 13px;
+}
+
+.sp-lib-note {
+    padding: 4px 8px;
+}
+
+.sp-lib-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    padding: 14px 16px 0;
+}
+
+.sp-asset-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.sp-asset-tools .tk-input {
+    flex: 1 1 210px;
+}
+
+.sp-asset-tools .tk-select {
+    width: auto;
+}
+
+.sp-asset-crumbs {
+    margin-top: 12px;
+    color: var(--ink-2);
+    font-size: 13px;
+}
+
+.sp-asset-crumbs b {
+    color: var(--ink);
+}
+
+.sp-asset-status {
+    margin: 2px 0 10px;
+    color: var(--ink-2);
+    font-size: 12.5px;
+}
+
+.sp-asset-grid {
+    display: grid;
+    flex: 1;
+    grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+    align-content: start;
+    gap: 14px 12px;
+    min-height: 0;
+    padding: 4px 4px 18px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.sp-asset {
+    position: relative;
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+.sp-asset-thumb {
+    aspect-ratio: 1;
+    overflow: hidden;
+    border-radius: 10px;
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px var(--edge);
+}
+
+.sp-asset-thumb img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.sp-asset.selected .sp-asset-thumb {
+    box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--ink);
+}
+
+.sp-asset-mark {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--card);
+    box-shadow: 0 0 0 1px var(--edge);
+    color: transparent;
+    font: 700 12px/22px var(--font-ui);
+    text-align: center;
+}
+
+.sp-asset.selected .sp-asset-mark {
+    background: var(--ink);
+    color: var(--card);
+}
+
+.sp-asset.added {
+    cursor: default;
+}
+
+.sp-asset.added .sp-asset-thumb {
+    opacity: .45;
+}
+
+.sp-asset.added .sp-asset-mark {
+    display: none;
+}
+
+.sp-asset-tag {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    display: none;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--ink);
+    color: var(--card);
+    font-size: 11.5px;
+    font-weight: 600;
+}
+
+.sp-asset.added .sp-asset-tag {
+    display: block;
+}
+
+.sp-asset-name {
+    overflow: hidden;
+    color: var(--ink-2);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sp-asset-more {
+    grid-column: 1 / -1;
+    justify-self: center;
+}
+
+/* After the picker's own size, so a phone's full-width sheet wins over it. */
+@media (max-width: 719px) {
+    .sp-picker {
+        width: 100%;
+        height: calc(100% - 24px);
+    }
+
+    .sp-lib {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .sp-lib-tree {
+        max-height: 168px;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+    }
+}
+
+/* ---- The full-size image ------------------------------------------------------------------------------------ */
+.sp-lightbox {
+    width: min(1200px, calc(100% - 32px));
+    max-height: calc(100% - 32px);
+    padding: 0;
+    border: 0;
+    border-radius: 16px;
+    background: var(--card);
+    box-shadow: var(--float);
+    color: var(--ink);
+    overflow: hidden;
+}
+
+.sp-lightbox::backdrop {
+    background: var(--shade);
+}
+
+.sp-lightbox img {
+    display: block;
+    width: 100%;
+    max-height: calc(100vh - 128px);
+    background: var(--well);
+    object-fit: contain;
+}
+
+.sp-lightbox-bar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 16px;
+}
+
+/* ---- Touch: every press area reaches 44 px ------------------------------------------------------------------ */
+@media (pointer: coarse) {
+    .sp-group .tk-link,
+    .sp-more,
+    .sp-slots-more,
+    .sp-lib-more,
+    #sp-clear {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+    }
+
+    .sp-ref-remove::before {
+        inset: -11px;
+    }
+
+    .sp-lib-entry {
+        min-height: 44px;
+    }
+
+    .sp-density .tk-seg-opt {
+        width: 44px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sp-spinner {
+        animation-duration: 2.4s;
+    }
+}
