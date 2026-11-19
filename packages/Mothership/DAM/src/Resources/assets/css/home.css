@@ -92,7 +92,6 @@ body:has([data-mothership-home]) .bridge-top-upload{display:inline-flex!importan
 body:has([data-mothership-home]) .bridge-top-upload{position:relative;display:inline-flex;flex:none;width:40px;height:40px;padding:0;border-radius:999px}
 body:has([data-mothership-home]) .bridge-top-upload::after{content:"";position:absolute;inset:-2px}
 body:has([data-mothership-home]) .bridge-top-upload>span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-body:has([data-mothership-home]) footer[data-fold-wrap]{margin-bottom:calc(64px + max(14px,env(safe-area-inset-bottom,0px)))}
 }
 .hm-layout{display:grid;grid-template-columns:minmax(0,1fr) 344px;column-gap:28px;align-items:start}
 .hm-centre{min-width:0}
@@ -320,7 +319,7 @@ a.hm-pic:active{transform:scale(.985)}
 .hm-sheet-head h2{font-size:17px;font-weight:600}
 .hm-sheet .hm-side{display:flex;align-items:stretch;margin-top:0}
 
-@media (max-width:1180px){
+@media (max-width:1023px){
     .hm-layout{grid-template-columns:minmax(0,1fr)}
     .hm-side{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));align-items:start;margin-top:16px}
     .hm-away{grid-column:1/-1}
@@ -331,16 +330,22 @@ a.hm-pic:active{transform:scale(.985)}
     .hm-glance small{display:block;color:var(--ink-2);font-size:13.5px}
     .hm-ell{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 }
-/* The shell's tab bar shows up to 719px. The page gutter and the assistant's button follow it, not the phone layout. */
+/* Under 720px the page keeps a narrow gutter, a short, wide screen included: its board needs the width. */
 @media (max-width:719px){
     [data-mothership-home]{padding:4px 0 32px}
-    /* Clears the tab bar and the analytics notice above it. */
+}
+/* The shell's phone form, the one with a tab bar: the assistant's button clears the bar and the notice above it. */
+@media (max-width:579px),(max-width:719px) and (min-height:501px){
     body:has([data-mothership-home]) .ap-fab{bottom:calc(128px + max(0px,env(safe-area-inset-bottom,0px) - 14px))}
 }
-/* The phone layout. home-bridge.js tests the same width. */
-@media (max-width:640px){
+/* The phone layout, a short, wide screen included. home-bridge.js tests the same widths. */
+@media (max-width:640px),(max-width:719px) and (max-height:500px){
     .hm-side{display:none}
     .hm-glance{margin-top:12px;padding:4px 18px}
+}
+/* The narrow column: the phone layout, and the leading half of an opened folding phone held sideways. home-bridge.js
+   sizes the cargo pictures by the same widths. */
+@media (max-width:640px),(max-width:719px) and (max-height:500px),(min-width:900px) and (max-width:1023px){
     .hm-board{padding:14px 14px 16px;border-radius:18px 18px 0 0}
     .hm-cols,.hm-cells{--tot:24;grid-template-columns:18px repeat(var(--tot),minmax(0,1fr))}
     .hm-cols :is(.k1,.k3),.hm-k:is(.k1,.k3){display:none}
@@ -374,9 +379,18 @@ a.hm-pic:active{transform:scale(.985)}
     .hm-trend-actions .hm-btn{flex:1 1 auto;min-height:44px}
     .hm-trend-x{width:44px;height:44px}
 }
-/* A short phone screen, such as a folding phone's outer display: the board and deck lose air, so the next step stays
-   above the notice. */
-@media (max-width:640px) and (max-height:620px){
+/* An opened folding phone held sideways: two halves that meet at the middle of the screen, so nothing rests on the fold
+   and folding it rearranges nothing. 114px is the icon rail, the page's gutter and half the gap between the halves. */
+@media (min-width:900px) and (max-width:1023px){
+    .hm-layout{grid-template-columns:calc(50vw - 114px) minmax(0,1fr)}
+    .hm-side{display:flex;align-items:stretch;margin-top:0}
+    .hm-glance{display:none}
+    html[data-fold="columns"] .hm-layout{grid-template-columns:calc(var(--seg-a-right) - 114px) minmax(0,1fr);column-gap:calc(var(--fold-gap,0px) + 28px)}
+    html[data-fold="columns"][dir="rtl"] .hm-layout{grid-template-columns:calc(100vw - var(--seg-b-left) - 114px) minmax(0,1fr)}
+}
+/* A short screen, such as a folding phone's outer display: the board and deck lose air, so the next step stays above
+   the notice. */
+@media (max-width:640px) and (max-height:620px),(max-width:719px) and (max-height:500px),(min-width:900px) and (max-width:1023px) and (max-height:620px){
     [data-mothership-home]{padding-top:0}
     .hm-board{padding:12px 14px}
     .hm-board-head{margin-bottom:8px}
@@ -390,12 +404,13 @@ a.hm-pic:active{transform:scale(.985)}
     .hm-deck p{margin-top:4px;font-size:14px}
 }
 /* Shorter still, a phone on its side: the deck stands beside the board, so both fit above the notice. */
-@media (max-width:640px) and (max-height:420px){
-    .hm-object{display:grid;grid-template-columns:minmax(0,1fr) minmax(210px,42%)}
+@media (max-width:640px) and (max-height:420px),(min-width:580px) and (max-width:719px) and (max-height:500px){
+    .hm-object{display:grid;grid-template-columns:minmax(0,1fr) minmax(190px,38%)}
+    .hm-cols,.hm-cells{column-gap:1px}
     .hm-board{padding:8px 12px;border-radius:18px 0 0 18px}
     .hm-board-head{margin-bottom:6px}
     .hm-cols{margin-bottom:4px}
-    .hm-k i{height:20px;font-size:clamp(10px,3.9cqw,13px)}
+    .hm-k i{height:20px;font-size:clamp(11px,3.9cqw,13px)}
     /* The deck reads from the top, so the next step keeps its place when a longer board makes the object taller. */
     .hm-deck{grid-template-columns:minmax(0,1fr);align-content:start;row-gap:8px;padding:10px 12px;border-radius:0 18px 18px 0}
     .hm-fig{margin-left:-3px;font-size:44px}
@@ -404,11 +419,15 @@ a.hm-pic:active{transform:scale(.985)}
     .hm-deck .hm-btn{height:44px;padding:0 12px;font-size:14px}
 }
 /* On a short screen, and where the full board meets the tab bar, the assistant's button docks on the notice strip,
-   clear of the deck and the cards. The strip is held tall enough to carry it, and the notice keeps its words clear of it. */
+   clear of the deck and the cards. */
 @media (max-width:719px) and (max-height:620px),(min-width:641px) and (max-width:719px){
-    body:has([data-mothership-home]) .ap-fab{right:max(12px,env(safe-area-inset-right,0px));bottom:calc(64px + max(14px,env(safe-area-inset-bottom,0px)));width:44px;height:44px}
+    body:has([data-mothership-home]) .ap-fab{right:max(12px,env(safe-area-inset-right,0px));bottom:var(--tabbar-space,0px);width:44px;height:44px}
     body:has([data-mothership-home]) .ap-fab svg{width:20px;height:20px}
-    body:has([data-mothership-home]) footer[data-fold-wrap]{min-height:44px;padding-right:calc(62px + max(0px,env(safe-area-inset-right,0px) - 12px));align-content:center}
+}
+/* Above a tab bar, and only where the button is in the page, the strip is held tall enough to carry it and the notice
+   keeps its words clear of it. */
+@media (max-width:579px) and (max-height:620px),(min-width:580px) and (max-width:719px) and (min-height:501px) and (max-height:620px),(min-width:641px) and (max-width:719px) and (min-height:501px){
+    body:has([data-mothership-home]):has(.ap-fab) footer[data-fold-wrap]{min-height:44px;padding-right:calc(62px + max(0px,env(safe-area-inset-right,0px) - 12px));align-items:center}
 }
 /* The assistant's button stays quiet on Home: blue belongs to the one next step. */
 body:has([data-mothership-home]) .ap-fab{background:var(--card);color:var(--ink);border:1px solid var(--edge);box-shadow:0 2px 10px rgba(0,0,0,.22)}

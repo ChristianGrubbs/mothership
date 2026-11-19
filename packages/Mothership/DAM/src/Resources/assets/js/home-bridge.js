@@ -15,7 +15,9 @@
     const FLAP_COLUMN_MS = 6;
     const GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     // The phone layout. home.css switches at the same width.
-    const PHONE = '(max-width: 640px)';
+    const PHONE = '(max-width: 640px), (max-width: 719px) and (max-height: 500px)';
+    // The phone layout, and the leading half of an opened folding phone held sideways (home.css).
+    const NARROW = `${PHONE}, (min-width: 900px) and (max-width: 1023px)`;
     const ICONS = {
         arrow: 'M5 12h14M12 5l7 7-7 7',
         chevron: 'm9 18 6-6-6-6',
@@ -163,7 +165,7 @@
         }
 
         const shelfSize = seen => {
-            const phone = window.matchMedia?.(PHONE).matches;
+            const phone = window.matchMedia?.(NARROW).matches;
             return {
                 room: Math.max(0, $('[data-cargo]').clientWidth - (phone ? 22 : 74)),
                 tile: seen ? (phone ? 110 : 150) : (phone ? 150 : 220),

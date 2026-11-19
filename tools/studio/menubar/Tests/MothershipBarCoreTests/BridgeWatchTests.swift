@@ -147,6 +147,6 @@ private func restartAfterTwoReads(_ watch: inout BridgeWatch) -> String? {
     #expect(!restartWouldHelp(snapshot), "the panel doesn't suggest an outage while the watcher is on it")
     snapshot.bridgeWatch = ["Optimizer": .noRecovery]
     #expect(problems(in: snapshot) == ["The Optimizer bridge didn't come back after two restarts"])
-    #expect(healthRows(snapshot: snapshot, overall: .degraded)[3].value == "1 of 2, Optimizer down")
+    #expect(healthRows(snapshot: snapshot, overall: .degraded)[3].value == "Optimizer down")
     #expect(restartWouldHelp(snapshot))
 }

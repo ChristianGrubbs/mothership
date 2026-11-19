@@ -54,6 +54,10 @@ html.dark { background-color: #17181c; }
     }
 }
 
+/* The More drawer. The phone's tab bar sits over the foot of the drawer, so the list ends that far above it and its last
+   row (Help) can be scrolled into reach. --tabbar-space is 0 outside the phone form of the shell. */
+[data-nav-drawer-list] { padding-bottom: var(--tabbar-space, 0px); }
+
 /* ---- Fold layer ------------------------------------------------------------------------------------------------ */
 
 /* Generic dialogs (x-admin::modal). Book: centre on the trailing segment, where they stay when the device closes.
@@ -69,6 +73,11 @@ html[data-fold="rows"] [data-admin-modal-panel] {
     top: calc(var(--seg-b-top) + var(--seg-b-height) / 2) !important;
     max-height: calc(var(--seg-b-height) - 1rem) !important;
 }
+
+/* The More drawer. Laptop: it opens on the lower segment, as dialogs do, and its list scrolls there, so no row rests on
+   the fold. The list's height keeps the drawer's own allowance for its head (100px), taken from the segment. */
+html[data-fold="rows"] [data-nav-drawer] [data-drawer-panel] { top: var(--seg-b-top); }
+html[data-fold="rows"] [data-nav-drawer-list] { height: calc(var(--seg-b-height) - 100px); }
 
 /* Admin header. Book: brand on the leading segment; search and account controls on the trailing one, so no field
    or button sits on the fold. The bar's background still spans both. */
