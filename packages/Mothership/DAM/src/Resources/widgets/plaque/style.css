@@ -1032,6 +1032,13 @@
         height: 44px;
     }
 
+    /* 16 px, as the kit's own fields under touch: Safari on iPhone zooms the page into a field under 16 px when it
+       takes the focus, and stays zoomed. The editor's fields and the paste boxes set smaller sizes of their own. */
+    .plq-edit .field :is(input:not([type="checkbox"], [type="range"], [type="color"], [type="file"]), select, textarea),
+    .plq-paste {
+        font-size: 16px;
+    }
+
     .plq-edit .icon-grid {
         grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
     }
