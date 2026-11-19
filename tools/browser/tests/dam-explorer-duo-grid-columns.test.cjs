@@ -17,6 +17,16 @@ function fileGridClasses(){
     return match[1];
 }
 
+// The folder grid follows its own width, not the window: it fills with cards at least 11.5rem (184px) wide, and one
+// card takes the whole row when the room is narrower than that.
+function folderGridClasses(){
+    const blade=source('packages/Mothership/DAM/src/Resources/views/components/explorer/grid.blade.php');
+    const match=blade.match(/<div class="(grid grid-cols-\[repeat\(auto-fill,minmax\(min\(100%,11\.5rem\),1fr\)\)\][^"]*)"/);
+    assert.ok(match,'the folder grid must keep its fill rule in grid.blade.php');
+
+    return match[1];
+}
+
 function builtStylesheets(){
     return ['public/themes/admin/default/build','public/themes/dam/build'].map(dir=>{
         const manifest=JSON.parse(source(`${dir}/manifest.json`));
@@ -41,6 +51,50 @@ async function measure(page,{width,panel}){
         return {columns:getComputedStyle(grid).gridTemplateColumns.split(' ').length,cell:grid.children[0].getBoundingClientRect().width};
     });
 }
+
+async function measureFolders(page,{panel,count}){
+    await page.setViewportSize({width:1280,height:800});
+    const cells=Array.from({length:count},()=>'<div style="height:40px"></div>').join('');
+    await page.setContent(`<!doctype html><html><head></head><body style="margin:0"><div style="width:${panel}px" data-panel><div class="${folderGridClasses()}" data-grid>${cells}</div></div></body></html>`);
+    for(const file of builtStylesheets()){
+        await page.addStyleTag({path:file});
+    }
+
+    return page.evaluate(()=>{
+        const grid=document.querySelector('[data-grid]');
+        const boxes=[...grid.children].map(cell=>cell.getBoundingClientRect());
+
+        return {
+            columns:getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+            card:boxes[0].width,
+            rows:new Set(boxes.map(box=>Math.round(box.top))).size,
+            sideways:grid.scrollWidth>grid.clientWidth||document.querySelector('[data-panel]').scrollWidth>document.querySelector('[data-panel]').clientWidth,
+        };
+    });
+}
+
+test('the Library folder grid fills its own width with cards at least 184px wide, and one card per row below that',async()=>{
+    const {chromium}=require(process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH);
+    const browser=await chromium.launch({headless:true,channel:process.env.MOTHERSHIP_BROWSER_CHANNEL||'chrome'});
+    try {
+        const page=await browser.newPage();
+
+        // [panel width, folders, columns, rows]. The gap is 12px, so two cards need 380px.
+        for(const [panel,count,columns,rows] of [[160,1,1,1],[160,3,1,3],[321,3,1,3],[400,1,2,1],[400,3,2,2],[800,1,4,1],[800,5,4,2]]){
+            const got=await measureFolders(page,{panel,count});
+            assert.equal(got.columns,columns,`${panel}px panel, ${count} folders: ${columns} columns`);
+            assert.equal(got.rows,rows,`${panel}px panel, ${count} folders: ${rows} rows`);
+            assert.equal(got.sideways,false,`${panel}px panel, ${count} folders: nothing scrolls sideways`);
+            if(panel<184){
+                assert.equal(Math.round(got.card),panel,`${panel}px panel: one card takes the whole row`);
+            } else {
+                assert.ok(got.card>=184,`${panel}px panel: cards are at least 184px wide, got ${got.card}px`);
+            }
+        }
+    } finally {
+        await browser.close();
+    }
+});
 
 test('the Library file grid keeps readable cards on an unfolded iPhone Duo and elsewhere',async()=>{
     const {chromium}=require(process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH);

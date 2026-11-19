@@ -16,106 +16,144 @@
         <script type="text/x-template" id="v-dam-ai-review-template">
             <div data-dam-ai-review>
                 <x-admin::layouts.page-header
+                    group="sorting"
                     :title="trans('dam::app.admin.ai-review.title')"
                     :description="trans('dam::app.admin.ai-review.description')"
-                    :parents="[['label' => trans('dam::app.admin.components.layouts.sidebar.library'), 'url' => route('admin.dam.index')]]"
                 />
 
-                <div class="mt-4 flex flex-wrap items-center gap-2" data-dam-ai-review-filters>
-                    <div class="inline-flex overflow-hidden rounded-md border border-gray-300 dark:border-cherry-700" role="radiogroup" :aria-label="t.groupBy">
+                <div class="bridge-list-filters" data-dam-ai-review-filters>
+                    <span class="bridge-list-label" aria-hidden="true">@lang('dam::app.admin.ai-review.group-by')</span>
+
+                    <div class="bridge-switch" role="radiogroup" :aria-label="t.groupBy">
                         <button
                             v-for="option in groups"
                             :key="option.value"
                             type="button"
                             role="radio"
                             :aria-checked="filters.group === option.value ? 'true' : 'false'"
-                            class="px-3 py-1.5 text-sm"
-                            :class="filters.group === option.value ? 'bg-primary-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50 dark:bg-cherry-900 dark:text-gray-200 dark:hover:bg-cherry-800'"
-                            @click="setFilter({ group: option.value })"
+                            class="bridge-switch-opt"
+                            v-on:click="setFilter({ group: option.value })"
                             :data-dam-ai-review-group="option.value"
                             v-text="option.label"
                         ></button>
                     </div>
 
-                    <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                    <label>
                         <span class="sr-only">@lang('dam::app.admin.ai-review.term')</span>
-                        <select class="h-8 max-w-[14rem] rounded-md border border-gray-300 px-2 text-sm dark:border-cherry-700 dark:bg-cherry-800" :value="filters.term || ''" @change="setFilter({ term: $event.target.value || null })" data-dam-ai-review-term>
+                        <select class="bridge-list-select" :value="filters.term || ''" v-on:change="setFilter({ term: $event.target.value || null })" data-dam-ai-review-term>
                             <option value="" v-text="t.allTerms"></option>
                             <option v-for="term in terms" :key="term.term" :value="term.term" v-text="t.termOption.replace(':label', term.label).replace(':count', term.count)"></option>
                         </select>
                     </label>
 
-                    <span v-if="filters.folder_id" class="inline-flex max-w-full items-center gap-1 rounded-full bg-primary-50 px-3 py-1 text-sm text-primary-800 dark:bg-cherry-800 dark:text-primary-200">
-                        <span class="truncate" v-text="t.inFolder.replace(':name', filters.folder_name)"></span>
-                        <button type="button" class="ms-1 shrink-0 text-base leading-none" :aria-label="t.clearFilter" @click="setFilter({ folder_id: null, folder_name: null })">×</button>
+                    <span v-if="filters.folder_id" class="bridge-list-chip" data-dam-ai-review-folder>
+                        <span v-text="t.inFolder.replace(':name', filters.folder_name)"></span>
+                        <button type="button" class="bridge-list-chip-clear" :aria-label="t.clearFilter" v-on:click="setFilter({ folder_id: null, folder_name: null })">×</button>
                     </span>
 
-                    <button type="button" class="secondary-button !h-8 !px-3 !py-1 text-sm" @click="pickerOpen = true">@lang('dam::app.admin.ai-review.choose-folder')</button>
+                    <button type="button" class="secondary-button on-ground" v-on:click="pickerOpen = true">@lang('dam::app.admin.ai-review.choose-folder')</button>
                 </div>
 
-                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">@lang('dam::app.admin.ai-review.keyboard')</p>
+                <p class="bridge-list-hint">@lang('dam::app.admin.ai-review.keyboard')</p>
 
-                <div class="mt-3 rounded-lg bg-white box-shadow dark:bg-cherry-900">
-                    <div v-if="items.length" class="sticky top-0 z-[1] flex flex-wrap items-center gap-3 border-b bg-white px-4 py-2.5 text-sm text-gray-700 dark:border-cherry-800 dark:bg-cherry-900 dark:text-gray-300">
-                        <label class="inline-flex items-center gap-2">
-                            <input type="checkbox" class="h-4 w-4" :checked="allSelected" :indeterminate.prop="someSelected" @change="toggle(items, $event.target.checked)" data-dam-ai-review-select-all>
+                {{-- The list frame shared with the other Sorting and Away from ship screens (app.css, "Lists"). --}}
+                <div class="bridge-list">
+                    {{-- The selection strip: with something picked, Accept is the one filled control on the screen. --}}
+                    <div v-if="items.length && ! failed" class="bridge-list-bar">
+                        <label class="bridge-list-pick cursor-pointer">
+                            <span class="bridge-list-check">
+                                <input type="checkbox" class="peer sr-only" :checked="allSelected" :indeterminate.prop="someSelected" v-on:change="toggle(items, $event.target.checked)" data-dam-ai-review-select-all>
+                                <span class="icon-checkbox-normal peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary-600 dark:peer-focus-visible:outline-primary-400 rounded-md text-2xl peer-checked:icon-checkbox-check peer-checked:text-primary-700 peer-indeterminate:icon-checkbox-partial peer-indeterminate:text-primary-700"></span>
+                            </span>
                             <span>@lang('dam::app.admin.ai-review.select-all')</span>
                         </label>
-                        <span v-if="selected.length" class="text-gray-500 dark:text-gray-400" v-text="t.selected.replace(':count', selected.length)"></span>
-                        <span v-if="selected.length" class="ms-auto flex flex-wrap gap-2">
-                            <button type="button" class="primary-button !h-8 !px-3 !py-1 text-sm" :disabled="busy" @click="bulk('accept', selectedItems)" data-dam-ai-review-accept-selected v-text="t.acceptSelected.replace(':count', selected.length)"></button>
-                            <button type="button" class="secondary-button !h-8 !px-3 !py-1 text-sm" :disabled="busy" @click="bulk('dismiss', selectedItems)" data-dam-ai-review-dismiss-selected v-text="t.dismissSelected.replace(':count', selected.length)"></button>
+
+                        <span role="status" data-dam-ai-review-selected v-text="selected.length ? t.selected.replace(':count', selected.length) : ''"></span>
+
+                        <button v-if="selected.length" type="button" class="bridge-list-clear" v-on:click="selected = []" data-dam-ai-review-clear>
+                            @lang('dam::app.admin.ai-review.clear-selection')
+                        </button>
+
+                        <span v-if="selected.length" class="bridge-list-bar-actions">
+                            <button type="button" class="primary-button" :disabled="busy" v-on:click="bulk('accept', selectedItems)" data-dam-ai-review-accept-selected v-text="t.acceptSelected.replace(':count', selected.length)"></button>
+                            <button type="button" class="secondary-button" :disabled="busy" v-on:click="bulk('dismiss', selectedItems)" data-dam-ai-review-dismiss-selected v-text="t.dismissSelected.replace(':count', selected.length)"></button>
                         </span>
                     </div>
 
-                    <p v-if="failed" class="px-4 py-8 text-center text-sm text-red-600 dark:text-red-400" role="alert">@lang('dam::app.admin.ai-review.load-failed')</p>
-                    <p v-else-if="! items.length && (filters.term || filters.folder_id)" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400" data-dam-ai-review-empty>@lang('dam::app.admin.ai-review.empty-filtered')</p>
-                    <p v-else-if="! items.length" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400" data-dam-ai-review-empty>@lang('dam::app.admin.ai-review.empty')</p>
+                    {{-- A list that did not load says so, with a way to try again, and never reads as nothing to review. --}}
+                    <v-load-error
+                        v-if="failed"
+                        title="@lang('dam::app.admin.ai-review.load-failed')"
+                        :message="failed.message"
+                        :retryable="failed.retryable"
+                        v-on:retry="load(failed.page)"
+                    ></v-load-error>
 
-                    <div v-else @keydown="onKey" data-dam-ai-review-list>
-                        <section v-for="section in sections" :key="section.key" class="border-b border-gray-100 last:border-b-0 dark:border-cherry-800" data-dam-ai-review-section>
-                            <header class="flex items-center gap-3 bg-gray-50 px-4 py-2 dark:bg-cherry-800/60">
-                                <input type="checkbox" class="h-4 w-4 shrink-0" :checked="section.items.every(isSelected)" @change="toggle(section.items, $event.target.checked)" :aria-label="t.selectGroup.replace(':name', section.title)">
-                                <img v-if="section.thumbnail" :src="section.thumbnail" alt="" class="h-10 w-10 shrink-0 rounded object-cover">
-                                <h2 class="min-w-0 flex-1 truncate text-sm font-semibold text-gray-800 dark:text-white">
+                    <template v-else-if="! items.length && (filters.term || filters.folder_id)">
+                        <x-admin::list.empty-state :framed="false" icon="icon-dam-tags" :title="trans('dam::app.admin.ai-review.empty-filtered')" :description="trans('dam::app.admin.ai-review.empty-filtered-text')" data-dam-ai-review-empty="filtered">
+                            <button type="button" class="secondary-button" v-on:click="setFilter({ term: null, folder_id: null, folder_name: null })" data-dam-ai-review-clear-filters>
+                                @lang('dam::app.admin.ai-review.clear-filters')
+                            </button>
+                        </x-admin::list.empty-state>
+                    </template>
+
+                    <template v-else-if="! items.length">
+                        <x-admin::list.empty-state :framed="false" icon="icon-dam-tags" :title="trans('dam::app.admin.ai-review.empty')" :description="trans('dam::app.admin.ai-review.empty-text')" data-dam-ai-review-empty="1" />
+                    </template>
+
+                    <div v-else v-on:keydown="onKey" data-dam-ai-review-list>
+                        <section v-for="section in sections" :key="section.key" class="bridge-review-section" data-dam-ai-review-section>
+                            <header class="bridge-review-head">
+                                <label class="bridge-list-check">
+                                    <input type="checkbox" class="peer sr-only" :checked="section.items.every(isSelected)" v-on:change="toggle(section.items, $event.target.checked)" :aria-label="t.selectGroup.replace(':name', section.title)">
+                                    <span class="icon-checkbox-normal peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary-600 dark:peer-focus-visible:outline-primary-400 rounded-md text-2xl peer-checked:icon-checkbox-check peer-checked:text-primary-700"></span>
+                                </label>
+                                <img v-if="section.thumbnail" :src="section.thumbnail" alt="" class="bridge-list-thumb">
+                                <h2 class="bridge-list-name">
                                     <a v-if="section.url" :href="section.url" class="hover:underline" :title="section.title" v-text="section.title"></a>
                                     <span v-else v-text="section.title"></span>
                                 </h2>
-                                <span class="shrink-0 text-xs text-gray-500 dark:text-gray-400" v-text="countLabel(section.count)"></span>
+                                <span class="bridge-list-note" v-text="countLabel(section.count)"></span>
                             </header>
 
-                            <ul :class="filters.group === 'term' ? 'grid grid-cols-1 gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3' : 'flex flex-wrap gap-2 p-3'">
+                            <ul class="bridge-review-items" :class="{ 'is-files': filters.group === 'term' }">
                                 <li
                                     v-for="item in section.items"
                                     :key="keyOf(item)"
                                     :ref="el => setRef(item, el)"
                                     tabindex="0"
-                                    class="flex min-w-0 items-center gap-2 rounded-lg border px-2.5 py-2 outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-                                    :class="isSelected(item) ? 'border-primary-400 bg-primary-50 dark:border-primary-600 dark:bg-cherry-800' : 'border-gray-200 dark:border-cherry-700'"
+                                    class="bridge-review-item"
+                                    :class="{ 'is-picked': isSelected(item) }"
                                     :aria-label="t.selectItem.replace(':term', item.label).replace(':name', item.asset_name)"
-                                    @focus="cursor = keyOf(item)"
+                                    v-on:focus="cursor = keyOf(item)"
                                     data-dam-ai-review-item
                                     :data-asset-id="item.asset_id"
                                     :data-term="item.term"
                                 >
-                                    <input type="checkbox" class="h-4 w-4 shrink-0" tabindex="-1" :checked="isSelected(item)" @change="toggle([item], $event.target.checked)" :aria-label="t.selectItem.replace(':term', item.label).replace(':name', item.asset_name)">
+                                    <label class="bridge-list-check">
+                                        <input type="checkbox" class="peer sr-only" tabindex="-1" :checked="isSelected(item)" v-on:change="toggle([item], $event.target.checked)" :aria-label="t.selectItem.replace(':term', item.label).replace(':name', item.asset_name)">
+                                        <span class="icon-checkbox-normal rounded-md text-2xl peer-checked:icon-checkbox-check peer-checked:text-primary-700"></span>
+                                    </label>
                                     <template v-if="filters.group === 'term'">
-                                        <img :src="item.thumbnail_url" alt="" loading="lazy" class="h-12 w-12 shrink-0 rounded object-cover">
-                                        <a :href="item.url" class="min-w-0 flex-1 line-clamp-2 break-all text-sm text-gray-800 hover:underline dark:text-gray-100" tabindex="-1" :title="item.asset_name" v-text="item.asset_name"></a>
+                                        <img :src="item.thumbnail_url" alt="" loading="lazy" class="bridge-list-thumb">
+                                        <a :href="item.url" class="bridge-review-name" tabindex="-1" :title="item.asset_name" v-text="item.asset_name"></a>
                                     </template>
-                                    <span v-else class="min-w-0 flex-1 truncate text-sm font-medium text-gray-800 dark:text-gray-100" v-text="item.label"></span>
-                                    <button type="button" class="shrink-0 rounded px-2 py-1 text-xs font-semibold text-green-800 hover:bg-green-50 dark:text-green-300 dark:hover:bg-green-900/30" tabindex="-1" :disabled="busy" @click="bulk('accept', [item])" v-text="t.accept"></button>
-                                    <button type="button" class="shrink-0 rounded px-2 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-cherry-700" tabindex="-1" :disabled="busy" @click="bulk('dismiss', [item])" v-text="t.dismiss"></button>
+                                    <span v-else class="bridge-review-name" v-text="item.label"></span>
+                                    {{-- Neither is filled: a grid of filled buttons has no single next step. --}}
+                                    <span class="bridge-review-acts">
+                                        <button type="button" class="secondary-button" tabindex="-1" :disabled="busy" v-on:click="bulk('accept', [item])" v-text="t.accept"></button>
+                                        <button type="button" class="transparent-button" tabindex="-1" :disabled="busy" v-on:click="bulk('dismiss', [item])" v-text="t.dismiss"></button>
+                                    </span>
                                 </li>
                             </ul>
                         </section>
                     </div>
 
-                    <div v-if="meta.total > meta.per_page" class="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-2.5 text-sm text-gray-600 dark:border-cherry-800 dark:text-gray-300">
+                    <div v-if="meta.total > meta.per_page && ! failed" class="bridge-list-foot">
                         <span v-text="shownLabel"></span>
                         <span class="flex gap-2">
-                            <button type="button" class="secondary-button !h-8 !px-3 !py-1 text-sm" :disabled="busy || meta.current_page <= 1" @click="load(meta.current_page - 1)">@lang('dam::app.admin.ai-review.previous')</button>
-                            <button type="button" class="secondary-button !h-8 !px-3 !py-1 text-sm" :disabled="busy || meta.current_page >= meta.last_page" @click="load(meta.current_page + 1)">@lang('dam::app.admin.ai-review.next')</button>
+                            <button type="button" class="secondary-button" :disabled="busy || meta.current_page <= 1" v-on:click="load(meta.current_page - 1)">@lang('dam::app.admin.ai-review.previous')</button>
+                            <button type="button" class="secondary-button" :disabled="busy || meta.current_page >= meta.last_page" v-on:click="load(meta.current_page + 1)">@lang('dam::app.admin.ai-review.next')</button>
                         </span>
                     </div>
                 </div>
@@ -141,7 +179,7 @@
                         selected: [],
                         cursor: null,
                         busy: false,
-                        failed: false,
+                        failed: null,
                         pickerOpen: false,
                         groups: [
                             { value: 'term', label: @js(trans('dam::app.admin.ai-review.group-term')) },
@@ -292,11 +330,12 @@
                             this.items = data.data;
                             this.terms = data.terms;
                             this.meta = data.meta;
-                            this.failed = false;
+                            this.failed = null;
                             this.selected = this.selected.filter(key => this.items.some(item => this.keyOf(item) === key));
                             window.history.replaceState(null, '', @js(route('admin.dam.ai-review.index')) + '?' + new URLSearchParams(params).toString());
                         } catch (e) {
-                            this.failed = true;
+                            // The cause and Try again take the list's place; the page asked for is kept for the retry.
+                            this.failed = { ...(globalThis.mothership?.requestError?.(e) ?? { message: e?.response?.data?.message ?? '', retryable: true }), page };
                         }
                     },
 

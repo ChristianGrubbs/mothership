@@ -9,56 +9,85 @@
         <script type="text/x-template" id="v-dam-trash-template">
             <div>
                 <x-admin::layouts.page-header
+                    group="sorting"
                     :title="trans('dam::app.admin.dam.trash.title')"
                     :description="trans('dam::app.admin.dam.trash.description', ['days' => \Mothership\DAM\Models\Asset::TRASH_RETENTION_DAYS])"
-                    :parents="[['label' => trans('dam::app.admin.components.layouts.sidebar.library'), 'url' => route('admin.dam.index')]]"
                 />
 
-                <div class="mt-4 rounded-lg bg-white dark:bg-cherry-900 box-shadow overflow-hidden">
-                    <p v-if="loaded && failed && ! assets.length" class="px-4 py-8 text-center text-sm text-red-600 dark:text-red-400" role="alert">
-                        @lang('dam::app.admin.dam.trash.load-failed')
-                    </p>
+                {{-- The list anatomy shared with the other Sorting and Away from ship screens (app.css, "Lists").
+                     --list-cols are the columns of the table form: name, deleted, kept until, actions. --}}
+                <div
+                    class="bridge-list"
+                    style="--list-cols: minmax(0, 1fr) 11rem 9rem 17rem"
+                    data-dam-trash
+                >
+                    <div v-if="! loaded" class="bridge-list-loading" aria-busy="true" data-list-loading>
+                        <span v-for="n in 3" :key="n"></span>
+                    </div>
 
-                    <p v-else-if="loaded && ! assets.length" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                        @lang('dam::app.admin.dam.trash.empty')
-                    </p>
+                    {{-- A list that did not load says so, with a way to try again, and never reads as an empty trash. --}}
+                    <v-load-error
+                        v-else-if="failed && ! assets.length"
+                        title="@lang('dam::app.admin.dam.trash.load-failed')"
+                        :message="failed.message"
+                        :retryable="failed.retryable"
+                        v-on:retry="load()"
+                    ></v-load-error>
 
-                    <!-- Below xl each row is a card with labelled lines, so its actions are on screen; from xl it is a table row. The header
-                         and every row are separate grids, so no column is auto-sized: an auto column would size apart in each. -->
-                    <div v-else class="xl:overflow-x-auto">
-                        <div class="hidden xl:grid xl:min-w-[760px] xl:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1fr)_11rem_11rem_16rem] items-center gap-2.5 border-b px-4 py-2.5 text-sm font-semibold text-gray-600 dark:border-cherry-800 dark:text-gray-300 bg-primary-50 dark:bg-cherry-900">
+                    <template v-else-if="! assets.length">
+                        <x-admin::list.empty-state :framed="false" icon="icon-delete" :title="trans('dam::app.admin.dam.trash.empty')" :description="trans('dam::app.admin.dam.trash.empty-text', ['days' => \Mothership\DAM\Models\Asset::TRASH_RETENTION_DAYS])" data-dam-trash-empty="1" />
+                    </template>
+
+                    <template v-else>
+                        <div class="bridge-list-head">
                             <span>@lang('dam::app.admin.dam.trash.col-name')</span>
-                            <span>@lang('dam::app.admin.dam.trash.col-location')</span>
-                            <span>@lang('dam::app.admin.dam.trash.col-deleted-by')</span>
                             <span>@lang('dam::app.admin.dam.trash.col-deleted-at')</span>
                             <span>@lang('dam::app.admin.dam.trash.col-purge-after')</span>
-                            <span></span>
+                            <span class="sr-only">@lang('admin::app.components.datagrid.table.actions')</span>
                         </div>
 
                         <div
                             v-for="asset in assets"
                             :key="asset.id"
-                            class="flex flex-col gap-1 border-b px-4 py-3 text-sm text-gray-600 transition-colors hover:bg-primary-50/40 dark:border-cherry-800 dark:text-gray-300 dark:hover:bg-cherry-800 xl:grid xl:min-w-[760px] xl:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1fr)_11rem_11rem_16rem] xl:items-center xl:gap-2.5 xl:py-2.5"
+                            class="bridge-list-row has-no-status"
+                            :data-dam-trash-row="asset.id"
                         >
-                            <span class="truncate font-semibold text-gray-800 dark:text-white xl:font-normal xl:text-gray-600 xl:dark:text-gray-300" :title="asset.file_name" v-text="asset.name"></span>
-                            <span class="truncate" :title="asset.location"><span class="me-1 text-gray-500 dark:text-gray-400 xl:hidden">@lang('dam::app.admin.dam.trash.col-location')</span><span v-text="asset.location"></span></span>
-                            <span class="truncate"><span class="me-1 text-gray-500 dark:text-gray-400 xl:hidden">@lang('dam::app.admin.dam.trash.col-deleted-by')</span><span v-text="asset.deleted_by ?? unknownDeleter"></span></span>
-                            <span><span class="me-1 text-gray-500 dark:text-gray-400 xl:hidden">@lang('dam::app.admin.dam.trash.col-deleted-at')</span><span v-text="fmtDate(asset.deleted_at)"></span></span>
-                            <span><span class="me-1 text-gray-500 dark:text-gray-400 xl:hidden">@lang('dam::app.admin.dam.trash.col-purge-after')</span><span v-text="fmtDate(asset.purge_after)"></span></span>
-                            <span class="mt-2 flex flex-wrap gap-2 xl:mt-0 xl:flex-nowrap xl:justify-end">
-                                <button type="button" class="primary-button whitespace-nowrap" :disabled="busy || asset.can_restore === false" @click="restore(asset)">
+                            <div class="bridge-list-main">
+                                <div class="bridge-list-text">
+                                    <p class="bridge-list-name" :title="asset.file_name" v-text="asset.name"></p>
+                                    <p class="bridge-list-sub" :title="asset.location"><span>@lang('dam::app.admin.dam.trash.col-location')</span> <span v-text="asset.location"></span></p>
+                                </div>
+                            </div>
+
+                            <div class="bridge-list-meta">
+                                <div class="bridge-list-cell">
+                                    <span class="bridge-list-label">@lang('dam::app.admin.dam.trash.col-deleted-at')</span>
+                                    <span class="bridge-list-value" v-text="fmtDate(asset.deleted_at)"></span>
+                                    <span class="bridge-list-note" v-text="deleterLabel(asset)"></span>
+                                </div>
+
+                                <div class="bridge-list-cell">
+                                    <span class="bridge-list-label">@lang('dam::app.admin.dam.trash.col-purge-after')</span>
+                                    <span class="bridge-list-value" v-text="fmtDay(asset.purge_after)"></span>
+                                    <span v-if="untilNote(asset.purge_after)" class="bridge-list-note" v-text="untilNote(asset.purge_after)"></span>
+                                </div>
+                            </div>
+
+                            {{-- Neither action is filled: a list of filled buttons has no single next step. Red waits for the confirmation. --}}
+                            <div class="bridge-list-actions">
+                                <button type="button" class="secondary-button" :disabled="busy || asset.can_restore === false" v-on:click="restore(asset)">
                                     @lang('dam::app.admin.dam.trash.restore')
                                 </button>
-                                <button v-if="asset.can_delete" type="button" class="inline-flex items-center rounded-full border border-red-300 bg-white px-3 py-1.5 text-red-700 font-semibold whitespace-nowrap transition-colors hover:bg-red-50 disabled:opacity-60 dark:border-red-800 dark:bg-transparent dark:text-red-300 dark:hover:bg-red-950/40 ms-2 xl:ms-4" :disabled="busy" @click="confirmDelete(asset)">
+                                <button v-if="asset.can_delete" type="button" class="transparent-button" :disabled="busy" v-on:click="confirmDelete(asset)">
                                     @lang('dam::app.admin.dam.trash.delete-permanently')
                                 </button>
-                            </span>
+                            </div>
                         </div>
-                    </div>
+                    </template>
 
-                    <div v-if="loaded && assets.length" class="flex items-center justify-between gap-3 px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">
+                    <div v-if="loaded && assets.length" class="bridge-list-foot">
                         <span v-text="shownLabel"></span>
-                        <button v-if="page < lastPage" type="button" class="secondary-button" :disabled="busy" @click="loadMore">
+                        <button v-if="page < lastPage" type="button" class="secondary-button" :disabled="busy" v-on:click="loadMore">
                             @lang('dam::app.admin.dam.trash.load-more')
                         </button>
                     </div>
@@ -71,14 +100,10 @@
                 template: '#v-dam-trash-template',
 
                 data() {
-                    return { assets: [], loaded: false, failed: false, busy: false, page: 1, lastPage: 1, total: 0 };
+                    return { assets: [], loaded: false, failed: null, busy: false, page: 1, lastPage: 1, total: 0 };
                 },
 
                 computed: {
-                    unknownDeleter() {
-                        return @js(trans('dam::app.admin.dam.trash.unknown-deleter'));
-                    },
-
                     shownLabel() {
                         return @js(trans('dam::app.admin.dam.trash.showing')).replace(':shown', this.assets.length).replace(':total', this.total);
                     },
@@ -101,11 +126,11 @@
                                 this.page = last.meta.current_page;
                                 this.lastPage = last.meta.last_page;
                                 this.total = last.meta.total;
-                                this.failed = false;
+                                this.failed = null;
                             })
-                            .catch(() => {
-                                // A list that never loaded must not read as an empty trash.
-                                this.failed = true;
+                            .catch((error) => {
+                                // A list that never loaded must not read as an empty trash: the cause and Try again take the list's place.
+                                this.failed = globalThis.mothership?.requestError?.(error) ?? { message: error?.response?.data?.message ?? '', retryable: true };
                                 this.$emitter.emit('add-flash', { type: 'error', message: @js(trans('dam::app.admin.dam.trash.load-failed')) });
                             })
                             .finally(() => { this.loaded = true; });
@@ -159,6 +184,26 @@
 
                     fmtDate(iso) {
                         return iso ? new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
+                    },
+
+                    fmtDay(iso) {
+                        return iso ? new Date(iso).toLocaleDateString([], { dateStyle: 'medium' }) : '';
+                    },
+
+                    deleterLabel(asset) {
+                        return asset.deleted_by
+                            ? @js(trans('dam::app.admin.dam.trash.deleted-by-line')).replace(':name', asset.deleted_by)
+                            : @js(trans('dam::app.admin.dam.trash.deleted-by-unknown'));
+                    },
+
+                    /** "in 22 days", "tomorrow", "today", in whole calendar days. */
+                    untilNote(iso) {
+                        if (! iso) return '';
+
+                        const day = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                        const days = Math.round((day(new Date(iso)) - day(new Date())) / 86400000);
+
+                        return new Intl.RelativeTimeFormat([], { numeric: 'auto' }).format(days, 'day');
                     },
                 },
             });

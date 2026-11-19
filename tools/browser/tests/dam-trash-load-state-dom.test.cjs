@@ -5,11 +5,15 @@ const path=require('node:path');
 const root=path.resolve(__dirname,'../../..');
 // Mounts the real Trash page component (P2 S4) with a stubbed $axios whose list answers come from `answers` in
 // order: an object is a page of the list, `'fail'` rejects. Blade output is stubbed to the translation key or route
-// name, and the page-header component is dropped, so the test reads the template's own states.
+// name, the page-header component and Blade comments are dropped, and the shared empty-state part is stood in for by
+// its title key, so the test reads the template's own states. <v-load-error> is the app-wide failed-load component;
+// a stand-in with the same role, title and retry event takes its place here.
 async function mountTrash(page,answers){
     const source=fs.readFileSync(path.join(root,'packages/Mothership/DAM/src/Resources/views/trash/index.blade.php'),'utf8');
     const blade=s=>s
+        .replace(/\{\{--[\s\S]*?--\}\}/g,'')
         .replace(/<x-admin::layouts\.page-header[\s\S]*?\/>/g,'')
+        .replace(/<x-admin::list\.empty-state([\s\S]*?)\/>/g,(_,attrs)=>`<p data-empty-state>${(attrs.match(/:title="trans\('([^']+)'/)||[])[1]}</p>`)
         .replace(/@js\(trans\('([^']+)'\)\)/g,(_,key)=>JSON.stringify(key))
         .replace(/@js\(route\('([^']+)'(?:, ':id')?\)\)/g,(_,name)=>JSON.stringify('/'+name+'/:id'))
         .replace(/@lang\('([^']+)'\)/g,'$1');
@@ -31,6 +35,7 @@ async function mountTrash(page,answers){
             delete:async()=>({data:{message:'dam::app.admin.dam.trash.deleted'}}),
         };
         app.config.globalProperties.$emitter={emit(name,payload){window.flashes.push({name,payload});}};
+        app.component('v-load-error',{props:['title','message','retryable'],emits:['retry'],template:'<div role="alert"><p>{{ title }}</p><button type="button" data-load-error-retry @click="$emit(\'retry\')">retry</button></div>'});
         const el=document.createElement('script');el.type='text/x-template';el.id='v-dam-trash-template';el.textContent=template;document.body.append(el);
         new Function('app',script)(app);app.mount('#app');
     },{template,script,answers});
@@ -68,6 +73,17 @@ test('a refresh that fails after an action keeps the rows already shown',async()
         assert.equal(await page.getByText('hero-banner.jpg').count(),0);
         assert.equal(await page.getByText('logo.svg').count(),1);
         assert.equal(await page.getByText('dam::app.admin.dam.trash.empty').count(),0);
+        assert.equal(await page.getByRole('alert').count(),0);
+    });
+});
+
+// Redesign phase 7: a failed first load offers Try again in the list's own place, and it recovers the list.
+test('a failed first load can be retried and then shows the rows',async()=>{
+    await withPage(async page=>{
+        await mountTrash(page,['fail',listPage([row(1,'hero-banner.jpg')])]);
+        await page.getByRole('alert').waitFor();
+        await page.locator('[data-load-error-retry]').click();
+        await page.getByText('hero-banner.jpg').waitFor();
         assert.equal(await page.getByRole('alert').count(),0);
     });
 });
