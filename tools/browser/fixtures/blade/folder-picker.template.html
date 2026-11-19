@@ -15,7 +15,7 @@
             aria-modal="true"
             :aria-labelledby="'dam-folder-picker-title-' + tabId"
             class="relative bg-white dark:bg-cherry-900 rounded-xl shadow-2xl w-[360px] h-[520px] flex flex-col focus:outline-none"
-            style="max-width: calc(var(--seg-trailing-width, 100vw) - 2rem); max-height: calc(var(--seg-trailing-height, 100dvh) - 2rem);"
+            style="max-width: calc(100% - 2rem); max-height: calc(100% - 2rem);"
             @keydown.tab="trapFocus"
             @keydown.esc="onEscape"
         >

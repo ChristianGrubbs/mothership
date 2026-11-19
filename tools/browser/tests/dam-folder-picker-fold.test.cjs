@@ -157,16 +157,14 @@ browserTest('with no fold the folder picker stays centred on the screen', async 
             await mount(page, size);
             const {screen, fold, dialog, scrim} = await layout(page);
             assert.equal(fold, null, `${size.name}: no fold`);
-            // With no fold the size limits are the window's (100vw, 100dvh, as before this change), so with a classic
-            // scrollbar's gutter the side margins shrink by half the gutter; the dialog still sits wholly on the screen.
-            const gutter = size.width - screen.width;
-            assertInside(dialog, {left: -gutter / 2, top: 0, right: screen.width + gutter / 2, bottom: screen.height}, size.name);
+            // The 1rem margin holds on the screen itself, with or without a classic scrollbar's gutter.
+            assertInside(dialog, {left: 0, top: 0, right: screen.width, bottom: screen.height}, size.name);
             assert.ok(Math.abs((dialog.left + dialog.right) / 2 - screen.width / 2) <= 0.5, `${size.name}: centred across`);
             assert.ok(Math.abs((dialog.top + dialog.bottom) / 2 - screen.height / 2) <= 0.5, `${size.name}: centred down`);
-            // The picker's own size where the window allows it: 360 wide, 520 tall. WebKit lays out in 1/64 px steps.
+            // The picker's own size where the screen allows it: 360 wide, 520 tall. WebKit lays out in 1/64 px steps.
             const near = (actual, expected, what) => assert.ok(Math.abs(actual - expected) <= 0.5, `${size.name}: ${what} ${actual}, expected ${expected}`);
-            near(dialog.right - dialog.left, Math.min(360, size.width - 32), 'width');
-            near(dialog.bottom - dialog.top, Math.min(520, size.height - 32), 'height');
+            near(dialog.right - dialog.left, Math.min(360, screen.width - 32), 'width');
+            near(dialog.bottom - dialog.top, Math.min(520, screen.height - 32), 'height');
             assertScrimCovers(scrim, screen, size.name);
         });
     }
