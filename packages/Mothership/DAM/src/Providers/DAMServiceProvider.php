@@ -106,6 +106,7 @@ use Mothership\DAM\Services\HomeWidgetRegistry;
 use Mothership\DAM\Services\RoleBuilder;
 use Mothership\DAM\Services\Share\ShareGate;
 use Mothership\DAM\Services\SharedHiggsfield;
+use Mothership\DAM\Services\Transfers\TransferSession;
 use Mothership\DAM\Services\Webhooks\DamWebhookEvents;
 use Mothership\DAM\Services\WebPagePolicy;
 use Mothership\DAM\Support\ChunkUploadLogger;
@@ -234,18 +235,31 @@ class DAMServiceProvider extends ServiceProvider
         });
     }
 
+    /**
+     * The admin menu without the entries whose feature cannot work on this site, so the rail never offers a page
+     * that answers 404.
+     *
+     * Transfers needs more than its switch: an origin and a shared key too (TransferSession::available()). Feedback
+     * triage (Settings, Feedback) stays out until the feature is switched on.
+     *
+     * @param  array<int|string, mixed>  $menu
+     * @return array<int|string, mixed>
+     */
+    public static function menuWithoutUnavailable(array $menu): array
+    {
+        $unavailable = array_keys(array_filter([
+            'dam_transfers' => ! app(TransferSession::class)->available(),
+            'dam.feedback'  => ! config('dam.feedback.enabled'),
+        ]));
+
+        return array_filter($menu, fn (mixed $item): bool => ! is_array($item) || ! in_array($item['key'] ?? null, $unavailable, true));
+    }
+
     public function boot(Router $router)
     {
         $this->routeS3DiskOverHomeNetwork();
 
-        if (! config('dam.transfers.enabled')) {
-            config(['menu.admin' => array_filter(config('menu.admin', []), fn (mixed $item): bool => ! is_array($item) || ($item['key'] ?? null) !== 'dam_transfers')]);
-        }
-
-        // Feedback triage (Settings → Feedback) stays out of the menu until the feature is switched on.
-        if (! config('dam.feedback.enabled')) {
-            config(['menu.admin' => array_filter(config('menu.admin', []), fn (mixed $item): bool => ! is_array($item) || ($item['key'] ?? null) !== 'dam.feedback')]);
-        }
+        config(['menu.admin' => self::menuWithoutUnavailable(menu: config('menu.admin', []))]);
 
         Asset::observe(CompoundAssetObserver::class);
         Asset::observe(AiIndexObserver::class);

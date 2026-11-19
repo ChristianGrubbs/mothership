@@ -1,5 +1,6 @@
 <?php
 
+use Mothership\DAM\Providers\DAMServiceProvider;
 use Mothership\DAM\Services\Transfers\TransferSession;
 use Mothership\DAM\Vectorization\Vectorizer;
 use Mothership\User\Models\Admin;
@@ -82,6 +83,21 @@ it('does not expose transfers while disabled or incorrectly configured', functio
     ['dam.transfers.origin', 'https://user@example.test'],
     ['dam.transfers.origin', 'https://example.test/path'],
     ['dam.transfers.origin', 'https://example.test?query=1'],
+]);
+
+it('offers Transfers in the menu only when the page behind it can open', function (array $settings, bool $offered) {
+    config($settings);
+
+    $keys = array_column(DAMServiceProvider::menuWithoutUnavailable(menu: [['key' => 'dam'], ['key' => 'dam_transfers']]), 'key');
+
+    expect($keys)->toContain('dam')
+        ->and(in_array('dam_transfers', $keys, true))->toBe($offered);
+})->with([
+    'switched on, with an origin and a key' => [[], true],
+    'switched off'                          => [['dam.transfers.enabled' => false], false],
+    'no shared key'                         => [['dam.transfers.shared_key' => ''], false],
+    'a key that is too short'               => [['dam.transfers.shared_key' => 'short'], false],
+    'no origin'                             => [['dam.transfers.origin' => ''], false],
 ]);
 
 it('allows a distinct loopback origin only in local or testing environments', function () {
