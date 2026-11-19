@@ -41,7 +41,9 @@ const submenuScript=(()=>{
     return found[1];
 })();
 // settings: 'parent' draws the Settings row as the open page with a submenu; 'scripted' also runs the view's script.
-const pageWith=settings=>`<!doctype html><html><head><style>${builtStyles()}</style></head><body>
+// The body carries the classes the layout gives it. Without bridge-body the stylesheet keeps a scrollbar gutter at the
+// root, which a browser with classic scrollbars takes out of every width measured here.
+const pageWith=settings=>`<!doctype html><html><head><style>${builtStyles()}</style></head><body class="h-screen overflow-hidden bridge-body">
 <div id="app" class="flex flex-col h-screen">
   <div class="flex flex-1 min-h-0 sidebar-not-collapsed">
     <div id="mothership-sidebar" class="bridge-rail bridge-phone-hide flex flex-col shrink-0 h-full">
@@ -87,11 +89,14 @@ const readShell=page=>page.evaluate(()=>{
         railScrolls:(()=>{const rail=document.querySelector('.bridge-rail');return rail.scrollHeight>rail.clientHeight&&getComputedStyle(rail).overflowY==='auto';})(),
         top:one('.bridge-top'),feedback:one('[data-feedback]'),drawerTheme:one('[data-drawer-theme]'),tabbar:one('.bridge-tabbar'),
         notice:drawn(footer),noticeLink:drawn(footer.querySelector('a')),noticeWords:footer.innerText.replace(/\s+/g,' ').trim(),
-        sideways:document.documentElement.scrollWidth-innerWidth,
+        // How far the page can be scrolled sideways.
+        sideways:document.documentElement.scrollWidth-document.documentElement.clientWidth,
+        gutter:getComputedStyle(document.documentElement).scrollbarGutter,
     };
 });
 
 test('the shell views carry the hooks this file styles',()=>{
+    assert.match(read(`${ADMIN_VIEWS}/index.blade.php`),/<body class="h-screen overflow-hidden bridge-body">/);
     assert.match(read(`${ADMIN_VIEWS}/sidebar/index.blade.php`),/class="bridge-rail bridge-phone-hide /);
     const header=read(`${ADMIN_VIEWS}/header/index.blade.php`);
     assert.match(header,/class="bridge-icon-btn bridge-phone-hide"/);
@@ -110,6 +115,7 @@ browserTest('the rail is words from 1180 px wide and icons from 720 to 1179',asy
     const browser=await launchBrowser({playwrightPath});
     try{
         const wide=await readShell(await shell(browser,1180,800));
+        assert.equal(wide.gutter,'auto','the page here keeps no scrollbar gutter at the root, as the shell does not');
         assert.equal(wide.rail[2],224);
         assert.ok(wide.railWords,'the rail shows its words at 1180 px');
         // 951 x 585 and 951 x 543 are an iPhone Duo open and held sideways: the icon rail leaves 387 px before its fold.
