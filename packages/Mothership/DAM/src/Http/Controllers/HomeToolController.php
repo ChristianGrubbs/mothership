@@ -5,16 +5,21 @@ namespace Mothership\DAM\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Mothership\Admin\Http\Controllers\Controller;
+use Mothership\DAM\Services\Home\HomeToolUses;
 use Mothership\DAM\Services\HomeTelemetry;
 use Mothership\DAM\Services\HomeWidgetRegistry;
 use Mothership\SphereSeam\Http\Controllers\SphereSeamController;
 
 class HomeToolController extends Controller
 {
-    public function file(string $widget, string $path, HomeWidgetRegistry $registry)
+    public function file(string $widget, string $path, HomeWidgetRegistry $registry, HomeToolUses $uses)
     {
         $definition = $registry->allowed($widget);
         abort_unless($definition['kind'] === 'tool', 404);
+        if ($path === ($definition['entry'] ?? null)) {
+            // The Tools page says when each tool was last used. The tool must still open if that cannot be written.
+            rescue(fn () => $uses->record(adminId: (int) auth('admin')->id(), widget: $widget, now: now()->toImmutable()));
+        }
         if ($widget === 'stylepress' && $path === 'index.html') {
             return app(HomeStylePressController::class)->index();
         }

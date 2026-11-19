@@ -77,6 +77,19 @@ return [
         'icon'      => 'icon-catalog',
     ],
     [
+        // The Tools page: every signed-in account has it ('home' resolves to "authenticated"), because some tools
+        // are open to every role. Which tiles it shows is HomeWidgetRegistry::tools().
+        'key'       => 'tools',
+        'rail'      => ['group' => 'main', 'sort' => 4, 'glyph' => 'wrench'],
+        'acl'       => 'home',
+        'name'      => 'dam::app.admin.components.layouts.sidebar.tools',
+        'route'     => 'admin.tools.index',
+        // The same 'sort' as Collections, which this entry follows: the phone drawer lists rows by 'sort' and
+        // keeps this file's order between equals.
+        'sort'      => 3,
+        'icon'      => 'icon-setting',
+    ],
+    [
         'key'       => 'dam_shares',
         'rail'      => ['group' => 'away', 'sort' => 1, 'glyph' => 'link-2'],
         'acl'       => 'dam.shares',
