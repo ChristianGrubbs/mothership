@@ -2709,6 +2709,9 @@ a.bridge-tool-tile:hover .bridge-tool-well {
     width: 100%;
     height: 100%;
     border: 0;
+    /* A file a tool opens here (a picture, say) is a light-scheme page in either theme. A frame of another scheme
+       would be given a white sheet behind it; matching it keeps the frame clear, so the ground shows round the file. */
+    color-scheme: light;
 }
 
 /* Opening, slow and failed are said where the tool will be. */

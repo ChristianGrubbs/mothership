@@ -20,6 +20,7 @@
         const $ = selector => root.querySelector(selector);
         const stage = $('[data-tool-stage]'), note = $('[data-tool-note]'), noteText = $('[data-tool-note-text]'), noteActions = $('[data-tool-note-actions]');
         const ask = $('[data-tool-ask]'), question = $('[data-tool-question]'), accept = $('[data-tool-ask-accept]'), cancel = $('[data-tool-ask-cancel]');
+        const notice = $('[data-tool-notice]'), noticeText = $('[data-tool-notice-text]');
         const back = $('[data-tool-back]'), reload = $('[data-tool-reload]'), status = $('[data-tool-status]');
         const launchId = globalThis.crypto?.randomUUID?.() || `tool-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
         const began = performance.now();
@@ -64,13 +65,15 @@
 
         // What the tool has told us, each fact tied to the document that said it: a reload or a move inside the frame
         // loads a new document, which must say it again.
-        let dirty = false, booted = false, launched = false, leaving = false;
+        // `away`: the frame shows a file the tool opened in its own place. The tool's page went when the file came,
+        // and what it held went with it, so nothing is left to lose and nothing asks about work.
+        let dirty = false, booted = false, launched = false, leaving = false, away = false;
         let noWorkDocument = null, reportsWorkDocument = null, discardedDocument = null;
         const holdsNoWork = () => Boolean(noWorkDocument) && noWorkDocument === currentDocument();
         const reportsWork = () => Boolean(reportsWorkDocument) && reportsWorkDocument === currentDocument();
         // Work may be lost when the tool reported work, or when nothing in its current document promised to report
-        // it (a tool without the bridge, a frame that left the tool, a tool that has not loaded).
-        const mayHoldWork = () => !holdsNoWork() && (dirty || !reportsWork());
+        // it (a tool without the bridge, a tool that has not loaded).
+        const mayHoldWork = () => !away && !holdsNoWork() && (dirty || !reportsWork());
 
         // `lead` makes Reload the one filled control: the tool is not coming, so Reload is the next step. While the
         // tool is only slow it may still arrive, and nothing is pressed on the person.
@@ -88,17 +91,31 @@
             // Frame identity proves delivery, not that the tool's own work or export succeeds.
             track({name: phase === 'loaded' ? 'home.launch.loaded' : phase === 'abandoned' ? 'home.launch.abandoned' : 'home.launch.failed', props: {phase, ...(error_code ? {error_code} : {})}});
         };
-        const slow = setTimeout(() => { track({name: 'home.launch.slow', props: {phase: 'timeout'}}); showNote({text: words.slow, actions: true}); }, 30000);
+        // Every try at loading the tool gets its own thirty seconds: the first, a Reload, and a Reload after that.
+        // The launch is reported slow once; a later try is the person's own, not a launch.
+        let slow = 0, slowReported = false;
+        const armSlow = () => {
+            clearTimeout(slow);
+            slow = setTimeout(() => {
+                if (!launched && !slowReported) { slowReported = true; track({name: 'home.launch.slow', props: {phase: 'timeout'}}); }
+                showNote({text: words.slow, actions: true});
+            }, 30000);
+        };
         signal.addEventListener('abort', () => clearTimeout(slow));
 
         // The question sits in its own band under the bar. It is the page's, not the tool's: nothing the tool does
         // can write over it, and it needs no browser dialog.
         let pending = null;
+        // A file in the frame stays in view: the page says what happened in a band above it and never covers it.
+        // The band steps aside while a question is up, so one filled control shows at a time.
+        const showNotice = () => { notice.hidden = !away || Boolean(pending); };
+        const setAway = on => { away = on; noticeText.textContent = on ? words.file : ''; showNotice(); };
         const dismissAsk = () => {
             if (!pending) return false;
             const {opener} = pending;
             pending = null;
             ask.hidden = true;
+            showNotice();
             opener?.focus();
             return true;
         };
@@ -109,6 +126,7 @@
             accept.textContent = label;
             accept.classList.toggle('is-discard', discards);
             ask.hidden = false;
+            showNotice();
             accept.focus();
         };
         cancel.addEventListener('click', () => dismissAsk());
@@ -126,7 +144,9 @@
             dirty = false;
             reportsWorkDocument = null;
             discardedDocument = currentDocument();
+            setAway(false);
             showNote({text: words.reloading});
+            armSlow();
             iframe.src = url.href;
         };
 
@@ -145,6 +165,7 @@
         };
         reload.addEventListener('click', () => askReload(reload));
         noteReload.addEventListener('click', () => reloadTool());
+        $('[data-tool-notice-reload]').addEventListener('click', () => reloadTool());
 
         // Escape backs out of the question first; otherwise it asks. It never closes a tool by itself, so an Escape
         // meant for a menu inside the tool can not throw work away.
@@ -155,14 +176,14 @@
             clearTimeout(slow);
             let identity;
             try { identity = iframe.contentWindow?.__MOTHERSHIP_FRAME__?.widget; } catch { identity = null; }
-            if (identity === id) { booted = true; finishLaunch({phase: 'loaded'}); note.hidden = true; sendTheme(); post('active', {active: true}); return; }
+            if (identity === id) { booted = true; finishLaunch({phase: 'loaded'}); setAway(false); note.hidden = true; sendTheme(); post('active', {active: true}); return; }
             // A tool page names itself. A first load that does not is a broken session. A later one is the tool
             // moving on (to a file's page, say): a page gets the whole window, never a second copy of the app
-            // inside the frame; a file stays here, with Reload as the way back to the tool.
+            // inside the frame; a file stays here in view, under a band whose Reload is the way back to the tool.
             let moved = '', page = false;
             try { moved = booted ? iframe.contentWindow.location.href : ''; page = ['text/html', 'application/xhtml+xml'].includes(iframe.contentDocument?.contentType); } catch { moved = ''; }
             if (moved && moved !== 'about:blank' && page) { window.location.assign(moved); return; }
-            if (moved && moved !== 'about:blank') { showNote({text: words.file, actions: true, lead: true}); return; }
+            if (moved && moved !== 'about:blank') { dirty = false; note.hidden = true; setAway(true); return; }
             finishLaunch({phase: 'error', error_code: 'frame_identity_missing'});
             showNote({text: words.failed, actions: true, lead: true});
         });
@@ -199,6 +220,7 @@
         window.addEventListener('beforeunload', event => { if (!leaving && dirty && !holdsNoWork()) { event.preventDefault(); event.returnValue = ''; } }, {signal});
 
         track({name: 'home.launch.attempted', props: {phase: 'opening'}});
+        armSlow();
         iframe.src = url.href;
         stage.prepend(iframe);
     };

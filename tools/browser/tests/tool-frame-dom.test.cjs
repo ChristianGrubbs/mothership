@@ -6,40 +6,60 @@ const {bladeFixture}=require('../fixtures/blade.cjs');
 
 // Real-DOM cover for the tool frame page (dam::tools.frame with tool-frame.js): who is asked before a tool is left
 // or reloaded, that the question is the page's own band and never a browser dialog, where Back goes, and what a
-// tool that did not open looks like. The page's markup is the view as Laravel rendered it (fixtures/blade.cjs).
+// tool that did not open looks like. The page's markup is the view as Laravel rendered it (fixtures/blade.cjs), under
+// the admin stylesheet as it is built and committed, so what covers what is the real thing.
 const playwrightPath=process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH;
 const browserTest=playwrightPath?test:test.skip;
 const root=path.resolve(__dirname,'../../..');
 const source=file=>fs.readFileSync(path.join(root,'packages/Mothership/DAM/src/Resources/assets/js',file),'utf8');
+const BUILD='public/themes/admin/default/build';
+const builtStyles=()=>{
+    const manifest=JSON.parse(fs.readFileSync(path.join(root,BUILD,'manifest.json'),'utf8'));
+    const entry=Object.values(manifest).find(item=>typeof item.file==='string'&&item.file.startsWith('assets/app-')&&item.file.endsWith('.css'));
+    assert.ok(entry,'the committed admin manifest lists a built assets/app-*.css');
+    return fs.readFileSync(path.join(root,BUILD,entry.file),'utf8');
+};
 
 // The fixture was rendered with this root, so the addresses in its markup are on this origin.
 const ORIGIN='http://mothership.test';
 const FRAME_URL=`${ORIGIN}/admin/tools/sound-effects`;
 const TOOLS_URL=`${ORIGIN}/admin/tools`;
 const LIBRARY_URL=`${ORIGIN}/admin/dam`;
-const FRAME_HTML=`<!doctype html><html><head><title>Sound Effect Maker</title></head><body><div id="app">${bladeFixture('tool-frame.html')}</div><script>${source('tool-frame.js')}<\/script></body></html>`;
+const FRAME_HTML=`<!doctype html><html><head><title>Sound Effect Maker</title><style>${builtStyles()}</style></head><body><div id="app">${bladeFixture('tool-frame.html')}</div><script>${source('tool-frame.js')}<\/script></body></html>`;
 const plainPage=name=>`<!doctype html><html><head><title>${name}</title></head><body><h1>${name}</h1></body></html>`;
 // The tool runs the real bridge, so typing and Escape inside it reach the page the way a live tool's do.
 const TOOL_HTML=`<!doctype html><html><body><script>window.__MOTHERSHIP_FRAME__={widget:"sound-effects",state:{},url:"/admin/home/widgets/sound-effects",csrf:"fixture"};<\/script><script>${source('home-frame.js')}<\/script><p>tool</p><input id="tool-field"></body></html>`;
 // What a lapsed session answers with at the tool's address: a page that does not name itself as the tool.
 const SIGN_IN_HTML=plainPage('Sign in');
+// A file a tool may put in its own place: a one-pixel picture.
+const FILE_PATH='/admin/home/tools/sound-effects/exports/cover.png';
+const PNG=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=','base64');
 
-async function framePage(browser,{toolHtml=TOOL_HTML,referer}={}){
+// `clock` puts the page on a clock the test moves; `held` starts with the tool's page never answering (hold() turns
+// that on and off later).
+async function framePage(browser,{toolHtml=TOOL_HTML,referer,clock=false,held=false}={}){
     const page=await browser.newPage({viewport:{width:1200,height:900}});
     let toolLoads=0,dialogs=0;
+    if(clock)await page.clock.install();
     page.on('dialog',dialog=>{dialogs++;dialog.dismiss().catch(()=>{});});
-    await page.route(FRAME_URL,route=>route.fulfill({contentType:'text/html',body:FRAME_HTML}));
+    await page.route(FRAME_URL,route=>route.fulfill({contentType:'text/html; charset=utf-8',body:FRAME_HTML}));
     await page.route(TOOLS_URL,route=>route.fulfill({contentType:'text/html',body:plainPage('Tools')}));
     await page.route(LIBRARY_URL,route=>route.fulfill({contentType:'text/html',body:plainPage('Library')}));
-    await page.route(`${ORIGIN}/admin/home/tools/**`,route=>{toolLoads++;return route.fulfill({contentType:'text/html',body:toolHtml});});
+    await page.route(`${ORIGIN}/admin/home/tools/**`,route=>{
+        if(new URL(route.request().url()).pathname===FILE_PATH)return route.fulfill({contentType:'image/png',body:PNG});
+        toolLoads++;
+        // A held page is never answered: the frame keeps waiting, as it does for a server that has stalled.
+        return held?undefined:route.fulfill({contentType:'text/html',body:toolHtml});
+    });
     // Every bridge message the page receives, in arrival order.
     await page.addInitScript(()=>{
         if(window.top!==window)return;
         window.__heard=[];
         window.addEventListener('message',event=>{if(event.data?.protocol==='mothership-widget/v1')window.__heard.push(event.data.type+(event.data.payload?.reportsWork===true?':reports':''));});
     });
-    await page.goto(FRAME_URL,referer?{referer}:{});
-    return {page,toolLoads:()=>toolLoads,dialogs:()=>dialogs};
+    // A page whose tool never answers never finishes loading, so it is waited for only as far as its own markup.
+    await page.goto(FRAME_URL,{...(referer?{referer}:{}),...(held?{waitUntil:'domcontentloaded'}:{})});
+    return {page,toolLoads:()=>toolLoads,dialogs:()=>dialogs,hold:on=>{held=on;}};
 }
 
 // The tool is open once its own page has loaded in the frame and has promised to report work; `loads` is how many
@@ -68,6 +88,20 @@ const ask=page=>page.evaluate(()=>{
         focus:focus===accept?'accept':focus?.hasAttribute('data-tool-back')?'back':focus?.hasAttribute('data-tool-reload')?'reload':focus?.tagName.toLowerCase(),
     };
 });
+// What a person would touch in the middle of the stage: the tool's own frame, or the note laid over it.
+const stageTop=page=>page.evaluate(()=>{
+    const box=document.querySelector('[data-tool-stage]').getBoundingClientRect();
+    const hit=document.elementFromPoint(box.left+box.width/2,box.top+box.height/2);
+    return hit?.hasAttribute('data-tool-window')?'tool':hit?.closest('[data-tool-note]')?'note':hit?.tagName.toLowerCase();
+});
+const note=page=>page.evaluate(()=>{
+    const box=document.querySelector('[data-tool-note]'),reload=box.querySelector('[data-tool-note-reload]');
+    return {shown:!box.hidden,text:box.querySelector('[data-tool-note-text]').textContent,actions:!box.querySelector('[data-tool-note-actions]').hidden,filled:reload.classList.contains('bridge-btn-act')};
+});
+const until=async(check,what)=>{
+    for(let tries=0;tries<200;tries++){if(check())return;await new Promise(resolve=>setTimeout(resolve,25));}
+    assert.fail(what);
+};
 const launch=()=>require(playwrightPath).chromium.launch({headless:true,channel:process.env.MOTHERSHIP_BROWSER_CHANNEL||'chrome'});
 
 browserTest('Back leaves at once while the tool holds no work, and asks in the page before work is lost',async()=>{
@@ -157,6 +191,7 @@ browserTest('a tool that did not open says so, offers Reload first, and lets the
         await page.locator('[data-tool-note-actions]').waitFor({state:'visible'});
         assert.equal(await page.locator('[data-tool-note-text]').textContent(),'Sound Effect Maker could not open. Reload it, or go back and check that you are still signed in.');
         assert.equal(await page.locator('[data-tool-note-reload]').evaluate(button=>button.classList.contains('bridge-btn-act')),true,'Reload is the filled control when the tool is not coming');
+        assert.equal(await stageTop(page),'note','the note covers the page that came in place of the tool');
 
         await page.locator('[data-tool-note-reload]').click();
         await page.waitForFunction(()=>document.querySelector('[data-tool-note-actions]').hidden===false&&document.querySelector('[data-tool-note-text]').textContent.includes('could not open'));
@@ -194,5 +229,82 @@ browserTest('Back returns to the page of the app the person came from, and to To
             assert.equal(await page.locator('[data-tool-back]').getAttribute('href'),TOOLS_URL,referer);
             await page.close();
         }
+    } finally { await browser.close(); }
+});
+
+browserTest('a file the tool opens in its own place stays in view under a notice, and Reload brings the tool back',async()=>{
+    const browser=await launch();
+    try{
+        const {page,toolLoads,dialogs}=await framePage(browser);
+        const frame=await toolOpen(page);
+        assert.equal(await stageTop(page),'tool','an open tool is what the stage shows');
+        await holdWork(page,frame);
+
+        // The tool moves its own frame to a file. The step is deferred so the call returns before the frame goes.
+        await frame.evaluate(file=>{setTimeout(()=>location.assign(file),0);},FILE_PATH);
+        await page.locator('[data-tool-notice]').waitFor({state:'visible'});
+        assert.equal(await page.locator('[data-tool-notice-text]').textContent(),'Sound Effect Maker opened a file here. Reload brings the tool back.');
+        assert.equal((await note(page)).shown,false,'nothing is laid over the file');
+        assert.equal(await stageTop(page),'tool','the file can be seen and reached');
+        assert.equal(new URL(frame.url()).pathname,FILE_PATH,'the frame still shows the file');
+
+        // The tool's page went when the file came, so nothing is left to lose: Escape asks in plain words. The
+        // notice steps aside while the question is up and comes back with it gone.
+        await page.locator('[data-tool-reload]').focus();
+        await page.keyboard.press('Escape');
+        assert.deepEqual(await ask(page),{shown:true,question:'Close Sound Effect Maker?',accept:'Close',discards:false,focus:'accept'});
+        assert.equal(await page.locator('[data-tool-notice]').isVisible(),false,'one filled control at a time');
+        await page.keyboard.press('Escape');
+        assert.equal(await page.locator('[data-tool-notice]').isVisible(),true);
+
+        await page.locator('[data-tool-notice-reload]').click();
+        await toolOpen(page,2);
+        assert.equal(toolLoads(),2,'Reload in the notice asks for the tool again, without a question');
+        assert.equal(await page.locator('[data-tool-notice]').isVisible(),false,'the notice goes when the tool is back');
+        assert.equal(await stageTop(page),'tool');
+
+        await page.locator('[data-tool-back]').click();
+        await page.waitForURL(TOOLS_URL);
+        assert.equal(dialogs(),0);
+        await page.close();
+    } finally { await browser.close(); }
+});
+
+browserTest('every try at loading the tool says so when it takes thirty seconds, and Reload tries again',async()=>{
+    const SLOW={shown:true,text:'Sound Effect Maker is taking longer than usual to open.',actions:true,filled:false};
+    const browser=await launch();
+    try{
+        // A tool that opened, then stalls on a reload.
+        const opened=await framePage(browser,{clock:true});
+        await opened.page.clock.fastForward(1000);
+        await toolOpen(opened.page);
+        opened.hold(true);
+        await opened.page.locator('[data-tool-reload]').click();
+        await until(()=>opened.toolLoads()===2,'Reload asks for the tool again');
+        assert.deepEqual(await note(opened.page),{shown:true,text:'Reloading Sound Effect Maker…',actions:false,filled:false});
+        await opened.page.clock.fastForward(31000);
+        assert.deepEqual(await note(opened.page),SLOW,'a reload that stalls says so, with Reload and Back');
+        await opened.page.close();
+
+        // A tool that never answered: the first try is slow, the next try is slow again, the third opens.
+        const {page,toolLoads,hold}=await framePage(browser,{clock:true,held:true});
+        await page.clock.fastForward(1000);
+        await until(()=>toolLoads()===1,'the page asks for the tool');
+        assert.deepEqual(await note(page),{shown:true,text:'Opening Sound Effect Maker…',actions:false,filled:false});
+        await page.clock.fastForward(31000);
+        assert.deepEqual(await note(page),SLOW);
+
+        await page.locator('[data-tool-note-reload]').click();
+        await until(()=>toolLoads()===2,'Reload in the note asks for the tool again');
+        assert.equal((await note(page)).text,'Reloading Sound Effect Maker…');
+        await page.clock.fastForward(31000);
+        assert.deepEqual(await note(page),SLOW,'the second try gets its own thirty seconds');
+
+        hold(false);
+        await page.locator('[data-tool-note-reload]').click();
+        await toolOpen(page);
+        assert.equal(toolLoads(),3);
+        assert.equal(await stageTop(page),'tool');
+        await page.close();
     } finally { await browser.close(); }
 });

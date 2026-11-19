@@ -57,6 +57,16 @@
             </div>
         </div>
 
+        {{-- Said when the tool put a file (a picture, a PDF) in its own place. A band, so the file stays in view
+             under it; Reload is the way back to the tool. --}}
+        <div class="bridge-toolask" data-tool-notice hidden>
+            <p role="status" data-tool-notice-text></p>
+
+            <div class="bridge-toolask-actions">
+                <button type="button" class="bridge-btn-act" data-tool-notice-reload>@lang('dam::app.admin.dam.tools.frame.reload')</button>
+            </div>
+        </div>
+
         <main class="bridge-toolstage" data-tool-stage>
             <div class="bridge-toolnote" data-tool-note>
                 <p role="status" data-tool-note-text>{{ $words['opening'] }}</p>

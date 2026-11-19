@@ -33,7 +33,11 @@ tool opens in the tool frame: a page of its own with one top bar that is the sam
 - Back goes to the page the person came from when that was another page of the app, and to Tools otherwise. The
   button's name says which.
 - Opening, slow (after 30 seconds) and failed each say so where the tool will be. Slow and failed offer Reload and
-  Back; when the tool failed, Reload is the filled button.
+  Back; when the tool failed, Reload is the filled button. Every try at loading the tool gets its own 30 seconds:
+  the first, a Reload, and a Reload after that.
+- A file a tool opens in its own place (a picture, a PDF) stays in view. A band under the bar says what happened and
+  its Reload brings the tool back; nothing is laid over the file. Nothing asks about work then: the tool's page went
+  when the file came. The band steps aside while a question is up.
 - A tool whose page marks itself `data-agh-ephemeral` (Palette Studio saves every edit as it happens) never reports
   work, so leaving it never asks.
 - A role that may not use a tool gets 403 from the frame page; an id that is not a tool with a page gets 404.
@@ -52,6 +56,7 @@ tool. Home still has its own Tools shelf, which opens a tool in a panel over Hom
 
 `packages/Mothership/DAM/tests/Feature/ToolsPageTest.php` covers who gets which tile, what each footer says over
 time, and who may open a frame. `tools/browser/tests/tool-frame-dom.test.cjs` covers Back, Reload, Escape, the
-question and a tool that did not open, in a browser. Its page is the frame view as Laravel renders it
-(`tools/browser/fixtures/blade/tool-frame.html`); after changing `tools/frame.blade.php`, regenerate it with
+question, a tool that did not open, a file in the frame and a load that stalls, in a browser. Its page is the frame
+view as Laravel renders it (`tools/browser/fixtures/blade/tool-frame.html`) under the committed admin stylesheet;
+after changing `tools/frame.blade.php`, regenerate the fixture with
 `BLADE_FIXTURES_WRITE=1 vendor/bin/pest tests/Feature/BrowserBladeFixturesTest.php`.
