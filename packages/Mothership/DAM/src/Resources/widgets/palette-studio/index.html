@@ -2,139 +2,183 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#f6f7f8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Palette Studio · The Mothership</title>
+    <link rel="stylesheet" href="../_kit/tool-kit.css">
     <link rel="stylesheet" href="style.css">
     <script src="palette-core.js"></script>
     <script src="app.js" defer></script>
 </head>
 <body>
-    <!-- Every edit is saved as it happens, so nothing here is unexported work: data-agh-ephemeral keeps Home from
-         asking before it closes the tool. -->
-    <main class="shell" data-agh-ephemeral>
-        <header class="page-head">
-            <p class="eyebrow">THE MOTHERSHIP · COLOUR</p>
-            <h1>Palette Studio</h1>
-            <p>Build a palette, check its contrast and colour-vision safety, then copy it into code or save it as an image.</p>
-            <p class="keys" aria-label="Keyboard shortcuts"><kbd>Space</kbd> generate · <kbd>1</kbd>–<kbd>8</kbd> select a swatch · <kbd>C</kbd> copy its hex · <kbd>S</kbd> save</p>
-        </header>
+    <!-- Every edit is saved as it happens, so nothing here is unexported work: data-agh-ephemeral keeps the page that
+         frames the tool from asking before it closes. The tool's name, its saved palettes, Export and "Save to
+         Library" are drawn by that page's bar (app.js tells it what to show); [data-own-bar] stands in where no bar
+         is drawn. -->
+    <main class="ps" data-agh-ephemeral data-view="swatches">
+        <div class="ps-seg tk-seg" role="group" aria-label="Part of the palette">
+            <button type="button" class="tk-seg-opt" aria-pressed="true" data-view-opt="swatches">Swatches</button>
+            <button type="button" class="tk-seg-opt" aria-pressed="false" data-view-opt="scales">Scales</button>
+            <button type="button" class="tk-seg-opt" aria-pressed="false" data-view-opt="contrast">Contrast</button>
+        </div>
 
-        <section class="toolbar" aria-label="Palette">
-            <div class="name-field">
-                <label for="palette-name">Palette name</label>
-                <div class="name-row">
-                    <input id="palette-name" data-name maxlength="60" autocomplete="off" spellcheck="false">
-                    <span class="save-state" data-save-state></span>
+        <section class="tk-pane" data-pane="swatches" aria-label="Swatches">
+            <div class="ps-own" data-own-bar hidden>
+                <button type="button" class="tk-btn is-small" data-open-saved>Saved palettes…</button>
+                <button type="button" class="tk-btn is-small" data-open-export>Export…</button>
+                <button type="button" class="tk-btn is-small is-act" data-open-library hidden>Save to Library…</button>
+            </div>
+
+            <label class="tk-field">Palette name
+                <input class="tk-input ps-name" data-name maxlength="60" autocomplete="off" spellcheck="false">
+            </label>
+            <div class="ps-state">
+                <span class="tk-note" role="status" data-save-state></span>
+                <button type="button" class="tk-btn is-small" data-save>Save palette</button>
+            </div>
+
+            <h2 class="tk-head">Swatches <span class="tk-mono" data-count></span></h2>
+            <ol class="ps-list" data-swatches></ol>
+
+            <!-- The editor of the selected swatch. app.js keeps it under that swatch's row. -->
+            <div class="ps-editor" data-editor>
+                <div class="ps-editor-head">
+                    <span class="tk-note">Swatch <span data-editor-index>1</span></span>
+                    <span class="ps-editor-tools">
+                        <button type="button" class="tk-btn is-quiet" data-move data-by="-1" data-icon="up" title="Move up"></button>
+                        <button type="button" class="tk-btn is-quiet" data-move data-by="1" data-icon="down" title="Move down"></button>
+                        <button type="button" class="tk-btn is-quiet" data-remove data-icon="trash" title="Remove"></button>
+                    </span>
+                </div>
+                <div class="ps-fields">
+                    <label class="tk-field">Hex<input class="tk-input tk-mono" data-field="hex" autocomplete="off" spellcheck="false" aria-describedby="field-error"></label>
+                    <label class="tk-field">RGB<input class="tk-input tk-mono" data-field="rgb" autocomplete="off" spellcheck="false" placeholder="r, g, b" aria-describedby="field-error"></label>
+                    <label class="tk-field">HSL<input class="tk-input tk-mono" data-field="hsl" autocomplete="off" spellcheck="false" placeholder="h, s%, l%" aria-describedby="field-error"></label>
+                    <label class="tk-field">OKLCH<input class="tk-input tk-mono" data-field="oklch" autocomplete="off" spellcheck="false" placeholder="L% C h" aria-describedby="field-error"></label>
+                </div>
+                <p class="ps-field-error" id="field-error" role="status" data-field-error></p>
+                <div class="ps-sliders">
+                    <label>Hue <output class="tk-mono" data-out="h"></output><input type="range" data-slider="h" min="0" max="360" step="1"></label>
+                    <label>Saturation <output class="tk-mono" data-out="s"></output><input type="range" data-slider="s" min="0" max="100" step="1"></label>
+                    <label>Lightness <output class="tk-mono" data-out="l"></output><input type="range" data-slider="l" min="0" max="100" step="1"></label>
                 </div>
             </div>
-            <div class="toolbar-actions">
-                <div class="generate">
-                    <label class="visually-hidden" for="harmony">Harmony</label>
-                    <select id="harmony" data-harmony>
-                        <option value="complementary">Complementary</option>
-                        <option value="analogous">Analogous</option>
-                        <option value="triadic">Triadic</option>
-                        <option value="split-complementary">Split-complementary</option>
-                        <option value="tetradic">Tetradic</option>
-                        <option value="monochromatic">Monochromatic</option>
-                    </select>
-                    <button type="button" data-generate>Generate</button>
-                </div>
-                <button type="button" data-surprise>Surprise me</button>
-                <button type="button" data-nudge>Nudge</button>
-                <button class="primary" type="button" data-save>Save</button>
-            </div>
-        </section>
 
-        <div class="vision-bar">
-            <label for="vision">View as</label>
-            <select id="vision" data-vision>
+            <button type="button" class="tk-btn is-small ps-add" data-add>Add swatch</button>
+
+            <h2 class="tk-head">Generate</h2>
+            <label class="tk-field">Harmony
+                <select class="tk-select" data-harmony>
+                    <option value="complementary">Complementary</option>
+                    <option value="analogous">Analogous</option>
+                    <option value="triadic">Triadic</option>
+                    <option value="split-complementary">Split-complementary</option>
+                    <option value="tetradic">Tetradic</option>
+                    <option value="monochromatic">Monochromatic</option>
+                </select>
+            </label>
+            <div class="ps-buttons">
+                <button type="button" class="tk-btn is-small" data-generate>Generate</button>
+                <button type="button" class="tk-btn is-small" data-surprise>Surprise me</button>
+                <button type="button" class="tk-btn is-small" data-nudge>Nudge</button>
+            </div>
+
+            <h2 class="tk-head" id="vision-title">Check as</h2>
+            <select class="tk-select" data-vision aria-labelledby="vision-title">
                 <option value="none">Original colours</option>
                 <option value="deuteranopia">Deuteranopia (no green cones)</option>
                 <option value="protanopia">Protanopia (no red cones)</option>
                 <option value="tritanopia">Tritanopia (no blue cones)</option>
                 <option value="achromatopsia">Achromatopsia (no colour)</option>
             </select>
-            <p class="vision-note" data-vision-note hidden>
+            <p class="ps-vision-note" data-vision-note hidden>
                 <span data-vision-text></span>
-                <button type="button" class="link" data-vision-off>Show original colours</button>
+                <button type="button" class="tk-link" data-vision-off>Show original colours</button>
             </p>
-        </div>
 
-        <section class="swatches" aria-label="Swatches">
-            <ol class="swatch-list" data-swatches></ol>
-            <button type="button" class="add-swatch" data-add><span aria-hidden="true">+</span> Add swatch</button>
+            <p class="ps-keys tk-note" aria-label="Keyboard shortcuts"><kbd>Space</kbd> generate · <kbd>1</kbd>–<kbd>8</kbd> select · <kbd>C</kbd> copy hex · <kbd>S</kbd> save palette</p>
         </section>
 
-        <div class="work">
-            <section class="panel editor" aria-labelledby="editor-title">
-                <div class="section-head"><div><h2 id="editor-title">Swatch <span data-editor-index>1</span></h2><p>Edit any value; the others follow. An incomplete value keeps the last valid colour.</p></div><span class="editor-chip" data-editor-chip aria-hidden="true"></span></div>
-                <div class="fields">
-                    <label>Hex<input data-field="hex" autocomplete="off" spellcheck="false" aria-describedby="field-error"></label>
-                    <label>RGB<input data-field="rgb" autocomplete="off" spellcheck="false" placeholder="r, g, b" aria-describedby="field-error"></label>
-                    <label>HSL<input data-field="hsl" autocomplete="off" spellcheck="false" placeholder="h, s%, l%" aria-describedby="field-error"></label>
-                    <label>OKLCH<input data-field="oklch" autocomplete="off" spellcheck="false" placeholder="L% C h" aria-describedby="field-error"></label>
-                </div>
-                <p class="field-error" id="field-error" role="status" data-field-error></p>
-                <div class="sliders">
-                    <label>Hue <output data-out="h"></output><input type="range" data-slider="h" min="0" max="360" step="1"></label>
-                    <label>Saturation <output data-out="s"></output><input type="range" data-slider="s" min="0" max="100" step="1"></label>
-                    <label>Lightness <output data-out="l"></output><input type="range" data-slider="l" min="0" max="100" step="1"></label>
-                </div>
-            </section>
+        <div class="ps-rest">
+            <section class="tk-pane" data-pane="scales" aria-labelledby="scales-title">
+                <h2 class="tk-head"><span id="scales-title">Scales</span> <span class="ps-head-note">Ten stops per swatch. Press one to copy it.</span></h2>
+                <div class="ps-scales" data-scales></div>
 
-            <section class="panel preview" aria-labelledby="preview-title">
-                <div class="section-head"><div><h2 id="preview-title">Preview</h2><p>The palette on a sample card: lightest swatch as the page, highest-contrast swatch as text, the selected swatch as the button.</p></div></div>
-                <div class="sample" data-sample>
-                    <h3 data-sample-heading>Quarterly report</h3>
-                    <p data-sample-body>Sign-ups rose in every region this quarter. The chart compares the three largest.</p>
-                    <div class="sample-chart" aria-label="Sample bar chart" role="img">
+                <h2 class="tk-head"><span id="sample-title">Sample</span> <span class="ps-head-note">Lightest swatch as the page, the selected swatch as the button.</span></h2>
+                <div class="ps-sample" data-sample aria-labelledby="sample-title">
+                    <h3>Quarterly report</h3>
+                    <p>Sign-ups rose in every region this quarter. The chart compares the three largest.</p>
+                    <div class="ps-sample-chart" aria-label="Sample bar chart" role="img">
                         <span data-bar style="height: 46%"></span><span data-bar style="height: 82%"></span><span data-bar style="height: 64%"></span>
                     </div>
-                    <div class="sample-actions">
+                    <div class="ps-sample-actions">
                         <button type="button" data-sample-primary tabindex="-1">Continue</button>
                         <button type="button" data-sample-disabled disabled tabindex="-1">Unavailable</button>
                     </div>
                 </div>
             </section>
+
+            <section class="tk-pane" data-pane="contrast" aria-labelledby="contrast-title">
+                <h2 class="tk-head"><span id="contrast-title">Contrast</span> <span class="tk-mono" data-contrast-summary></span></h2>
+                <ul class="ps-pairs" data-contrast></ul>
+                <p class="tk-empty" data-contrast-empty hidden>One swatch has nothing to be read against. Add a second to check contrast.</p>
+                <p class="tk-note ps-contrast-note">WCAG 2.2: normal text needs 4.5:1 for AA and 7:1 for AAA; large text needs 3:1 and 4.5:1. Open a pair for all four.</p>
+            </section>
         </div>
 
-        <section class="panel" aria-labelledby="scales-title">
-            <div class="section-head"><div><h2 id="scales-title">Scales</h2><p>Ten stops per swatch at evenly spaced OKLCH lightness. Click a value to copy it.</p></div></div>
-            <div class="scales" data-scales></div>
-        </section>
-
-        <section class="panel" aria-labelledby="contrast-title">
-            <div class="section-head"><div><h2 id="contrast-title">Contrast</h2><p>Every swatch against every other, with WCAG 2.2 results. Normal text needs 4.5:1 for AA and 7:1 for AAA; large text needs 3:1 and 4.5:1.</p></div><p class="contrast-summary" data-contrast-summary></p></div>
-            <div class="table-wrap" data-contrast-wrap>
-                <table class="contrast">
-                    <thead><tr><th scope="col">Pair</th><th scope="col">Sample</th><th scope="col">Ratio</th><th scope="col">AA normal</th><th scope="col">AA large</th><th scope="col">AAA normal</th><th scope="col">AAA large</th></tr></thead>
-                    <tbody data-contrast></tbody>
-                </table>
-            </div>
-            <p class="empty" data-contrast-empty hidden>Add a second swatch to check contrast.</p>
-        </section>
-
-        <section class="panel" aria-labelledby="export-title">
-            <div class="section-head"><div><h2 id="export-title">Export</h2><p>Copy the palette as code, or download it as a 1600 × 900 PNG named after the palette.</p></div></div>
-            <div class="exports" data-exports></div>
-            <div class="export-bar"><span><small>Image</small><strong data-png-name>Palette.png</strong></span><button class="primary-outline" type="button" data-png>Download PNG</button></div>
-        </section>
-
-        <section class="panel" aria-labelledby="library-title">
-            <div class="section-head">
-                <div><h2 id="library-title">Library</h2><p>Saved palettes, favourites first. Changes are kept with your account.</p></div>
-                <div class="library-actions">
-                    <label class="file-button">Import JSON<input type="file" accept="application/json,.json" data-import></label>
-                    <button type="button" data-export-library>Export library</button>
+        <dialog class="tk-sheet" data-sheet="export" aria-labelledby="export-title">
+            <div class="tk-sheet-head"><h2 id="export-title">Export</h2></div>
+            <div class="tk-sheet-body">
+                <fieldset class="ps-choices" data-export-choices>
+                    <legend class="tk-hidden">Export as</legend>
+                </fieldset>
+                <pre class="ps-code tk-mono" data-export-preview tabindex="0" aria-label="What will be copied"></pre>
+                <div class="ps-export-image" data-export-image hidden>
+                    <span class="ps-strip" data-export-strip aria-hidden="true"></span>
+                    <span class="tk-mono" data-png-name></span>
                 </div>
             </div>
-            <ul class="library" data-library></ul>
-            <p class="empty" data-library-empty hidden>No saved palettes yet. Save this one, or import a library file.</p>
-        </section>
+            <div class="tk-sheet-foot">
+                <p class="tk-status" role="status"></p>
+                <button type="button" class="tk-btn" data-sheet-close>Close</button>
+                <button type="button" class="tk-btn is-act" data-export-go>Copy</button>
+            </div>
+        </dialog>
 
-        <div class="toast" role="status" aria-live="polite" data-toast hidden><span data-toast-text></span><button type="button" class="link" data-toast-action hidden></button></div>
+        <dialog class="tk-sheet" data-sheet="library" aria-labelledby="library-title">
+            <div class="tk-sheet-head"><h2 id="library-title">Save to Library</h2></div>
+            <div class="tk-sheet-body">
+                <fieldset class="ps-choices is-one">
+                    <legend class="tk-head">What is saved</legend>
+                    <label class="tk-check"><input type="checkbox" data-save-image checked><span>Image <small data-save-image-name></small></span></label>
+                    <label class="tk-check"><input type="checkbox" data-save-tokens checked><span>Colour tokens <small data-save-tokens-name></small></span></label>
+                </fieldset>
+                <label class="tk-field" data-folder-field>Folder
+                    <select class="tk-select" data-folder></select>
+                </label>
+                <p class="tk-empty" data-folder-empty hidden>There is no folder you can save into. Ask an administrator for a folder you may upload to.</p>
+            </div>
+            <div class="tk-sheet-foot">
+                <p class="tk-status" role="status"></p>
+                <button type="button" class="tk-btn" data-sheet-close>Cancel</button>
+                <button type="button" class="tk-btn is-act" data-library-go>Save</button>
+            </div>
+        </dialog>
+
+        <dialog class="tk-sheet ps-saved" data-sheet="saved" aria-labelledby="saved-title">
+            <div class="tk-sheet-head"><h2 id="saved-title">Saved palettes</h2><span class="tk-mono ps-saved-count" data-saved-count></span></div>
+            <div class="tk-sheet-body">
+                <ul class="ps-saved-list" data-library></ul>
+                <p class="tk-empty" data-library-empty hidden>No saved palettes yet. Keep this one with “Save palette”, or import a file.</p>
+            </div>
+            <div class="tk-sheet-foot">
+                <p class="tk-status" role="status"></p>
+                <label class="tk-btn ps-file">Import JSON<input type="file" class="tk-hidden" accept="application/json,.json" data-import></label>
+                <button type="button" class="tk-btn" data-export-library>Export all</button>
+                <button type="button" class="tk-btn" data-sheet-close>Done</button>
+            </div>
+        </dialog>
+
+        <div class="tk-toast" role="status" aria-live="polite" data-toast hidden></div>
     </main>
 </body>
 </html>

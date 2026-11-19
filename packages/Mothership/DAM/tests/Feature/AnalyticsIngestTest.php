@@ -32,6 +32,17 @@ function analyticsDrops(): array
         ->groupBy('detail')->map(fn ($rows) => (int) $rows->sum('events'))->sortKeys()->all();
 }
 
+it('keeps a launch reported by the tool frame under the tools surface', function () {
+    $admin = Admin::factory()->create(['status' => 1]);
+    analyticsIngestAs($admin, [analyticsClientEvent('home.launch.attempted', [
+        'sf' => 'tools',
+        'p'  => ['widget_id' => 'palette-studio', 'launch_id' => 'launch-1', 'phase' => 'opening'],
+    ])])->assertNoContent();
+
+    expect(DB::table(EventStore::TABLE)->where('name', 'home.launch.attempted')->sole()->surface)->toBe('tools')
+        ->and(analyticsDrops())->toBe([]);
+});
+
 it('keeps versioned metric snapshots and deduplicates their transport retries', function () {
     $admin = Admin::factory()->create(['status' => 1]);
     $props = ['metric' => 'CLS', 'value' => 300, 'route' => 'admin.dam.index',

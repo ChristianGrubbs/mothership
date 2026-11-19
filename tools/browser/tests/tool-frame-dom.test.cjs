@@ -37,10 +37,11 @@ const PNG=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42
 
 // `clock` puts the page on a clock the test moves; `held` starts with the tool's page never answering (hold() turns
 // that on and off later).
-async function framePage(browser,{toolHtml=TOOL_HTML,referer,clock=false,held=false}={}){
+async function framePage(browser,{toolHtml=TOOL_HTML,referer,clock=false,held=false,init}={}){
     const page=await browser.newPage({viewport:{width:1200,height:900}});
     let toolLoads=0,dialogs=0;
     if(clock)await page.clock.install();
+    if(init)await page.addInitScript(init);
     page.on('dialog',dialog=>{dialogs++;dialog.dismiss().catch(()=>{});});
     await page.route(FRAME_URL,route=>route.fulfill({contentType:'text/html; charset=utf-8',body:FRAME_HTML}));
     await page.route(TOOLS_URL,route=>route.fulfill({contentType:'text/html',body:plainPage('Tools')}));
@@ -305,6 +306,133 @@ browserTest('every try at loading the tool says so when it takes thirty seconds,
         await toolOpen(page);
         assert.equal(toolLoads(),3);
         assert.equal(await stageTop(page),'tool');
+        await page.close();
+    } finally { await browser.close(); }
+});
+
+// A tool that offers everything the bar can show, through the real bridge, and keeps what the bar told it.
+const BAR_TOOL_HTML=`<!doctype html><html><body><script>window.__MOTHERSHIP_FRAME__={widget:"sound-effects",state:{},url:"/admin/home/widgets/sound-effects",csrf:"fixture",library:{folders:"/folders",save:"/save",open:"/open/__ID__"}};<\/script><script>${source('home-frame.js')}<\/script><p>tool</p><input id="tool-field"><dialog id="sheet"><button>In the sheet</button></dialog><script>
+window.__commands=[];
+for(const name of ['open-set','manage-sets','export','library'])MothershipFrame.on(name,detail=>window.__commands.push(name==='open-set'?name+':'+detail.id:name));
+document.addEventListener('DOMContentLoaded',()=>MothershipFrame.chrome({set:'Harbour',sets:[{id:'a',name:'Harbour',current:true},{id:'b',name:'<b>Dusk</b>'}],setsLabel:'Saved palettes',manage:'Manage saved palettes…',export:true,library:true}));
+<\/script></body></html>`;
+const barOpen=async page=>{const frame=await toolOpen(page);await page.locator('[data-tool-sets]').waitFor();return frame;};
+const seen=(page,selector)=>page.locator(selector).evaluate(node=>{const box=node.getBoundingClientRect();return box.width>0&&box.height>0;});
+
+browserTest('the bar shows what the tool offers, writes its names as text, and tells it what was pressed',async()=>{
+    const browser=await launch();
+    try{
+        const {page}=await framePage(browser,{toolHtml:BAR_TOOL_HTML});
+        const frame=await barOpen(page);
+        assert.equal(await frame.evaluate(()=>MothershipFrame.bar),true,'the tool knows the page draws a bar for it');
+        assert.equal(await page.locator('[data-tool-set-name]').textContent(),'Harbour');
+
+        // The menu by keys: Arrow Down opens it on the open set, the arrows walk it, Escape closes it and asks nothing.
+        await page.locator('[data-tool-sets-btn]').focus();
+        await page.keyboard.press('ArrowDown');
+        const items=page.locator('[data-tool-sets-menu] button');
+        assert.deepEqual(await items.allTextContents(),['Harbouropen now','<b>Dusk</b>','Manage saved palettes…']);
+        assert.equal(await page.locator('[data-tool-sets-menu] b').count(),0,'a name from a tool is never markup');
+        assert.equal(await page.evaluate(()=>document.activeElement.getAttribute('aria-checked')),'true');
+        await page.keyboard.press('ArrowDown');
+        assert.equal(await page.evaluate(()=>document.activeElement.textContent),'<b>Dusk</b>');
+        await page.keyboard.press('Escape');
+        assert.equal(await page.locator('[data-tool-sets-menu]').isHidden(),true);
+        assert.equal(await page.evaluate(()=>document.activeElement.hasAttribute('data-tool-sets-btn')),true);
+        assert.equal((await ask(page)).shown,false);
+
+        await page.locator('[data-tool-sets-btn]').click();
+        await items.nth(1).click();
+        await page.locator('.bridge-toolbar [data-tool-export]').click();
+        await page.locator('.bridge-toolbar [data-tool-library]').click();
+        await frame.waitForFunction(()=>window.__commands.length===3);
+        assert.deepEqual(await frame.evaluate(()=>window.__commands),['open-set:b','export','library']);
+
+        // What the tool says lands in the status line; a link may only stay in the app.
+        await frame.evaluate(()=>MothershipFrame.notice({text:'Saved 2 files.',link:{label:'Open in Library',url:'/admin/dam'}}));
+        await page.locator('[data-tool-status] a').waitFor();
+        assert.equal(await page.locator('[data-tool-status] a').getAttribute('href'),LIBRARY_URL);
+        await frame.evaluate(()=>MothershipFrame.notice({text:'Elsewhere.',link:{label:'Away',url:'https://example.test/'}}));
+        await page.waitForFunction(()=>document.querySelector('[data-tool-status]').textContent==='Elsewhere.');
+        assert.equal(await page.locator('[data-tool-status] a').count(),0);
+
+        // Escape that closes a sheet inside the tool is the tool's own.
+        // While it is open the page's own actions step back, so the sheet holds the one filled control.
+        await frame.evaluate(()=>document.querySelector('#sheet').showModal());
+        await page.waitForSelector('[data-tool-frame][data-tool-sheet]',{state:'attached'});
+        assert.equal(await page.locator('.bridge-toolbar [data-tool-library]').evaluate(node=>node.inert),true);
+        await frame.locator('#sheet button').press('Escape');
+        await frame.waitForFunction(()=>!document.querySelector('#sheet').open);
+        await page.waitForSelector('[data-tool-frame]:not([data-tool-sheet])',{state:'attached'});
+        assert.equal(await page.locator('.bridge-toolbar [data-tool-library]').evaluate(node=>node.inert),false);
+        assert.equal((await ask(page)).shown,false);
+        await page.close();
+    } finally { await browser.close(); }
+});
+
+browserTest('the phone form moves Export and Save to Library under the tool, and only the phone form',async()=>{
+    const browser=await launch();
+    try{
+        const {page}=await framePage(browser,{toolHtml:BAR_TOOL_HTML});
+        await barOpen(page);
+        for(const [width,height,foot] of [[390,844,true],[579,800,true],[594,368,false],[669,867,false],[1200,900,false]]){
+            await page.setViewportSize({width,height});
+            assert.equal(await seen(page,'.bridge-toolfoot [data-tool-library]'),foot,`foot at ${width}`);
+            assert.equal(await seen(page,'.bridge-toolbar [data-tool-library]'),!foot,`bar at ${width}`);
+            const bar=await page.evaluate(()=>{
+                const edge=document.querySelector('.bridge-toolbar').getBoundingClientRect();
+                const reload=document.querySelector('[data-tool-reload]').getBoundingClientRect();
+                return {sideways:Math.max(0,document.documentElement.scrollWidth-document.documentElement.clientWidth),reloadInside:reload.right<=edge.right,sameRow:Math.abs(reload.top-document.querySelector('[data-tool-back]').getBoundingClientRect().top)<1};
+            });
+            assert.deepEqual(bar,{sideways:0,reloadInside:true,sameRow:true},`the bar's controls at ${width}`);
+        }
+        await page.close();
+    } finally { await browser.close(); }
+});
+
+browserTest('the question keeps one row beside its buttons from 580 px up, and stacks on a phone',async()=>{
+    const browser=await launch();
+    try{
+        const {page}=await framePage(browser);
+        await holdWork(page,await toolOpen(page));
+        await page.locator('[data-tool-back]').click();
+        const band=()=>page.evaluate(()=>{
+            const box=selector=>document.querySelector(selector).getBoundingClientRect();
+            const words=box('[data-tool-question]'),cancel=box('[data-tool-ask-cancel]');
+            return {beside:cancel.left>=words.right,cancel:Math.round(cancel.width),height:Math.round(box('[data-tool-ask]').height)};
+        });
+        for(const [width,height] of [[594,368],[669,867],[951,585]]){
+            await page.setViewportSize({width,height});
+            const shown=await band();
+            assert.equal(shown.beside,true,`beside the sentence at ${width}`);
+            assert.ok(shown.cancel<140,`Cancel keeps its own width at ${width}: ${shown.cancel}`);
+            assert.ok(shown.height<=68,`one row at ${width}: ${shown.height}`);
+        }
+        await page.setViewportSize({width:390,height:844});
+        const phone=await band();
+        assert.equal(phone.beside,false);
+        assert.ok(phone.cancel>=150,`the phone's full-width buttons: ${phone.cancel}`);
+        await page.close();
+    } finally { await browser.close(); }
+});
+
+browserTest('the page tells a tool where the fold crosses it',async()=>{
+    const browser=await launch();
+    try{
+        const {page}=await framePage(browser,{toolHtml:BAR_TOOL_HTML,init:()=>{
+            if(window.top!==window)return;
+            window.__segments=[{left:0,right:580,top:0,bottom:900},{left:620,right:1200,top:0,bottom:900}];
+            Object.defineProperty(window,'viewport',{configurable:true,value:{get segments(){return window.__segments;}}});
+        }});
+        const frame=await barOpen(page);
+        const fold=()=>frame.evaluate(()=>{const root=document.documentElement;return [root.dataset.fold??null,root.style.getPropertyValue('--fold-start'),root.style.getPropertyValue('--fold-end')];});
+        await frame.waitForFunction(()=>document.documentElement.dataset.fold==='columns');
+        assert.deepEqual(await fold(),['columns','580px','620px']);
+
+        // Unfolded flat, the same page says the fold has gone.
+        await page.evaluate(()=>{window.__segments=[{left:0,right:1200,top:0,bottom:900}];window.dispatchEvent(new CustomEvent('mothership:fold'));});
+        await frame.waitForFunction(()=>!document.documentElement.dataset.fold);
+        assert.deepEqual(await fold(),[null,'','']);
         await page.close();
     } finally { await browser.close(); }
 });

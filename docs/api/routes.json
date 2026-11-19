@@ -23449,6 +23449,21 @@
         "source": "packages/Mothership/Admin/src/Http/Controllers/TinyMCEController.php"
     },
     {
+        "id": "POST * /admin/tools/{widget}/library",
+        "method": "POST",
+        "domain": "*",
+        "uri": "/admin/tools/{widget}/library",
+        "name": "admin.tools.library",
+        "action": "Mothership\\DAM\\Http\\Controllers\\ToolsController@save",
+        "middleware": [
+            "web",
+            "admin",
+            "dam"
+        ],
+        "wheres": {},
+        "source": "packages/Mothership/DAM/src/Http/Controllers/ToolsController.php"
+    },
+    {
         "id": "POST * /api/v1/rest/ai-review/bulk",
         "method": "POST",
         "domain": "*",
