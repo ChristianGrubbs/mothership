@@ -246,30 +246,12 @@ class ShareDataGrid extends DataGrid implements ExportableInterface
             'searchable' => false,
             'filterable' => false,
             'sortable'   => false,
-            'closure'    => function ($row) {
-                $badge = fn (string $label, string $classes) => sprintf(
-                    '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold %s">%s</span>',
-                    $classes,
-                    e($label),
-                );
-
-                if ($row->revoked_at) {
-                    return $badge(
-                        trans('dam::app.admin.dam.share.datagrid.status-revoked'),
-                        'bg-red-100 text-red-700 dark:bg-red-900/40'
-                    );
-                }
-                if ($row->expires_at && Carbon::parse($row->expires_at)->isPast()) {
-                    return $badge(
-                        trans('dam::app.admin.dam.share.datagrid.status-expired'),
-                        'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-                    );
-                }
-
-                return $badge(
-                    trans('dam::app.admin.dam.share.datagrid.status-active'),
-                    'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-                );
+            // The row's state as a plain key. The page draws it as a word and a shape (a filled dot, a ring, a bar),
+            // so it never rests on colour and no markup travels in the grid's JSON.
+            'closure'    => fn ($row) => match (true) {
+                (bool) $row->revoked_at                                              => 'revoked',
+                $row->expires_at && Carbon::parse($row->expires_at)->isPast()        => 'expired',
+                default                                                              => 'active',
             },
         ]);
 

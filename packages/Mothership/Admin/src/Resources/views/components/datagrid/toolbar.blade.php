@@ -120,7 +120,8 @@
                     />
                 </div>
 
-                <div class="shrink-0 ltr:pl-2.5 rtl:pr-2.5">
+                {{-- A first load that failed has no count to show: without this the line read "undefined Results". --}}
+                <div class="shrink-0 ltr:pl-2.5 rtl:pr-2.5" v-if="hasLoaded">
                     {{-- "singular|plural" (trans_choice form); locales without a pipe keep one string for every count. --}}
                     <p class="text-sm font-light text-gray-800 dark:text-white whitespace-nowrap">
                         @{{ (forms => forms[available.meta.total === 1 && forms.length > 1 ? 0 : forms.length - 1])(@json(trans('admin::app.components.datagrid.toolbar.results')).split('|')).replace(':total', available.meta.total) }}
@@ -394,7 +395,8 @@
             </x-admin::drawer>
             </div>
 
-            <div class="flex items-center gap-x-2">
+            {{-- Per page and the pager need a loaded page; after a failed first load only the search stays. --}}
+            <div class="flex items-center gap-x-2" v-if="hasLoaded">
                 <x-admin::dropdown>
                     <x-slot:toggle>
                         <button

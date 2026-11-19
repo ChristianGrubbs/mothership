@@ -689,22 +689,14 @@
         animation-iteration-count: infinite;
         animation-name: skeleton;
         animation-timing-function: linear;
+        /* A neutral tint of the ink, so a placeholder reads on the ground and on a card, in Graphite and in White. */
         background: linear-gradient(
             to right,
-            #f6f6f6 8%,
-            #f0f0f0 18%,
-            #f6f6f6 33%
+            color-mix(in srgb, var(--ink) 9%, transparent) 8%,
+            color-mix(in srgb, var(--ink) 5%, transparent) 18%,
+            color-mix(in srgb, var(--ink) 9%, transparent) 33%
         );
         background-size: 1250px 100%;
-    }
-
-    .dark .shimmer {
-        background: linear-gradient(
-            to right,
-            #1f2937 8%,
-            #1a2232 18%,
-            #1f2937 33%
-        );
     }
 
     @keyframes skeleton {
@@ -1143,6 +1135,767 @@ html.dark .dark\:text-slate-500:is(.dark *):where(:not([class*="hover:text-"]:ho
     letter-spacing: .02em;
     text-transform: uppercase;
     white-space: nowrap;
+}
+
+/* A rail group's name above the title of a page that lives in that group (Away from ship, Sorting). */
+.bridge-page-group {
+    color: var(--ink-2);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+}
+
+/*
+ * Lists (Away from ship, Sorting). One card holds an optional column line, the rows and a footer. A row follows the
+ * list's own width, not the window's, because the rail and a side panel both take room from it:
+ *   below 640 px   a stacked card: what it is and its status, its labelled facts, then its actions as words;
+ *   from 640 px    the actions move up beside the status, the facts stay on their own line;
+ *   from 1040 px   a table row on the columns the screen sets in --list-cols, under one line of column names.
+ * Nothing in a list scrolls sideways.
+ */
+.bridge-list,
+.bridge-list-grid .table-responsive {
+    border: 0;
+    border-radius: 16px;
+    background: var(--card);
+    box-shadow: var(--lift), inset 0 0 0 1px var(--edge);
+    color: var(--ink);
+    container: list / inline-size;
+}
+
+/* The gap between a page's header and its list is larger than any gap inside a row. */
+.bridge-list {
+    margin-top: 24px;
+}
+
+.bridge-list-head {
+    display: none;
+}
+
+.bridge-list-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+        "main status"
+        "meta meta"
+        "actions actions";
+    gap: 14px 16px;
+    padding: 18px 16px;
+}
+
+.bridge-list-row + .bridge-list-row,
+.bridge-list-foot {
+    border-top: 1px solid var(--line);
+}
+
+.bridge-list-main {
+    grid-area: main;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    min-width: 0;
+}
+
+/* A row with no status cell lets its name run the full width. */
+.bridge-list-main:only-child,
+.bridge-list-row.has-no-status > .bridge-list-main {
+    grid-column: 1 / -1;
+}
+
+.bridge-list-tile {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--well);
+    color: var(--ink-2);
+    font-size: 22px;
+}
+
+.bridge-list-text {
+    min-width: 0;
+}
+
+.bridge-list-name {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--ink);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+/* A name that is a link is a 24 px target; the pull-back keeps the row where it was. */
+a.bridge-list-name {
+    margin-block: -2px;
+    padding-block: 2px;
+}
+
+a.bridge-list-name:hover {
+    text-decoration: underline;
+}
+
+.bridge-list-sub,
+.bridge-list-note {
+    color: var(--ink-2);
+    font-size: 13px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.bridge-list-sub {
+    display: -webkit-box;
+    overflow: hidden;
+    margin-top: 2px;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.bridge-list-status {
+    grid-area: status;
+    justify-self: end;
+    padding-top: 2px;
+}
+
+.bridge-list-meta {
+    grid-area: meta;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+    gap: 12px 16px;
+}
+
+.bridge-list-cell {
+    position: relative;
+    min-width: 0;
+}
+
+.bridge-list-label,
+.bridge-list-head {
+    color: var(--ink-2);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+}
+
+.bridge-list-label {
+    display: block;
+    margin-bottom: 3px;
+}
+
+.bridge-list-value {
+    display: block;
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.4;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+
+.bridge-list-actions {
+    grid-area: actions;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.bridge-list-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    color: var(--ink-2);
+    font-size: 14px;
+}
+
+/* A column name that sorts the list is a real button, so the keyboard reaches it. */
+.bridge-list-sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: -6px -8px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    cursor: pointer;
+}
+
+.bridge-list-sort:hover,
+.bridge-list-sort.is-sorted,
+.bridge-list-sort[aria-pressed="true"] {
+    color: var(--ink);
+}
+
+/* A list that can be put in another order keeps its sort buttons in the card forms, as one strip above the rows:
+   the column names go, the buttons stay, each at a touch height. */
+.bridge-list-head.has-sorts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 20px;
+    padding: 4px 16px;
+    border-bottom: 1px solid var(--line);
+}
+
+.bridge-list-head.has-sorts .bridge-list-sort {
+    min-height: 40px;
+    margin-block: 0;
+}
+
+/* Three quiet rows stand in for a list until its first answer arrives. */
+.bridge-list-loading {
+    display: grid;
+    gap: 12px;
+    padding: 18px 16px;
+}
+
+.bridge-list-loading > span {
+    display: block;
+    height: 44px;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--ink) 9%, transparent);
+    animation: bridge-list-pulse 1.4s ease-in-out infinite;
+}
+
+/* A failed load takes the list's place inside the same frame: the card is the frame, so the dashed box goes. */
+.bridge-list > [data-load-error],
+.bridge-list-grid [data-load-error] {
+    margin: 0;
+    padding: 48px 24px;
+    border: 0;
+}
+
+.bridge-list-grid [data-load-error] {
+    margin-top: 16px;
+    border-radius: 16px;
+    background: var(--card);
+    box-shadow: var(--lift), inset 0 0 0 1px var(--edge);
+}
+
+/* The grid's own pager: each arrow is a full-size target. */
+.bridge-list-grid .datagrid-toolbar [role="navigation"] button {
+    justify-content: center;
+    min-width: 40px;
+    min-height: 40px;
+}
+
+@keyframes bridge-list-pulse {
+    50% { opacity: .45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .bridge-list-loading > span { animation: none; }
+}
+
+/* An empty list: its own picture slot, a title, one sentence, and the one action that fills it where there is one. */
+.bridge-list-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 56px 24px;
+    text-align: center;
+}
+
+.bridge-list-empty .bridge-list-tile {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    font-size: 28px;
+}
+
+.bridge-list-empty-title {
+    margin-top: 16px;
+    color: var(--ink);
+    font-size: 17px;
+    font-weight: 600;
+}
+
+.bridge-list-empty-text {
+    max-width: 26rem;
+    margin-top: 6px;
+    color: var(--ink-2);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.bridge-list-empty-action {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 20px;
+}
+
+/* A list whose rows can be picked keeps its head in the card form too, as the select-all strip. */
+.bridge-list-head.has-pick {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--line);
+}
+
+.bridge-list-head.has-pick > :not(.bridge-list-pick),
+.bridge-list-for-table {
+    display: none;
+}
+
+.bridge-list-pick {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+/* The tick box of a row or of the whole list: a 24 px glyph in a 44 px target, pulled back so the glyph lines up. */
+.bridge-list-check {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin: -2px -10px;
+    cursor: pointer;
+}
+
+.bridge-list-clear {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin-block: -2px;
+    padding-inline: 8px;
+    border-radius: 8px;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+
+/* How many are picked, and the way to undo it, are words about the list, not column names: they leave the
+   head's small capitals. */
+.bridge-list-pick [role="status"],
+.bridge-list-clear {
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+/* A picked row is told by its ticked box and by a step of lightness, not by hue. */
+.bridge-list-row.is-picked {
+    background: var(--well);
+}
+
+.bridge-list-row.is-picked .bridge-list-tile {
+    background: var(--card);
+}
+
+.bridge-list-thumb {
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--well);
+    object-fit: cover;
+}
+
+/* The strip of filters above a list: every control at the buttons' 40 px height. */
+.bridge-list-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 20px;
+}
+
+.bridge-list-filters ~ .bridge-list {
+    margin-top: 16px;
+}
+
+/* A two-way switch: the chosen side is raised by a step of lightness and darker words, not by a hue. */
+.bridge-switch {
+    display: inline-flex;
+    gap: 2px;
+    padding: 4px;
+    border-radius: 12px;
+    background: var(--card);
+    box-shadow: var(--lift), inset 0 0 0 1px var(--edge);
+}
+
+.bridge-switch-opt {
+    height: 32px;
+    padding: 0 14px;
+    border-radius: 8px;
+    color: var(--ink-2);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.bridge-switch-opt:hover {
+    color: var(--ink);
+}
+
+.bridge-switch-opt[aria-checked="true"] {
+    background: var(--ctl);
+    color: var(--ink);
+}
+
+.bridge-list-select {
+    height: 40px;
+    max-width: 14rem;
+    padding: 0 12px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+/* A quiet control that sits on the page ground, not on a card, takes the card's surface. On the ground the
+   control fill (--ctl) is one step from the ground itself in White, and the control read as plain words. */
+.secondary-button.on-ground,
+.bridge-list-select {
+    background-color: var(--card);
+    box-shadow: var(--lift), inset 0 0 0 1px var(--edge);
+}
+
+.secondary-button.on-ground:hover,
+.bridge-list-select:hover {
+    background-color: var(--well);
+}
+
+/* A filter that is on, with its own way off. */
+.bridge-list-chip {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    min-height: 40px;
+    padding-inline-start: 14px;
+    border-radius: 999px;
+    background: var(--card);
+    box-shadow: var(--lift), inset 0 0 0 1px var(--edge);
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.bridge-list-chip > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bridge-list-chip-clear {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    color: var(--ink-2);
+    font-size: 18px;
+    line-height: 1;
+}
+
+.bridge-list-chip-clear:hover {
+    color: var(--ink);
+}
+
+/* Keys only help where there is a keyboard. */
+.bridge-list-hint {
+    margin-top: 12px;
+    color: var(--ink-2);
+    font-size: 13px;
+}
+
+@media (pointer: coarse) {
+    .bridge-list-hint {
+        display: none;
+    }
+}
+
+/* The selection strip of a list whose rows are not columns: what is picked, and what to do with it. */
+.bridge-list-bar {
+    position: sticky;
+    /* The page scroller has 12 px of top padding, and a stuck box stops at the padding's inner edge: at 0, rows
+       would pass through that strip above the bar. */
+    top: -12px;
+    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    min-height: 60px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--line);
+    border-radius: 16px 16px 0 0;
+    background: var(--card);
+    color: var(--ink-2);
+    font-size: 14px;
+}
+
+.bridge-list-bar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-inline-start: auto;
+}
+
+/* Tag review: suggestions grouped under a term or a file, each one a small row with its own yes and no. */
+.bridge-review-section + .bridge-review-section {
+    border-top: 1px solid var(--line);
+}
+
+.bridge-review-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px 0;
+}
+
+.bridge-review-head .bridge-list-name {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* A group's name that opens its file is a 24 px target: the link fills the heading. */
+.bridge-review-head .bridge-list-name > a {
+    display: block;
+    padding-block: 2px;
+}
+
+.bridge-review-head .bridge-list-note {
+    flex: none;
+}
+
+.bridge-review-items {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+    gap: 8px;
+    padding: 12px 16px 16px;
+}
+
+.bridge-review-items.is-files {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 26rem), 1fr));
+}
+
+.bridge-review-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    min-width: 0;
+    padding: 6px 8px 6px 12px;
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.bridge-review-item.is-picked {
+    background: var(--well);
+}
+
+.bridge-review-name {
+    display: -webkit-box;
+    flex: 1 1 6rem;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+a.bridge-review-name {
+    margin-block: -3px;
+    padding-block: 3px;
+}
+
+a.bridge-review-name:hover {
+    text-decoration: underline;
+}
+
+.bridge-review-acts {
+    display: flex;
+    gap: 4px;
+    margin-inline-start: auto;
+}
+
+/* Status is a word and a shape: live is a filled dot, ended by time is a ring, stopped by a person is a bar. */
+.bridge-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.bridge-status-mark {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.bridge-status.is-ended,
+.bridge-status.is-stopped {
+    color: var(--ink-2);
+}
+
+.bridge-status.is-ended .bridge-status-mark {
+    background: transparent;
+    box-shadow: inset 0 0 0 2px currentColor;
+}
+
+.bridge-status.is-stopped .bridge-status-mark {
+    width: 12px;
+    height: 3px;
+    border-radius: 2px;
+}
+
+@container list (min-width: 640px) {
+    .bridge-list-row {
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-areas:
+            "main status actions"
+            "meta meta meta";
+        align-items: start;
+        padding: 18px 20px;
+    }
+
+    .bridge-list-status {
+        padding-top: 9px;
+    }
+
+    .bridge-list-row.has-no-status > .bridge-list-main {
+        grid-column: 1 / 3;
+    }
+
+    /* The labelled facts line up under the name, not under its tile or its tick box. */
+    .bridge-list-row:has(> .bridge-list-main > .bridge-list-tile, > .bridge-list-main > .bridge-list-thumb) > .bridge-list-meta {
+        padding-inline-start: 52px;
+    }
+
+    .bridge-list-row:has(> .bridge-list-main > .bridge-list-check) > .bridge-list-meta {
+        padding-inline-start: 88px;
+    }
+
+    .bridge-list-foot,
+    .bridge-list-loading,
+    .bridge-list-head.has-pick,
+    .bridge-list-head.has-sorts,
+    .bridge-list-bar,
+    .bridge-review-head,
+    .bridge-review-items {
+        padding-inline: 20px;
+    }
+}
+
+@container list (min-width: 1040px) {
+    .bridge-list-head,
+    .bridge-list-row {
+        display: grid;
+        grid-template-columns: var(--list-cols);
+        grid-template-areas: none;
+        align-items: center;
+        gap: 0 20px;
+        padding: 14px 20px;
+    }
+
+    .bridge-list-head {
+        padding-block: 12px;
+        border-bottom: 1px solid var(--line);
+    }
+
+    /* In the table form the select-all strip is the head row again: its column names come back. */
+    .bridge-list-head.has-pick {
+        display: grid;
+        padding-block: 8px;
+    }
+
+    .bridge-list-head.has-pick > :not(.bridge-list-pick),
+    .bridge-list-for-table {
+        display: block;
+    }
+
+    .bridge-list-for-cards {
+        display: none;
+    }
+
+    /* In the table form the sort strip is the head row again: each button sits over its own column. */
+    .bridge-list-head.has-sorts {
+        display: grid;
+        gap: 0 20px;
+        padding: 12px 20px;
+    }
+
+    .bridge-list-head.has-sorts .bridge-list-sort {
+        min-height: 0;
+        margin-block: -6px;
+    }
+
+    .bridge-list-main,
+    .bridge-list-status,
+    .bridge-list-meta,
+    .bridge-list-actions {
+        grid-area: auto;
+    }
+
+    .bridge-list-main {
+        align-items: center;
+    }
+
+    .bridge-list-main:only-child,
+    .bridge-list-row.has-no-status > .bridge-list-main {
+        grid-column: auto;
+    }
+
+    .bridge-list-name,
+    .bridge-list-sub {
+        -webkit-line-clamp: 1;
+    }
+
+    .bridge-list-status {
+        justify-self: start;
+        padding-top: 0;
+    }
+
+    /* The labelled facts become the row's own cells; each keeps its label for a screen reader. */
+    .bridge-list-meta {
+        display: contents;
+    }
+
+    .bridge-list-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+    }
+
+    .bridge-list-actions {
+        flex-wrap: nowrap;
+        justify-content: flex-end;
+    }
 }
 
 /* Rows that have no place in the rail yet fold under one "More" row, so the rail keeps to its destinations. */

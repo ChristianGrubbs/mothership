@@ -192,22 +192,14 @@
         animation-iteration-count: infinite;
         animation-name: skeleton;
         animation-timing-function: linear;
+        /* Neutral in both themes (it follows the text colour), matching the admin stylesheet's rule. */
         background: linear-gradient(
             to right,
-            #f6f6f6 8%,
-            #f0f0f0 18%,
-            #f6f6f6 33%
+            color-mix(in srgb, var(--ink, currentColor) 9%, transparent) 8%,
+            color-mix(in srgb, var(--ink, currentColor) 5%, transparent) 18%,
+            color-mix(in srgb, var(--ink, currentColor) 9%, transparent) 33%
         );
         background-size: 1250px 100%;
-    }
-
-    .dark .shimmer {
-        background: linear-gradient(
-            to right,
-            #1f2937 8%,
-            #1a2232 18%,
-            #1f2937 33%
-        );
     }
 
     @keyframes skeleton {

@@ -87,6 +87,7 @@ function bladeFixturesRender(): array
         'explorer-tab'  => [$library, 'v-dam-tab-template'],
         'explorer-grid' => [$library, 'v-dam-explorer-grid-template'],
         'explorer-list' => [$library, 'v-dam-explorer-list-template'],
+        'folder-picker' => [$library, 'v-dam-folder-picker-template'],
     ] as $name => [$document, $templateId]) {
         $parts = bladeFixturesComponent($document, $templateId);
         $files["{$name}.template.html"] = $parts['template'];
