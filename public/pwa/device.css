@@ -236,3 +236,22 @@ html[data-fold="columns"] [data-fold-wrap] {
     flex-wrap: wrap;
     padding-inline-end: var(--fold-rest, 0px) !important;
 }
+
+/* The tool frame. Opening, slow and failed are said on one segment, the one a dialog uses: the trailing one in book
+   pose, the lower one in laptop pose. The tool is hidden while the message is up, so the other segment stays plain and
+   a tap there can not reach a page nobody can see. */
+html[data-fold] .bridge-toolstage:has(> .bridge-toolnote:not([hidden])) > iframe { visibility: hidden; }
+html[data-fold="columns"] .bridge-toolnote {
+    left: calc(var(--seg-trailing-left) - env(safe-area-inset-left, 0px));
+    right: auto;
+    width: var(--seg-trailing-width);
+}
+html[data-fold="rows"] .bridge-toolnote {
+    top: auto;
+    height: var(--seg-b-height);
+}
+/* The question asked before work is lost, and the notice of a file. Book: the sentence wraps inside the leading segment
+   and its buttons stay on the trailing one. */
+html[data-fold="columns"] .bridge-toolask p { max-width: calc(var(--seg-a-width) - 2rem); }
+html[data-fold="columns"][dir="rtl"] .bridge-toolask p { max-width: calc(var(--seg-b-width) - 2rem); }
+html[data-fold="columns"][dir="rtl"] .bridge-toolask-actions { margin-left: 0; margin-right: auto; }
