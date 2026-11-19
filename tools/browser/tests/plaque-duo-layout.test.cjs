@@ -334,3 +334,123 @@ browserTest('with a mouse the list rows, the transport and the segment keep thei
         }
     } finally { await browser.close(); }
 });
+
+// The transport's controls and where they sit, and how much of the open pane is left in view under the tool.
+const transport = page => page.evaluate(() => {
+    const at = selector => {
+        const node = document.querySelector(selector);
+        if (!node || !node.checkVisibility()) return null;
+        const r = node.getBoundingClientRect();
+        return { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom), middle: Math.round(r.top + r.height / 2), width: Math.round(r.width), height: Math.round(r.height) };
+    };
+    const tool = document.querySelector('.plq').getBoundingClientRect();
+    // The pane the segment picked (Edit beside it is always in view on a wide tool).
+    const view = document.querySelector('.plq').dataset.view;
+    const pane = [...document.querySelectorAll('.plq [data-pane]')].filter(node => node.checkVisibility()).find(node => node.dataset.pane === view) || document.querySelector('.plq [data-pane="plaques"]');
+    const p = pane.getBoundingClientRect();
+    const t = document.querySelector('.plq-transport');
+    const tb = t.getBoundingClientRect();
+    return {
+        box: { left: Math.round(tb.left), right: Math.round(tb.right) },
+        height: Math.round(t.getBoundingClientRect().height),
+        overflow: t.scrollWidth > t.clientWidth + 1,
+        label: document.querySelector('[data-play-label]').getBoundingClientRect().width > 2,
+        // What to play has room for its longest option in full: the text plus the select's own padding (its chevron sits there).
+        scopeShort: (() => {
+            const select = document.querySelector('[data-scope]'), style = getComputedStyle(select), ctx = document.createElement('canvas').getContext('2d');
+            ctx.font = style.font;
+            const widest = Math.max(...[...select.options].map(o => ctx.measureText(o.textContent).width));
+            return Math.ceil(widest + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) - select.clientWidth);
+        })(),
+        pane: pane.dataset.pane,
+        visible: Math.round(Math.min(p.bottom, tool.bottom) - Math.max(p.top, tool.top)),
+        play: at('[data-action="play"]'), scrub: at('[data-scrub]'), clock: at('[data-clock]'),
+        back: at('[data-action="step-back"]'), forward: at('[data-action="step-forward"]'), scope: at('[data-scope]'),
+        mute: at('.plq-mute'), closeUp: at('[data-action="close-up"]'),
+    };
+});
+
+// Two rows: Play, the scrubber, the clock and Close-up (when it applies), then the steps, what to play and Mute, each a
+// 44 px target, none overlapping another or the transport's edges.
+function assertTwoRows(t, label) {
+    assert.ok(t.height <= 100, `${label}: the transport takes two rows: ${t.height}`);
+    assert.equal(t.overflow, false, `${label}: nothing overflows the row`);
+    for (const name of ['play', 'scrub', 'clock', 'back', 'forward', 'scope', 'mute']) assert.ok(t[name], `${label}: ${name} stays in view`);
+    const first = ['play', 'scrub', 'clock', ...(t.closeUp ? ['closeUp'] : [])];
+    const second = ['back', 'forward', 'scope', 'mute'];
+    for (const name of first) assert.ok(Math.abs(t[name].middle - t.play.middle) <= 4, `${label}: ${name} shares the first row`);
+    assert.ok(t.closeUp ? t.closeUp.left >= t.clock.right : true, `${label}: Close-up closes the first row`);
+    assert.ok(t.scrub.width >= 96 && t.scrub.height >= 44, `${label}: the scrubber keeps room to drag and a 44 px target: ${t.scrub.width} x ${t.scrub.height}`);
+    for (const name of second) {
+        assert.ok(Math.abs(t[name].middle - t.back.middle) <= 4 && t[name].top >= t.play.bottom, `${label}: ${name} sits on the second row`);
+        assert.ok(t[name].height >= 44, `${label}: ${name} is a 44 px target: ${t[name].height}`);
+    }
+    for (const row of [first, second]) {
+        const boxes = row.map(name => ({ name, ...t[name] })).sort((a, b) => a.left - b.left);
+        boxes.forEach((b, i) => {
+            assert.ok(b.left >= t.box.left - 1 && b.right <= t.box.right + 1, `${label}: ${b.name} stays inside the transport`);
+            if (i) assert.ok(b.left >= boxes[i - 1].right, `${label}: ${b.name} does not overlap ${boxes[i - 1].name}`);
+        });
+    }
+    assert.ok(t.play.width >= 44 && t.play.height >= 44, `${label}: Play is a 44 px target`);
+    assert.equal(t.label, false, `${label}: Play shows its glyph only`);
+    assert.ok(t.scopeShort <= 0, `${label}: what to play shows every option in full (short by ${t.scopeShort} px)`);
+}
+
+browserTest('on a short tool under touch the transport takes two rows, hides nothing, and the pane gains the room', async () => {
+    const browser = await launch();
+    try {
+        // The outer display upright, the inner display flat and as a book, and a phone on its side.
+        for (const size of [
+            { width: 382, height: 463, view: 'edit', pane: 150 },
+            { width: 951, height: 479, view: 'plaques', pane: 95 },
+            { width: 951, height: 479, fold: ['columns', 476, 476], view: 'plaques', pane: 150 },
+            { width: 594, height: 312 },
+        ]) {
+            const label = `${size.width} x ${size.height}${size.fold ? ' book' : ''}`;
+            const { page, errors } = await open(browser, size);
+            if (size.fold) await fold(page, ...size.fold);
+            await addPlaques(page, 3);
+            if (size.view) await page.locator(`[data-view-opt="${size.view}"]`).evaluate(button => button.click());
+            await settled(page);
+            const t = await transport(page);
+            // Each of these stages shows the whole frame under 480 px, so Close-up applies and must be in view.
+            assert.ok(t.closeUp, `${label}: Close-up stays in view`);
+            assertTwoRows(t, label);
+            assert.equal(await page.getByRole('button', { name: 'Play', exact: true }).count(), 1, `${label}: Play keeps its name for assistive tech`);
+            if (size.pane) assert.ok(t.visible >= size.pane, `${label}: the ${t.pane} pane has room: ${t.visible}`);
+            assert.deepEqual(errors, []);
+            await page.close();
+        }
+
+        // Tight framing stands Close-up down; the clock closes the first row and Mute the second, at the same edge.
+        {
+            const { page } = await open(browser, { width: 382, height: 463 });
+            await addPlaques(page, 1);
+            await page.locator('[data-view-opt="output"]').evaluate(button => button.click());
+            await page.locator('[data-out="mode"]').selectOption('tight');
+            await settled(page);
+            const t = await transport(page);
+            assert.equal(t.closeUp, null, 'tight framing: no Close-up');
+            assertTwoRows(t, 'tight framing');
+            assert.ok(Math.abs(t.mute.right - t.clock.right) <= 2, `tight framing: Mute ends under the clock: ${t.mute.right} vs ${t.clock.right}`);
+            await page.close();
+        }
+
+        // Taller tools under touch and a short window under a mouse keep the transport as it was.
+        for (const size of [
+            { width: 390, height: 664 },
+            { width: 669, height: 761, fold: ['rows', 286, 286] },
+            { width: 951, height: 479, touch: false },
+        ]) {
+            const label = `${size.width} x ${size.height}${size.touch === false ? ' mouse' : ''}`;
+            const { page } = await open(browser, size);
+            if (size.fold) await fold(page, ...size.fold);
+            await addPlaques(page, 3);
+            const t = await transport(page);
+            assert.equal(t.label, true, `${label}: Play keeps its word`);
+            assert.ok(t.scrub.top >= t.play.bottom, `${label}: the scrubber keeps its own row under Play`);
+            await page.close();
+        }
+    } finally { await browser.close(); }
+});
