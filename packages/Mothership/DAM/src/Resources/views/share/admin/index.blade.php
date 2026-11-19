@@ -5,7 +5,7 @@
 
     {!! view_render_event('mothership.dam.shares.list.before') !!}
 
-    <v-dam-shares-page>
+    <v-dam-shares-page data-fold-list data-fold-split>
         <x-admin::layouts.page-header
             group="away"
             :title="trans('dam::app.admin.dam.share.index.title')"
@@ -23,7 +23,7 @@
 
     @pushOnce('scripts')
         <script type="text/x-template" id="v-dam-shares-page-template">
-            <div>
+            <div data-fold-list data-fold-split>
                 <x-admin::layouts.page-header
                     group="away"
                     :title="trans('dam::app.admin.dam.share.index.title')"

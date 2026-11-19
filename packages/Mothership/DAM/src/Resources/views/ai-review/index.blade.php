@@ -14,14 +14,14 @@
 
     @pushOnce('scripts')
         <script type="text/x-template" id="v-dam-ai-review-template">
-            <div data-dam-ai-review>
+            <div data-dam-ai-review data-fold-list data-fold-split>
                 <x-admin::layouts.page-header
                     group="sorting"
                     :title="trans('dam::app.admin.ai-review.title')"
                     :description="trans('dam::app.admin.ai-review.description')"
                 />
 
-                <div class="bridge-list-filters" data-dam-ai-review-filters>
+                <div class="bridge-list-filters" data-dam-ai-review-filters data-fold-lead>
                     <span class="bridge-list-label" aria-hidden="true">@lang('dam::app.admin.ai-review.group-by')</span>
 
                     <div class="bridge-switch" role="radiogroup" :aria-label="t.groupBy">

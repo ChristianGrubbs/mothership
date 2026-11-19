@@ -84,6 +84,50 @@ const navBody = `<style>.row{display:flex}.pad{padding:16px}.min{min-width:220px
 </div>
 <script>${js}</script>`;
 
+// A list page (Shared links' grid form) in the shell: a top bar above the page's one scroller, the page head and the grid's
+// toolbar with its filter drawer, then the rows. Rows sit in a positioned layer, as the list's sticky parts do.
+const listBody = `<style>body{margin:0}.top{position:relative;z-index:20;height:60px}main{height:525px;overflow-y:auto;padding:12px 16px;box-sizing:border-box}
+.panel{position:fixed;top:0;bottom:0;right:0;width:350px;z-index:10001;background:#fff}.rows>div{position:relative;height:90px}.rows button{width:100%}${css}</style>
+<header class="top" style="display:flex;justify-content:flex-end"><button>Account</button></header>
+<main id="main-content">
+  <div data-fold-list data-fold-split>
+    <div class="bridge-page-head" style="display:flex"><h1 style="margin:0">Shared links</h1><button>New</button></div>
+    <div class="bridge-list-grid"><div>
+      <div class="datagrid-toolbar" style="display:flex;flex-wrap:wrap;gap:8px"><div style="display:flex;gap:8px"><input aria-label="Search" style="width:260px"><button>Filter</button></div>
+        <div><div style="display:flex;gap:8px"><button>10</button><p style="margin:0;max-width:44px">Per Page</p><input aria-label="Page" style="width:46px"><span>of 3</span><button>First</button><button>Previous</button><button>Next</button><button>Last</button></div></div></div>
+      <div style="display:flex;margin-top:16px"><div class="table-responsive rows" style="width:100%">${Array.from({length: 12}, (_, i) => `<div><button>Link ${i}</button></div>`).join('')}</div></div>
+    </div></div>
+  </div>
+</main>
+<script>${js}</script>`;
+
+browserTest('a list page puts its head and toolbar on the leading segment and its rows on the trailing one', async () => {
+    const browser = await launchBrowser({playwrightPath: process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH});
+    const box = (page, selector) => page.evaluate(selector => { const {left, right, top, bottom} = document.querySelector(selector).getBoundingClientRect(); return {left, right, top, bottom}; }, selector);
+    try {
+        const flat = await open(browser, false, {html: listBody});
+        assert.equal(await flat.evaluate(() => getComputedStyle(document.querySelector('[data-fold-list]')).display), 'block');
+        assert.ok((await onFold(flat)).length > 0, 'the fixture must put controls across the middle when nothing is folded');
+
+        const page = await open(browser, true, {html: listBody});
+        assert.deepEqual(await onFold(page), []);
+        for (const selector of ['.bridge-page-head', '.datagrid-toolbar']) assert.ok((await box(page, selector)).right <= 455, selector);
+        assert.ok((await box(page, '.table-responsive')).left >= 495);
+        assert.equal(await page.evaluate(() => document.querySelector('main').scrollWidth - document.querySelector('main').clientWidth), 0);
+
+        // The rows scroll past; the toolbar stays in reach.
+        await page.evaluate(() => { document.querySelector('main').scrollTop = 400; });
+        const [toolbar, main] = [await box(page, '.datagrid-toolbar'), await box(page, 'main')];
+        assert.ok(toolbar.top >= main.top && toolbar.bottom <= main.bottom, `toolbar ${JSON.stringify(toolbar)}`);
+
+        // The open filter drawer covers the top bar and the rows, though its toolbar is a sticky layer of its own.
+        await page.evaluate(() => { const panel = document.createElement('div'); panel.className = 'panel'; panel.dataset.drawerPanel = ''; panel.innerHTML = '<button>Apply</button>'; document.querySelector('.datagrid-toolbar').append(panel); });
+        assert.deepEqual(await page.evaluate(() => [[760, 30], [760, 300]].map(([x, y]) => Boolean(document.elementFromPoint(x, y).closest('[data-drawer-panel]')))), [true, true]);
+    } finally {
+        await browser.close();
+    }
+});
+
 browserTest('the Directory column shrinks below its desktop minimum rather than cross the fold', async () => {
     const browser = await launchBrowser({playwrightPath: process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH});
     try {
