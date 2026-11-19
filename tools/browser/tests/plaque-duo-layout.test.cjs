@@ -341,7 +341,7 @@ const transport = page => page.evaluate(() => {
         const node = document.querySelector(selector);
         if (!node || !node.checkVisibility()) return null;
         const r = node.getBoundingClientRect();
-        return { top: Math.round(r.top), bottom: Math.round(r.bottom), middle: Math.round(r.top + r.height / 2), width: Math.round(r.width), height: Math.round(r.height) };
+        return { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom), middle: Math.round(r.top + r.height / 2), width: Math.round(r.width), height: Math.round(r.height) };
     };
     const tool = document.querySelector('.plq').getBoundingClientRect();
     // The pane the segment picked (Edit beside it is always in view on a wide tool).
@@ -349,7 +349,9 @@ const transport = page => page.evaluate(() => {
     const pane = [...document.querySelectorAll('.plq [data-pane]')].filter(node => node.checkVisibility()).find(node => node.dataset.pane === view) || document.querySelector('.plq [data-pane="plaques"]');
     const p = pane.getBoundingClientRect();
     const t = document.querySelector('.plq-transport');
+    const tb = t.getBoundingClientRect();
     return {
+        box: { left: Math.round(tb.left), right: Math.round(tb.right) },
         height: Math.round(t.getBoundingClientRect().height),
         overflow: t.scrollWidth > t.clientWidth + 1,
         label: document.querySelector('[data-play-label]').getBoundingClientRect().width > 2,
@@ -360,6 +362,30 @@ const transport = page => page.evaluate(() => {
         mute: at('.plq-mute'), closeUp: at('[data-action="close-up"]'),
     };
 });
+
+// Two rows: Play, the scrubber and the clock, then the steps, what to play, Mute and Close-up (when it applies), each a
+// 44 px target, none overlapping another or the transport's edges.
+function assertTwoRows(t, label) {
+    assert.ok(t.height <= 100, `${label}: the transport takes two rows: ${t.height}`);
+    assert.equal(t.overflow, false, `${label}: nothing overflows the row`);
+    for (const name of ['play', 'scrub', 'clock', 'back', 'forward', 'scope', 'mute']) assert.ok(t[name], `${label}: ${name} stays in view`);
+    const first = ['play', 'scrub', 'clock'];
+    const second = ['back', 'forward', 'scope', 'mute', ...(t.closeUp ? ['closeUp'] : [])];
+    for (const name of first) assert.ok(Math.abs(t[name].middle - t.play.middle) <= 4, `${label}: ${name} shares the first row`);
+    for (const name of second) {
+        assert.ok(Math.abs(t[name].middle - t.back.middle) <= 4 && t[name].top >= t.play.bottom, `${label}: ${name} sits on the second row`);
+        assert.ok(t[name].height >= 44, `${label}: ${name} is a 44 px target: ${t[name].height}`);
+    }
+    for (const row of [first, second]) {
+        const boxes = row.map(name => ({ name, ...t[name] })).sort((a, b) => a.left - b.left);
+        boxes.forEach((b, i) => {
+            assert.ok(b.left >= t.box.left - 1 && b.right <= t.box.right + 1, `${label}: ${b.name} stays inside the transport`);
+            if (i) assert.ok(b.left >= boxes[i - 1].right, `${label}: ${b.name} does not overlap ${boxes[i - 1].name}`);
+        });
+    }
+    assert.ok(t.play.width >= 44 && t.play.height >= 44, `${label}: Play is a 44 px target`);
+    assert.equal(t.label, false, `${label}: Play shows its glyph only`);
+}
 
 browserTest('on a short tool under touch the transport takes two rows, hides nothing, and the pane gains the room', async () => {
     const browser = await launch();
@@ -378,19 +404,25 @@ browserTest('on a short tool under touch the transport takes two rows, hides not
             if (size.view) await page.locator(`[data-view-opt="${size.view}"]`).evaluate(button => button.click());
             await settled(page);
             const t = await transport(page);
-            assert.ok(t.height <= 100, `${label}: the transport takes two rows: ${t.height}`);
-            assert.equal(t.overflow, false, `${label}: nothing overflows the row`);
-            for (const name of ['play', 'scrub', 'clock', 'back', 'forward', 'scope', 'mute']) assert.ok(t[name], `${label}: ${name} stays in view`);
-            assert.ok(Math.abs(t.scrub.middle - t.play.middle) <= 4 && Math.abs(t.clock.middle - t.play.middle) <= 4, `${label}: Play, the scrubber and the clock share the first row`);
-            for (const name of ['back', 'forward', 'scope', 'mute', ...(t.closeUp ? ['closeUp'] : [])]) {
-                assert.ok(Math.abs(t[name].middle - t.back.middle) <= 4 && t[name].top >= t.play.bottom, `${label}: ${name} sits on the second row`);
-                assert.ok(t[name].height >= 44, `${label}: ${name} is a 44 px target: ${t[name].height}`);
-            }
-            assert.ok(t.play.width >= 44 && t.play.height >= 44, `${label}: Play is a 44 px target`);
-            assert.equal(t.label, false, `${label}: Play shows its glyph only`);
+            // Each of these stages shows the whole frame under 480 px, so Close-up applies and must be in view.
+            assert.ok(t.closeUp, `${label}: Close-up stays in view`);
+            assertTwoRows(t, label);
             assert.equal(await page.getByRole('button', { name: 'Play', exact: true }).count(), 1, `${label}: Play keeps its name for assistive tech`);
             if (size.pane) assert.ok(t.visible >= size.pane, `${label}: the ${t.pane} pane has room: ${t.visible}`);
             assert.deepEqual(errors, []);
+            await page.close();
+        }
+
+        // Tight framing stands Close-up down; the rest of the two rows hold, and nothing moves into its empty cell.
+        {
+            const { page } = await open(browser, { width: 382, height: 463 });
+            await addPlaques(page, 1);
+            await page.locator('[data-view-opt="output"]').evaluate(button => button.click());
+            await page.locator('[data-out="mode"]').selectOption('tight');
+            await settled(page);
+            const t = await transport(page);
+            assert.equal(t.closeUp, null, 'tight framing: no Close-up');
+            assertTwoRows(t, 'tight framing');
             await page.close();
         }
 
