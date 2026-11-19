@@ -152,8 +152,8 @@ matching (`suggestTopics`) offers topic presets from the same description.
 - Outer display upright (382 x 463 once the page's foot shows): the phone layout holds, with the preview on top and
   the pane scrolling by itself. The "whole tool scrolls" layout is for short windows that are wider than tall (a
   phone on its side).
-- Close-up: when the whole frame would show under 480 CSS px wide (the outer display, a phone, a book fold's half,
-  tabletop), the preview frames the plaques in play close up, centred and fitted to the stage, so their words can be
+- Close-up: when the stage would show the whole frame under 480 CSS px wide (the outer display, a phone, the open
+  inner display flat or folded), the preview frames the plaques in play close up, centred and fitted to the stage, so their words can be
   read. The stage keeps its size. The Output pane shows the whole frame by default, and the Close-up switch after
   Mute turns it on or off. Exports never change.
 - Touch: every control of the tool is a 44 px target under a coarse pointer. A row's checkbox keeps its 18 px mark,

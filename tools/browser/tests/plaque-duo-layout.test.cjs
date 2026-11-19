@@ -237,11 +237,28 @@ browserTest('on a narrow stage the preview frames the plaque close up; a wide st
         assert.ok(narrow.canvas < 480, `the stage is narrow: ${narrow.canvas}`);
         assert.ok(narrow.plaque >= narrow.canvas * 0.7, `the plaque fills the stage: ${narrow.plaque} of ${narrow.canvas}`);
         assert.equal(await page.locator('[data-action="close-up"]').getAttribute('aria-pressed'), 'true', 'the close-up says it is on');
-        await page.locator('[data-action="close-up"]').click();
+        const toggle = await box(page, '[data-action="close-up"]');
+        assert.ok(toggle.width >= 44 && toggle.height >= 44, `the switch is a 44 px target on touch: ${toggle.width} x ${toggle.height}`);
+        // From the keyboard: Space on the focused switch turns it off and does not start playback.
+        await page.locator('[data-action="close-up"]').focus();
+        await page.keyboard.press('Space');
         await page.waitForTimeout(100);
+        assert.equal(await page.locator('[data-action="close-up"]').getAttribute('aria-pressed'), 'false', 'Space turns close-up off');
+        assert.equal(await page.locator('[data-play-label]').textContent(), 'Play', 'and does not play');
         const whole = await drawn(page);
         assert.ok(whole.plaque < narrow.plaque * 0.7, `the whole frame shows when asked: ${whole.plaque}`);
+        await page.keyboard.press('Enter');
+        assert.equal(await page.locator('[data-action="close-up"]').getAttribute('aria-pressed'), 'true', 'Enter turns it back on');
+
+        // The Output pane sets the frame, so it shows the whole frame unless close-up is asked for there.
         await page.close();
+        const fresh = await open(browser, { width: 382, height: 463 });
+        await addPlaques(fresh.page, 1);
+        await fresh.page.locator('[data-view-opt="output"]').click();
+        await fresh.page.waitForTimeout(150);
+        assert.equal(await fresh.page.locator('[data-action="close-up"]').getAttribute('aria-pressed'), 'false', 'Output shows the whole frame');
+        assert.ok((await drawn(fresh.page)).plaque < narrow.plaque * 0.7, 'the whole frame is drawn in Output');
+        await fresh.page.close();
 
         const wide = await open(browser, { width: 1440, height: 900, touch: false });
         await addPlaques(wide.page, 1);
@@ -250,5 +267,67 @@ browserTest('on a narrow stage the preview frames the plaque close up; a wide st
         assert.ok(desk.canvas >= 480, `the stage is wide: ${desk.canvas}`);
         assert.ok(desk.plaque < desk.canvas * 0.6, `the whole frame shows: ${desk.plaque} of ${desk.canvas}`);
         assert.equal(await wide.page.locator('[data-action="close-up"]').isVisible(), false, 'no close-up switch on a wide stage');
+    } finally { await browser.close(); }
+});
+
+browserTest('the close-up follows the stage as the window changes, holds steady while it is shown, and stands down for tight framing', async () => {
+    const browser = await launch();
+    try {
+        const { page, errors } = await open(browser, { width: 382, height: 463 });
+        await addPlaques(page, 2);
+        const toggle = page.locator('[data-action="close-up"]');
+        const pressed = () => toggle.getAttribute('aria-pressed');
+        assert.equal(await pressed(), 'true');
+        // A desktop window: the stage is wide and shows the whole frame.
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await page.waitForTimeout(200);
+        assert.equal(await toggle.isVisible(), false, 'no switch on a wide stage');
+        assert.ok((await drawn(page)).plaque < 0.6 * (await drawn(page)).canvas, 'the whole frame on a wide stage');
+        await page.setViewportSize({ width: 382, height: 463 });
+        await page.waitForTimeout(200);
+        assert.equal(await pressed(), 'true', 'closed again: close-up again');
+        // Steady: the stage and the canvas keep their size frame after frame.
+        const sizes = await page.evaluate(() => new Promise(done => {
+            const seen = [];
+            const tick = () => {
+                const stage = document.querySelector('[data-stage]').getBoundingClientRect(), canvas = document.querySelector('[data-preview]');
+                seen.push(`${Math.round(stage.width)}x${Math.round(stage.height)} ${canvas.width}x${canvas.height}`);
+                if (seen.length < 12) requestAnimationFrame(tick); else done([...new Set(seen)]);
+            };
+            requestAnimationFrame(tick);
+        }));
+        assert.equal(sizes.length, 1, `one size throughout: ${sizes.join(', ')}`);
+        // Tight framing already fills the canvas with the plaque: no close-up, no switch.
+        await page.locator('[data-view-opt="output"]').click();
+        await page.locator('[data-out="mode"]').selectOption('tight');
+        await page.locator('[data-view-opt="plaques"]').click();
+        await page.waitForTimeout(150);
+        assert.equal(await toggle.isVisible(), false, 'no switch with tight framing');
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); }
+});
+
+browserTest('with a mouse the list rows, the transport and the segment keep their desktop sizes at 1440 and on a 390 phone', async () => {
+    const browser = await launch();
+    try {
+        for (const [width, height] of [[1440, 900], [390, 844]]) {
+            const { page } = await open(browser, { width, height, touch: false });
+            await addPlaques(page, 3);
+            assert.equal(await page.evaluate(() => matchMedia('(pointer: coarse)').matches), false, 'the page sees a mouse');
+            const sizes = await page.evaluate(() => {
+                const h = selector => Math.round(document.querySelector(selector).getBoundingClientRect().height);
+                const row = document.querySelector('[data-list] .row.is-current');
+                return {
+                    columns: getComputedStyle(row).gridTemplateColumns.split(' ').length,
+                    move: getComputedStyle(row.querySelector('.row-move')).position,
+                    checkbox: h('[data-list] .row [data-select]'),
+                    play: h('[data-action="play"]'),
+                    segment: document.querySelector('.plq-seg').checkVisibility() ? h('.plq-seg .tk-seg-opt') : 36,
+                    scrub: h('[data-scrub]'),
+                };
+            });
+            assert.deepEqual({ ...sizes, scrub: sizes.scrub < 30 }, { columns: 3, move: 'absolute', checkbox: 18, play: 40, segment: 36, scrub: true }, `${width} x ${height}`);
+            await page.close();
+        }
     } finally { await browser.close(); }
 });
