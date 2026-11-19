@@ -145,6 +145,18 @@ browserTest('an empty set shows its heading and every way to start whole on the 
         ({ page, errors } = await open(browser, { width: 1440, height: 900, touch: false }));
         const wide = await whole(page, '1440 x 900');
         assert.ok(Math.abs(wide.width / wide.height - 16 / 9) < .01, `the stage keeps its 16:9 box: ${wide.width} x ${wide.height}`);
+        // A plaque gives the stage its frame's shape, at most 1.2:1 for a portrait frame. Deleting the last plaque
+        // must give the empty set its own box back, not keep that taller shape.
+        await addPlaques(page, 1);
+        await page.locator('[data-out="frame"]').evaluate(select => { select.value = 'portrait'; select.dispatchEvent(new Event('change', { bubbles: true })); });
+        await settled(page);
+        const portrait = await box(page, '[data-stage]');
+        assert.ok(portrait.height > wide.height + 1, `a portrait frame makes the stage taller: ${portrait.height} px`);
+        await page.locator('[data-action="delete"]').first().evaluate(button => button.click());
+        await page.locator('[data-empty] [data-action="add-blank"]').waitFor();
+        await settled(page);
+        const emptied = await whole(page, '1440 x 900 after the last plaque is deleted');
+        assert.ok(Math.abs(emptied.height - wide.height) < 1, `the emptied stage is ${emptied.height} px tall, not ${wide.height}`);
         assert.deepEqual(errors, []);
     } finally { await browser.close(); }
 });

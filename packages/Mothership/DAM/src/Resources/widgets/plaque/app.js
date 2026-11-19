@@ -239,9 +239,10 @@
         $('[data-empty]').hidden = !empty;
         root.toggleAttribute('data-empty-set', empty);
         $('[data-transport]').hidden = empty;
-        if (empty) { canvas.width = 1; canvas.height = 1; return; }
-        const frameSize = C.canvasSize(pctx, state.set.output, plaques);
         const stage = $('[data-stage]');
+        // An empty set's stage takes its size from the stylesheet, so the last plaque's frame shape goes with it.
+        if (empty) { stage.style.aspectRatio = ''; canvas.width = 1; canvas.height = 1; return; }
+        const frameSize = C.canvasSize(pctx, state.set.output, plaques);
         stage.style.aspectRatio = `${Math.max(frameSize.width / frameSize.height, 1.2)}`;
         const closeUp = closeUpOn(), toggle = $('[data-action="close-up"]');
         toggle.hidden = !closeUpCan();
