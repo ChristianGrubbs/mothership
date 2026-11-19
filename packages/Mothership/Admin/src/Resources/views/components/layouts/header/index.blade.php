@@ -222,6 +222,7 @@
     width="270px"
     :full-width-on-phone="false"
     ref="sidebarMenuDrawer"
+    data-nav-drawer
 >
     <x-slot:header>
         {{-- The padding keeps the logo clear of the drawer's close button, which sits over this corner. --}}
@@ -259,7 +260,9 @@
     </x-slot>
 
     <x-slot:content class="p-4">
-        <div class="h-[calc(100vh-100px)] overflow-auto journal-scroll">
+        {{-- public/pwa/device.css keeps the end of this list clear of the phone's tab bar, and in tabletop pose puts the
+             drawer on the lower segment. --}}
+        <div class="h-[calc(100vh-100px)] overflow-auto journal-scroll" data-nav-drawer-list>
             {{-- Phones: the top bar has no room for the theme segment, so the More drawer carries it. --}}
             <div class="mb-4 bridge-phone-only">
                 <v-dark></v-dark>

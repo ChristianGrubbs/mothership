@@ -100,11 +100,36 @@ const fixture = `
     })}
 `;
 
-async function mount(page) {
+// The navigation drawer with the header's own list (its sizing class and the hook public/pwa/device.css styles) holding as
+// many rows as the header's navigation, and the shell's tab bar, which is var(--tabbar-space) tall where it shows.
+function navList() {
+    const list = source(headerFile).match(/<div class="([^"]*)"\s+data-nav-drawer-list>/);
+    assert.ok(list, 'the navigation drawer list in the admin header must carry data-nav-drawer-list');
+    const rows = Array.from({ length: 14 }, (_, i) => `<a class="block" href="#row-${i}" style="height: 38px">Row ${i}</a>`).join('');
+
+    return `<div class="${list[1]}" data-nav-drawer-list>${rows}</div>`;
+}
+
+const navFixture = `
+    <button type="button" id="menu" @click="$refs.navDrawer.open()">Menu</button>
+
+    ${renderDrawer({
+        attributes: 'ref="navDrawer" data-nav-drawer',
+        position: 'left',
+        width: '270px',
+        fullWidthOnPhone: false,
+        header: '<p id="nav-title">Space</p>',
+        content: navList(),
+    })}
+
+    <nav id="tabbar" style="position: fixed; left: 0; right: 0; bottom: 0; height: var(--tabbar-space); z-index: 10002; background: #fff"></nav>
+`;
+
+async function mount(page, markup = fixture) {
     const { template, registration } = extractComponent();
 
     // The admin layout's document: left to right (the drawer's side classes are ltr:/rtl: variants) and sized to the device.
-    await page.setContent(`<!doctype html><html dir="ltr"><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><main id="app">${fixture}</main></body></html>`);
+    await page.setContent(`<!doctype html><html dir="ltr"><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><main id="app">${markup}</main></body></html>`);
     await page.addStyleTag({ path: resolveBuiltAdminStylesheetPath() });
     await page.addStyleTag({ path: path.join(root, deviceStylesheetFile) });
     await page.addScriptTag({ path: process.env.MOTHERSHIP_VUE_RUNTIME_PATH });
@@ -152,13 +177,13 @@ const vueTest = process.env.MOTHERSHIP_VUE_RUNTIME_PATH && process.env.MOTHERSHI
 // An iPhone Duo's outer screen in the installed app: about 385 CSS px wide, a finger for a pointer.
 const phone = { viewport: { width: 385, height: 640 }, hasTouch: true, isMobile: true };
 
-async function withPage(fn, context = phone) {
+async function withPage(fn, context = phone, markup = fixture) {
     const { chromium } = require(process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH);
     const browser = await chromium.launch({ headless: true, channel: process.env.MOTHERSHIP_BROWSER_CHANNEL || 'chrome' });
 
     try {
         const page = await (await browser.newContext(context)).newPage();
-        await mount(page);
+        await mount(page, markup);
         await fn(page);
     } finally {
         await browser.close();
@@ -169,7 +194,61 @@ test('the navigation drawer in the admin header keeps its width on a phone', () 
     const drawer = source(headerFile).match(/<x-admin::drawer\b[\s\S]*?ref="sidebarMenuDrawer"[\s\S]*?>/);
     assert.ok(drawer, 'the admin header must hold the navigation drawer');
     assert.match(drawer[0], /:full-width-on-phone="false"/);
+    assert.match(drawer[0], /\sdata-nav-drawer\b/, 'the device stylesheet finds the navigation drawer by this hook');
 });
+
+// The bottom of the list after it has been scrolled to its end, and the top of the tab bar.
+const scrollNavListToEnd = (page) => page.evaluate(() => {
+    const list = document.querySelector('[data-nav-drawer-list]');
+    list.scrollTop = list.scrollHeight;
+
+    return { tabbarTop: document.querySelector('#tabbar').getBoundingClientRect().top, padding: getComputedStyle(list).paddingBottom };
+});
+
+// The iPhone Duo's outer display (382 x 580) and any short phone: the tab bar sits over the foot of the drawer.
+vueTest('on a short phone the last row of the navigation drawer scrolls clear of the tab bar', () => withPage(async (page) => {
+    await tap(page, '#menu');
+    await expectPanels(page, 1);
+    await page.waitForTimeout(300);
+
+    const { tabbarTop } = await scrollNavListToEnd(page);
+    assert.equal(tabbarTop, 580 - 78, 'the phone form of the shell shows its 78px tab bar');
+
+    const last = await reach(page, '[href="#row-13"]');
+    assert.ok(last.top + last.height <= tabbarTop, `the last row ends above the tab bar: ${JSON.stringify(last)}`);
+    assert.ok(last.reaches, 'a finger on the last row lands on it, not on the tab bar');
+}, { ...phone, viewport: { width: 382, height: 580 } }, navFixture));
+
+// Folded like a laptop (public/pwa/device.js sets these on the root; this test sets them as it would, with a 40px hinge).
+vueTest('folded like a laptop the navigation drawer opens on the lower segment and every row scrolls into reach there', () => withPage(async (page) => {
+    await page.evaluate(() => {
+        const html = document.documentElement;
+        html.dataset.fold = 'rows';
+        html.style.setProperty('--seg-b-top', '453px');
+        html.style.setProperty('--seg-b-height', '414px');
+    });
+    await tap(page, '#menu');
+    await expectPanels(page, 1);
+    await page.waitForTimeout(300);
+
+    const panel = await reach(page, '[data-drawer-panel]');
+    assert.equal(panel.top, 453, 'the drawer starts below the hinge');
+
+    // From the end of the list upward, as a finger scrolls back: each row comes into view at the top of the list.
+    const { tabbarTop } = await scrollNavListToEnd(page);
+    for (let i = 13; i >= 0; i--) {
+        await page.evaluate((i) => document.querySelector(`[href="#row-${i}"]`).scrollIntoView({ block: 'nearest' }), i);
+        const row = await reach(page, `[href="#row-${i}"]`);
+        assert.ok(row.top >= 453 && row.top + row.height <= tabbarTop && row.reaches, `row ${i} in reach below the hinge: ${JSON.stringify(row)}`);
+    }
+}, { ...phone, viewport: { width: 669, height: 867 } }, navFixture));
+
+vueTest('where the shell shows no tab bar the navigation list keeps no room for one', () => withPage(async (page) => {
+    await page.click('#menu');
+    await expectPanels(page, 1);
+
+    assert.equal((await scrollNavListToEnd(page)).padding, '0px');
+}, { viewport: { width: 951, height: 585 } }, navFixture));
 
 vueTest('on a phone the navigation drawer leaves the page in view, and a tap there closes it', () => withPage(async (page) => {
     await tap(page, '#menu');
