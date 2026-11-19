@@ -481,6 +481,11 @@
     .sfx-own .tk-btn.is-small {
         height: 44px;
     }
+
+    /* 16 px, as the kit's own fields under touch: Safari on iPhone zooms into a smaller one. */
+    .sfx-item input {
+        font-size: 16px;
+    }
 }
 
 /* A short window (a phone on its side, an iPhone Duo's outer display held sideways): a list that scrolls by itself
