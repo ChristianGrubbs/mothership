@@ -118,12 +118,17 @@ browserTest('an empty set shows its heading and every way to start whole on the 
                 .filter(node => { const r = node.getBoundingClientRect(); return r.top < stage.top - .5 || r.bottom > stage.bottom + .5 || r.left < stage.left - .5 || r.right > stage.right + .5; })
                 .map(node => node.textContent.trim().slice(0, 30)), stage);
             assert.deepEqual(cut, [], `${label}: nothing cut by the stage`);
+            // Safari holds a box to its max-height even when its min-height asks for more; Chromium lets the min-height
+            // win. A stage taller than its own cap fits the ways to start here and cuts them on the iPhone.
+            const cap = await page.locator('[data-stage]').evaluate(node => getComputedStyle(node).maxHeight);
+            assert.ok(cap === 'none' || stage.height <= parseFloat(cap) + .5, `${label}: the stage is ${stage.height} px under a ${cap} cap, which Safari keeps it to`);
             return stage;
         };
         // Generate… joins the ways to start where the page offers AI; the tool shows it then, as here.
         const offerGenerate = async page => { await page.locator('[data-ai-open]').evaluateAll(buttons => buttons.forEach(button => { button.hidden = false; })); await settled(page); };
-        // The outer display upright, with the page's foot and without it: the buttons wrap to a second row, or a third.
-        for (const [width, height] of [[382, 463], [382, 524]]) {
+        // The outer display upright, with the page's foot and without it (the buttons wrap to a second row, or a third),
+        // and on its side under Safari's bars and the page's: the stage's cap there leaves no room for the buttons.
+        for (const [width, height] of [[382, 463], [382, 524], [678, 287]]) {
             const { page, errors } = await open(browser, { width, height });
             await whole(page, `${width} x ${height}`);
             await offerGenerate(page);
