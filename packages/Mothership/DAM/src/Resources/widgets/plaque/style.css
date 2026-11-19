@@ -1244,6 +1244,83 @@
     }
 }
 
+/* A short tool under touch (an iPhone Duo's outer display, the open inner display flat or as a book, a phone on its
+   side): with 44 px targets the transport wrapped to three or four rows and left the pane under it 74 to 86 px. Here it
+   takes two rows and hides nothing: Play, the scrubber and the clock, then the frame steps, what to play, Mute and
+   Close-up. Play shows its glyph only; its name stays for assistive tech. The query reads the tool frame's own
+   viewport, so a tool 640 px tall or less qualifies whatever the device; an ordinary phone (664 and taller), tabletop,
+   a mouse and the desktop keep the layout above. */
+@media (pointer: coarse) and (max-width: 1099px) and (max-height: 640px) {
+    .plq-transport {
+        display: grid;
+        grid-template-columns: 44px 44px minmax(0, 1fr) auto 44px;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .plq-transport-row {
+        display: contents;
+    }
+
+    .plq-transport .plq-play {
+        grid-area: 1 / 1;
+        width: 44px;
+        min-width: 0;
+        padding: 0;
+        justify-content: center;
+    }
+
+    .plq-play [data-play-label] {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+    }
+
+    .plq-play kbd {
+        display: none;
+    }
+
+    .plq-scrub {
+        grid-area: 1 / 2 / 2 / 4;
+        margin: 0;
+    }
+
+    .plq-clock {
+        grid-area: 1 / 4 / 2 / 6;
+        justify-self: end;
+        margin: 0;
+    }
+
+    .plq-transport [data-action="step-back"] {
+        grid-area: 2 / 1;
+    }
+
+    .plq-transport [data-action="step-forward"] {
+        grid-area: 2 / 2;
+    }
+
+    .plq-scope {
+        grid-area: 2 / 3;
+        min-width: 0;
+    }
+
+    .plq-scope .tk-select {
+        width: 100%;
+    }
+
+    .plq-mute {
+        grid-area: 2 / 4;
+    }
+
+    .plq-closeup {
+        grid-area: 2 / 5;
+    }
+}
+
 /* A folded screen (the kit says how a tool learns of it). Nothing sits on the fold in either pose.
    Open like a book: the preview, the segment and its pane left of the fold, the editor right of it. */
 :root[data-fold="columns"] .plq {
