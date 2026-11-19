@@ -448,7 +448,9 @@ final class AppModel {
             containerValue = held.value
             containersUnreadable = held.unreadable
             tunnelJobRunning = await job
-            externalBusy = await busy
+            externalBusy = anotherSessionIsChangingStack(
+                stackCommandRunning: await busy, ownActionRunning: activeAction != nil
+            )
             lastProcessRead = pollStarted
             lastProcessReadSucceeded = containerReading != nil
             siteOKAtProcessRead = siteOK

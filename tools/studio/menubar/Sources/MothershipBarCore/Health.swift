@@ -249,6 +249,11 @@ public func restartWouldHelp(_ snapshot: HealthSnapshot) -> Bool {
     return snapshot.bridges?.contains { !$0.ok && snapshot.bridgeWatch[$0.name] != .restarting } == true
 }
 
+/// The stack command seen while this app's own action runs is that action, not another session.
+public func anotherSessionIsChangingStack(stackCommandRunning: Bool, ownActionRunning: Bool) -> Bool {
+    stackCommandRunning && !ownActionRunning
+}
+
 public func verdict(for snapshot: HealthSnapshot, action: ActionKind?, externalBusy: Bool) -> Verdict {
     if let action {
         return Verdict(overall: action.overall, reason: "You can close this panel. The work carries on.")
