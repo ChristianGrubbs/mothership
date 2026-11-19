@@ -271,12 +271,17 @@ browserTest('Loop Maker on the iPhone Duo: Play and both figures above a tableto
             const wave = await page.locator('[data-overlay]').boundingBox();
             await finger.send('Input.synthesizeScrollGesture', { x: Math.round(wave.x + wave.width * .6), y: Math.round(wave.y + wave.height * .7), ...distance, gestureSourceType: 'touch' });
         };
-        const before = await region(page), scrolled = () => page.locator('.lm').evaluate(scroller => scroller.scrollTop);
-        const top = await scrolled();
+        // The swipe starts from the top, with room below it, wherever loading the demo left the scroll on this machine's
+        // fonts; the scroll lands a frame or more after the gesture on a busy machine, so the check waits for it.
+        const scroller = page.locator('.lm'), before = await region(page);
+        await scroller.evaluate(node => { node.scrollTop = 0; });
+        const room = await scroller.evaluate(node => node.scrollHeight - node.clientHeight);
+        assert.ok(room >= 100, `the tool has room to scroll (${room} px)`);
         await swipe({ yDistance: -100 });
-        assert.ok(await scrolled() >= top + 50, 'a swipe up that starts on the wave scrolls the tool');
+        const scrolled = await page.waitForFunction(() => document.querySelector('.lm').scrollTop >= 50, null, { timeout: 3000 }).then(() => true, () => false);
+        assert.ok(scrolled, `a swipe up that starts on the wave scrolls the tool (to ${await scroller.evaluate(node => node.scrollTop)} of ${room} px)`);
         assert.deepEqual(await region(page), before, 'and leaves the loop where it was');
-        await page.locator('.lm').evaluate(scroller => { scroller.scrollTop = 0; });
+        await scroller.evaluate(node => { node.scrollTop = 0; });
         await swipe({ xDistance: -80 });
         assert.notDeepEqual(await region(page), before, 'a sideways drag on the wave still moves the loop');
         assert.deepEqual(errors, []);
