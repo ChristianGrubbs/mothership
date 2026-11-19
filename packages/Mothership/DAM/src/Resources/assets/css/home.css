@@ -1,9 +1,9 @@
 [data-mothership-home]{--agh-bg:#fff;--agh-text:#141414;--agh-muted:#575757;--agh-line:#E6E6E6;--agh-soft:#F4F4F4;--agh-violet:#2D5BE3;--agh-tint:#F4F4F4;max-width:1580px;margin:0 auto;padding:24px 12px 64px;color:var(--agh-text)}
-.dark [data-mothership-home],.dark .agh-workspace{--agh-bg:#161616;--agh-text:#F2F2F2;--agh-muted:#A8A8A8;--agh-line:#2A2A2A;--agh-soft:#0B0B0B;--agh-violet:#8AA8FF;--agh-tint:#1E1E1E}
-[data-mothership-home] [hidden],.agh-workspace[hidden]{display:none!important}
-.agh-actions,.agh-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.agh-eyebrow{font-size:10px;letter-spacing:2px;font-weight:700;color:var(--agh-violet);margin:0}.agh-subtitle{color:var(--agh-muted);font-size:14px;margin:0}.agh-actions{justify-content:flex-end;flex-wrap:wrap}.agh-button{font:inherit;font-size:12px;font-weight:600;background:var(--agh-bg);color:var(--agh-text);border:1px solid var(--agh-line);border-radius:8px;padding:9px 13px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;white-space:nowrap}.agh-button:hover{background:var(--agh-soft);border-color:var(--agh-violet)}.agh-button:disabled{cursor:default;opacity:.5}.agh-primary{background:#2D5BE3;color:#fff;border-color:#2D5BE3}.agh-primary:hover{background:#2449C4;border-color:#2449C4}.agh-button:focus-visible,.agh-card a:focus-visible,.agh-card:focus-visible{outline:2px solid var(--agh-violet);outline-offset:3px}.agh-card{border:1px solid var(--agh-line);background:var(--agh-bg);border-radius:15px;overflow:hidden;min-width:0;box-shadow:0 3px 12px #14141403}.agh-card[data-size=wide]{grid-column:span 2}.agh-card[data-size=large]{grid-column:span 4}.agh-card-body{padding:0 18px 18px;min-height:164px}.agh-caption{font-size:12px;color:var(--agh-muted);line-height:1.6}.agh-card[draggable=true]{outline:1px dashed var(--agh-violet);cursor:grab}.agh-card.is-dragging{opacity:.45}.agh-settings{background:var(--agh-bg);color:var(--agh-text);border:1px solid var(--agh-line);border-radius:18px;padding:28px;width:min(800px,92vw);max-height:85vh;box-shadow:0 20px 90px #0004}.agh-settings::backdrop{background:#14141477;backdrop-filter:blur(5px)}.agh-dialog-head{margin-bottom:14px}.agh-dialog-head h2{font-size:24px;font-weight:600;margin:5px 0}.agh-settings label{display:block;font-size:12px;margin-bottom:16px}.agh-settings input,.agh-settings textarea{display:block;width:100%;background:var(--agh-soft);color:var(--agh-text);border:1px solid var(--agh-line);border-radius:8px;padding:10px;margin-top:7px;font:inherit}.agh-settings textarea{min-height:150px}.agh-workspace{--agh-bg:#fff;--agh-text:#141414;--agh-muted:#575757;--agh-line:#E6E6E6;--agh-soft:#F4F4F4;--agh-violet:#2D5BE3;--agh-tint:#F4F4F4;position:fixed;inset:20px;z-index:11000;display:flex;flex-direction:column;background:var(--agh-bg);color:var(--agh-text);border:1px solid var(--agh-line);border-radius:15px;box-shadow:0 0 0 30px #14141488,0 20px 80px #0005;overflow:hidden}.agh-workspace-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 20px;border-bottom:1px solid var(--agh-line)}.agh-workspace-head h2{font-size:14px;font-weight:600}.agh-workspace-head p{font-size:11px;color:var(--agh-muted);margin:3px 0 0}.agh-workspace iframe{width:100%;height:100%;border:0;background:var(--agh-bg);flex:1;min-height:0}.agh-frame-status{padding:12px 20px;font-size:12px;background:var(--agh-soft);color:var(--agh-muted)}.agh-frame-status[hidden]{display:none}.agh-workspace-head .agh-actions{flex-wrap:nowrap}
+.dark [data-mothership-home]{--agh-bg:#161616;--agh-text:#F2F2F2;--agh-muted:#A8A8A8;--agh-line:#2A2A2A;--agh-soft:#0B0B0B;--agh-violet:#8AA8FF;--agh-tint:#1E1E1E}
+[data-mothership-home] [hidden]{display:none!important}
+.agh-actions,.agh-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.agh-eyebrow{font-size:10px;letter-spacing:2px;font-weight:700;color:var(--agh-violet);margin:0}.agh-subtitle{color:var(--agh-muted);font-size:14px;margin:0}.agh-actions{justify-content:flex-end;flex-wrap:wrap}.agh-button{font:inherit;font-size:12px;font-weight:600;background:var(--agh-bg);color:var(--agh-text);border:1px solid var(--agh-line);border-radius:8px;padding:9px 13px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;white-space:nowrap}.agh-button:hover{background:var(--agh-soft);border-color:var(--agh-violet)}.agh-button:disabled{cursor:default;opacity:.5}.agh-primary{background:#2D5BE3;color:#fff;border-color:#2D5BE3}.agh-primary:hover{background:#2449C4;border-color:#2449C4}.agh-button:focus-visible,.agh-card a:focus-visible,.agh-card:focus-visible{outline:2px solid var(--agh-violet);outline-offset:3px}.agh-card{border:1px solid var(--agh-line);background:var(--agh-bg);border-radius:15px;overflow:hidden;min-width:0;box-shadow:0 3px 12px #14141403}.agh-card[data-size=wide]{grid-column:span 2}.agh-card[data-size=large]{grid-column:span 4}.agh-card-body{padding:0 18px 18px;min-height:164px}.agh-caption{font-size:12px;color:var(--agh-muted);line-height:1.6}.agh-card[draggable=true]{outline:1px dashed var(--agh-violet);cursor:grab}.agh-card.is-dragging{opacity:.45}.agh-settings{background:var(--agh-bg);color:var(--agh-text);border:1px solid var(--agh-line);border-radius:18px;padding:28px;width:min(800px,92vw);max-height:85vh;box-shadow:0 20px 90px #0004}.agh-settings::backdrop{background:#14141477;backdrop-filter:blur(5px)}.agh-dialog-head{margin-bottom:14px}.agh-dialog-head h2{font-size:24px;font-weight:600;margin:5px 0}.agh-settings label{display:block;font-size:12px;margin-bottom:16px}.agh-settings input,.agh-settings textarea{display:block;width:100%;background:var(--agh-soft);color:var(--agh-text);border:1px solid var(--agh-line);border-radius:8px;padding:10px;margin-top:7px;font:inherit}.agh-settings textarea{min-height:150px}
 @media(max-width:1100px){.agh-card[data-size=large]{grid-column:span 2}}
-@media(max-width:640px){[data-mothership-home]{padding:16px 0 40px}.agh-card[data-size]{grid-column:span 1}.agh-workspace{inset:0;border-radius:0}.agh-workspace-head{padding:10px}.agh-workspace-head p{display:none}.agh-workspace-head .agh-button{padding:7px 9px;font-size:11px}}.agh-card{display:flex;flex-direction:column}.agh-card-body{min-height:0;flex:1;overflow:auto}.agh-settings select{display:block;width:100%;background:var(--agh-soft);color:var(--agh-text);border:1px solid var(--agh-line);border-radius:8px;padding:10px;margin-top:7px;font:inherit}.agh-signal-state.is-offline{color:#c14949}.agh-trend-day{font:inherit;font-size:10px;font-weight:600;border:1px solid var(--agh-line);background:var(--agh-bg);color:var(--agh-muted);border-radius:999px;padding:4px 9px;cursor:pointer}.agh-trend-day[aria-pressed=true]{background:var(--agh-tint);color:var(--agh-violet);border-color:var(--agh-violet)}
+@media(max-width:640px){[data-mothership-home]{padding:16px 0 40px}.agh-card[data-size]{grid-column:span 1}}.agh-card{display:flex;flex-direction:column}.agh-card-body{min-height:0;flex:1;overflow:auto}.agh-settings select{display:block;width:100%;background:var(--agh-soft);color:var(--agh-text);border:1px solid var(--agh-line);border-radius:8px;padding:10px;margin-top:7px;font:inherit}.agh-signal-state.is-offline{color:#c14949}.agh-trend-day{font:inherit;font-size:10px;font-weight:600;border:1px solid var(--agh-line);background:var(--agh-bg);color:var(--agh-muted);border-radius:999px;padding:4px 9px;cursor:pointer}.agh-trend-day[aria-pressed=true]{background:var(--agh-tint);color:var(--agh-violet);border-color:var(--agh-violet)}
 
 /* Compact, fixed-track Home canvas. Card bodies own overflow; #main-content owns page scrolling. */
 [data-mothership-home]{--agh-row:116px;padding-top:16px}.agh-card{position:relative;min-height:0;transition:transform .18s ease,box-shadow .18s ease,opacity .18s ease}.agh-card-body{padding:0 11px 9px;min-height:0;flex:1 1 0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-gutter:stable}.agh-card[data-rows="1"] .agh-card-body:empty{display:none}
@@ -96,6 +96,11 @@ body:has([data-mothership-home]) .bridge-top-upload>span{position:absolute;width
 .hm-layout{display:grid;grid-template-columns:minmax(0,1fr) 344px;column-gap:28px;align-items:start}
 .hm-centre{min-width:0}
 .hm-side{display:flex;flex-direction:column;gap:16px;min-width:0}
+/* While the centre has nothing for the person (a role without the Library, home-state.js), Home is its side column
+   alone, at a readable width, at every pose. Its cards are on the page, so a phone needs no glance rows or sheet. */
+.hm-layout[data-solo]{grid-template-columns:minmax(0,640px);justify-content:center}
+.hm-layout[data-solo]>.hm-centre{display:none}
+.hm-layout[data-solo]>.hm-side{display:flex;flex-direction:column;align-items:stretch;margin-top:0}
 .hm-mono{font-family:var(--font-mono);font-size:12px;line-height:1.35;letter-spacing:.01em;text-transform:uppercase;font-weight:400}
 .hm-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .hm-sp{flex:1}
@@ -225,19 +230,25 @@ a.hm-pic:active{transform:scale(.985)}
 .hm-divider{display:grid;grid-template-columns:52px 22px 1fr;align-items:center;padding:4px 0 22px;color:var(--ink-2);font-family:var(--font-mono);font-size:12px;text-transform:uppercase}
 .hm-divider span{grid-column:3}
 
-/* Tools stay reachable from here until the Tools page ships. */
-.hm-tools{margin-top:12px;padding-top:24px;border-top:1px solid var(--line)}
-.hm-tools h2{font-size:17px;font-weight:600;letter-spacing:-.015em}
-.hm-tools h3{margin:18px 0 8px;color:var(--ink-2)}
-.hm-tool-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;margin:12px 0 0;padding:0;list-style:none}
-.hm-tool{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:8px 12px;border:0;border-radius:12px;background:var(--card);box-shadow:var(--lift);color:var(--ink);font:500 14px/1.2 var(--font-ui);text-align:left;cursor:pointer;transition:background-color .12s ease,transform .08s ease}
-.hm-tool:hover{background:var(--well)}
-.hm-tool:active{transform:translateY(1px)}
-.hm-tool span{flex:1;min-width:0;overflow-wrap:anywhere}
-.hm-tool .hm-ic{color:var(--ink-2)}
+/* Home's own ways out, kept quiet: Calendar beside Open in Library, and a card's foot (Add your iPhone, saved links). */
+/* Calendar is an inline box, not a flex one, so its label and not its icon sets the baseline the Cargo head aligns on. */
+button.hm-sec-link{display:inline-block;flex:none;padding:0;white-space:nowrap;border:0;background:none;font:inherit;font-size:14px;line-height:32px;cursor:pointer}
+button.hm-sec-link .hm-ic{display:inline-block;margin-right:6px;vertical-align:-3px}
+.hm-sec-link.is-quiet{color:var(--ink-2);font-weight:500}
+.hm-sec-link.is-quiet:hover{color:var(--ink)}
+/* Calendar and Open in Library are one group at the end of Cargo's head, so a narrow head wraps them together. */
+.hm-sec-acts{display:flex;align-items:baseline;gap:12px;margin-left:auto}
+.hm-sec-acts .hm-sec-link{margin-left:0}
+.hm-foot{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.hm-foot h3{margin-bottom:8px;color:var(--ink-2)}
+.hm-foot-link{display:inline-flex;align-items:center;gap:8px;min-height:32px;padding:0;border:0;background:none;color:var(--ink-2);font:500 14px/1.2 var(--font-ui);cursor:pointer}
+.hm-foot-link:hover{color:var(--ink)}
+.hm-foot-link .hm-ic{width:16px;height:16px}
 .hm-saved-links{display:flex;flex-wrap:wrap;gap:8px 16px}
-.hm-saved-links a{color:var(--ink);font-size:14px;font-weight:500;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+.hm-saved-links a{gap:.25em;color:var(--ink);font-size:14px;font-weight:500;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
 .hm-saved-links a:hover{text-decoration-color:currentColor}
+
+@media (pointer:coarse){.hm-sec-link,.hm-foot-link,.hm-saved-links a{min-height:44px}button.hm-sec-link{line-height:44px}}
 
 /* Around the ship */
 .hm-dock ul{margin:0;padding:0;list-style:none}
@@ -370,7 +381,6 @@ a.hm-pic:active{transform:scale(.985)}
     .hm-divider{grid-template-columns:22px 1fr}
     .hm-divider span{grid-column:2}
     .hm-issue{flex-wrap:wrap}
-    .hm-tool-list{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
     /* Signal's small controls reach 44px on a phone, and 16px text keeps the phone from zooming into the menu. */
     .hm-newrow::after{content:"";position:absolute;inset:-6px 0}
     .hm-day select{height:44px;font-size:16px}
@@ -387,6 +397,10 @@ a.hm-pic:active{transform:scale(.985)}
     .hm-glance{display:none}
     html[data-fold="columns"] .hm-layout{grid-template-columns:calc(var(--seg-a-right) - 114px) minmax(0,1fr);column-gap:calc(var(--fold-gap,0px) + 28px)}
     html[data-fold="columns"][dir="rtl"] .hm-layout{grid-template-columns:calc(100vw - var(--seg-b-left) - 114px) minmax(0,1fr)}
+    /* Alone, the side column takes the leading half, the centre's: it rests off the fold, and folding moves nothing. */
+    .hm-layout[data-solo]{grid-template-columns:calc(50vw - 114px);justify-content:start}
+    html[data-fold="columns"] .hm-layout[data-solo]{grid-template-columns:calc(var(--seg-a-right) - 114px)}
+    html[data-fold="columns"][dir="rtl"] .hm-layout[data-solo]{grid-template-columns:calc(100vw - var(--seg-b-left) - 114px)}
 }
 /* A short screen, such as a folding phone's outer display: the board and deck lose air, so the next step stays above
    the notice. */
@@ -433,7 +447,7 @@ a.hm-pic:active{transform:scale(.985)}
 body:has([data-mothership-home]) .ap-fab{background:var(--card);color:var(--ink);border:1px solid var(--edge);box-shadow:0 2px 10px rgba(0,0,0,.22)}
 body:has([data-mothership-home]) .ap-fab:hover,body:has([data-mothership-home]) .ap-fab:focus-visible{background:var(--ctl);box-shadow:0 2px 10px rgba(0,0,0,.22)}
 @media (prefers-reduced-motion:reduce){
-    .hm-btn,.hm-tool,.hm-pic,.hm-pic::after{transition:none}
+    .hm-btn,.hm-pic,.hm-pic::after{transition:none}
     .hm-pic.is-wait .hm-ic{animation:none}
     .hm-tr-btn[aria-busy=true]>[data-l=busy]{animation:none}
 }

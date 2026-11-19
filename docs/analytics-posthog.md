@@ -179,12 +179,16 @@ Every export carries `internal_actor`, true only for admin ids listed in `DAM_AN
 test traffic: the project's test-account filter must be the event property `internal_actor` is not `true`.
 The list is deployment configuration in `app.env`; changing it needs a stack recreate like any other value.
 
-Home funnel: `home.feature.exposed` → `home.feature.activated` → `home.launch.attempted` →
-`home.launch.loaded`. Use `widget_id`, `launch_id`, `journey_id`, `duration_ms`, and `environment` to segment.
-Exposure requires visibility in the Home emitter. Loaded means document bootstrap only, not task success.
-`home.launch.slow` is nonterminal; `failed` and `abandoned` explain unsuccessful launches. Native links and
-generic gadget controls only emit activation. Confirmed app-use events must be added at the application's
-actual completion boundary; do not relabel loaded as success. Existing upload successes are real server outcomes.
+Tool funnel: tools open from the Tools page, and the tool frame sends `home.launch.attempted` →
+`home.launch.loaded` on the surface `tools`. Use `widget_id`, `launch_id`, `journey_id`, `duration_ms`, and
+`environment` to segment. Loaded means document bootstrap only, not task success. `home.launch.slow` is
+nonterminal; `failed` and `abandoned` explain unsuccessful launches. Home's Tools shelf, which sent
+`home.feature.exposed` and opened tools in a popup on the surface `home`, is gone. The funnel's first step,
+`home.feature.exposed`, pauses until the Tools page emits the exposure; until then the funnel starts at
+`home.launch.attempted`. Home sends `home.feature.activated` only for its own cards and links. Earlier events keep
+their meaning.
+Confirmed app-use events must be added at the application's actual completion boundary; do not relabel loaded as
+success. Existing upload successes are real server outcomes.
 
 The `hub.open.*`, `hub.save.*` and `hub.connect.*` events came from the in-app Creative Hub and its Craft connect
 wizard, both removed 2026-11-17. Nothing emits them now; the names stay in the event catalog so earlier data keeps
@@ -197,8 +201,9 @@ The Craft connector token endpoint records `craft.oauth.token.issued` (for the t
 no refreshes between them, mean the client is consenting again rather than refreshing. Codes, tokens, client ids
 and callbacks are never recorded.
 
-Dashboard acceptance: production-only exposure-to-activation by gadget; attempts-to-loaded and p50/p95 load
-duration; slow/failure/abandon counts by gadget/error; distinct successful operation conversions. Compare the
+Dashboard acceptance: production-only attempts-to-loaded and p50/p95 load duration by tool; slow/failure/abandon
+counts by tool/error; distinct successful operation conversions; exposure-to-attempt by tool once the Tools page
+emits the exposure. Compare the
 same date windows and device cohorts. Event delivery and dashboard creation must be checked in project 677447
 after deployment; local tests with HTTP fakes are not that proof.
 

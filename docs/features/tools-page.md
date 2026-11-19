@@ -16,8 +16,8 @@ tool opens in the tool frame: a page of its own with one top bar that is the sam
   - **Used today**, **Used yesterday**, **Used Fri 13 Nov**, **Used 13 Nov 2025**: the day in the account's timezone.
   - **New**: never opened, and the tile's `added` day is less than `dam-home.tools.new_days` days ago.
   - **Never used**.
-- A use is written by `HomeToolController::file` when it serves a tool's entry page, so opening a tool from Home's
-  shelf counts as well. Table `dam_home_tool_uses`: one row per account and tool, `last_used_at`.
+- A use is written by `HomeToolController::file` when it serves a tool's entry page. Table `dam_home_tool_uses`: one
+  row per account and tool, `last_used_at`.
 
 ## The tool frame (`/admin/tools/{tool}`)
 
@@ -56,7 +56,7 @@ Add the widget to `dam-home.widgets` as before (see [Home](customizable-home.md)
 ## Not built yet
 
 The frame's saved-sets menu, Export and "Save to Library" belong to the tools' restyle into the frame, one change per
-tool. Home still has its own Tools shelf, which opens a tool in a panel over Home.
+tool. Home has no Tools shelf: this page is the only way into a tool.
 
 ## Checks
 

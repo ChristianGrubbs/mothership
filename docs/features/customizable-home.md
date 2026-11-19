@@ -10,15 +10,21 @@ Top to bottom:
    that submits to the Library, and up to five start buttons (`HomeController::startActions`). A button the role
    cannot finish is left out.
 2. **Your day** beside **Apps**. Your day is drawn by `home.js` from `/admin/home/calendar/mine` and
-   `/calendar/events`; the month grid opens in a dialog. Apps lists the studio tools the role's catalog allows,
-   each as an icon. The last tile, **iPhone app**, opens the Add to Home Screen steps for the installable web
-   app; there is no native iOS app.
+   `/calendar/events`; the month grid opens in a dialog from **Calendar**, beside **Open in Library** in Cargo's
+   head, for an account whose catalog has the calendar; Cargo keeps its head, over a one-line empty state, while it
+   has no files but offers Calendar. Tools are not on Home; they open from the Tools page
+   ([tools-page](tools-page.md)). **Add your iPhone**, at the foot of the Docked card (for a role without the
+   Library, which has no Docked card, at the foot of Away from ship), opens the Add to Home Screen steps for the
+   installable web app; there is no native iOS app. While the centre has nothing for the person (no board, nothing
+   that needs them, no Cargo: a role without the Library), Home is its side column alone, in one column at every pose
+   (`showCentre()` in `home-state.js`).
 3. **Send files to a person**, under Apps, when Transfers is available to the account (`TransferSession::clientConfig`).
    It subscribes to `window.MothershipTransfers` and offers one Send button per connected device.
 4. **Recent uploads**: eight newest listable files, starred files beneath.
 5. **Studio admin**, rendered only for full-access roles (`permission_type` `all`): Studio load and who is online,
    the Signal quick feed, GitHub Trending and file storage. The Signal card has no launcher into the reader.
-6. **Your saved links**: Quick links from a layout saved before the change, read-only.
+6. **Your saved links**, at the foot of the Away from ship card and only when there are any: Quick links from a
+   layout saved before the change, read-only.
 
 `GET /admin/home/layout` returns `{widgets, catalog, links}`: the role's catalog with default settings, and the saved
 Quick links. `PUT` and `DELETE /admin/home/layout` were removed. `dam_home_layouts` rows are kept and never rewritten.
@@ -32,12 +38,10 @@ the page calls them (# TODO 2026-11-10: remove the unused layout helpers and the
    description, icon, kind, allowed sizes, default size/settings and permission.
 2. For a tool, place its browser distribution beneath `Resources/widgets/<id>` and
    name its entry file in the registry. Keep build sources outside that distribution.
-   For a native card, add its data endpoint and renderer, and place it in `SECTIONS` in
-   `home.js`. A tool gets an icon and one-line purpose in `appIcons` / `appPurposes`.
-3. Test role access, account isolation, malformed settings and failure states. The
-   shell mounts tools lazily; the popup offers Reload and Close tool only (no Collapse,
-   operator directive 2026-09-13), and Close, Escape, reload and navigation guard
-   unexported work. Test both initial load and SPA navigation.
+   For a native card, add its data endpoint and renderer to Home's view and scripts. A tool appears on the Tools
+   page and opens in the tool frame ([tools-page](tools-page.md)).
+3. Test role access, account isolation, malformed settings and failure states, on both initial load and SPA
+   navigation.
 
 The host bridge is `mothership-widget/v1`: tools may send `ready`, `dirty`, `escape`
 and `preference-error`; the host sends `theme`. Messages must match both the frame
