@@ -222,6 +222,36 @@ vueTest('a confirmation chained from an answer still returns focus to the origin
     assert.equal(await active(page), 'chained');
 }));
 
+vueTest('a message cut short by the screen joins the Tab cycle, and a whole one stays out of it', () => withPage(async (page) => {
+    await page.focus('#trigger');
+    await page.keyboard.press('Enter');
+    await settle(page);
+
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Tab');
+    assert.equal(await active(page), 'Disagree', 'a message that fits is not a stop');
+
+    const describedBy = await dialog(page).getAttribute('aria-describedby');
+
+    await page.evaluate((id) => {
+        const message = document.getElementById(id);
+
+        message.style.height = '8px';
+        message.style.overflowY = 'auto';
+    }, describedBy);
+
+    await page.keyboard.press('Tab');
+    assert.equal(await active(page), 'Agree');
+    await page.keyboard.press('Tab');
+    assert.equal(await active(page), describedBy, 'Tab from the last button reaches the clipped message');
+    await page.keyboard.press('Tab');
+    assert.equal(await active(page), 'Disagree');
+    await page.keyboard.press('Shift+Tab');
+    assert.equal(await active(page), describedBy);
+    await page.keyboard.press('Shift+Tab');
+    assert.equal(await active(page), 'Agree', 'Shift+Tab from the message wraps to the last button');
+}));
+
 vueTest('a replacement requested while focus is inside the dialog keeps the original opener', () => withPage(async (page) => {
     await page.focus('#trigger');
     await page.keyboard.press('Enter');
