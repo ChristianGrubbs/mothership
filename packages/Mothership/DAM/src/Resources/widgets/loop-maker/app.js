@@ -444,7 +444,7 @@
     nodes.smart.addEventListener('change', () => { if (nodes.smart.checked) findBest(); dirty(); });
     const edgeAt = time => { const edge = Math.max(.15, state.buffer.duration * .012), end = state.start + state.length; return Math.abs(time - state.start) < edge ? 'start' : Math.abs(time - end) < edge ? 'end' : 'move'; };
     const timeAt = event => { const rect = nodes.overlay.getBoundingClientRect(); return (event.clientX - rect.left) / rect.width * state.buffer.duration; };
-    nodes.overlay.addEventListener('pointerdown', event => { if (!state.buffer) return; const time = timeAt(event); state.drag = edgeAt(time); state.dragOffset = time - state.start; nodes.overlay.setPointerCapture(event.pointerId); });
+    nodes.overlay.addEventListener('pointerdown', event => { if (!state.buffer) return; const time = timeAt(event); state.drag = edgeAt(time); state.dragOffset = time - state.start; state.dragFrom = [state.start, state.length]; nodes.overlay.setPointerCapture(event.pointerId); });
     nodes.overlay.addEventListener('pointermove', event => {
         if (!state.buffer) return;
         // The pointer says what a press would do: resize at an edge, move inside or beside the region.
@@ -453,7 +453,15 @@
         if (state.drag === 'start') { const end = state.start + state.length; state.start = Math.min(time, end - .25); state.length = end - state.start; } else if (state.drag === 'end') state.length = clamp(time - state.start, .25, state.buffer.duration - state.start); else state.start = clamp(time - state.dragOffset, 0, state.buffer.duration - state.length);
         syncControls(); scoreSeam(); draw(); dirty();
     });
-    for (const type of ['pointerup', 'pointercancel']) nodes.overlay.addEventListener(type, () => { state.drag = null; });
+    nodes.overlay.addEventListener('pointerup', () => { state.drag = null; });
+    // A finger that goes up or down the wave scrolls the page, and the browser then cancels the press: the region goes
+    // back to where it was, so the slight sideways drift of a scroll edits nothing.
+    nodes.overlay.addEventListener('pointercancel', () => {
+        if (!state.drag) return;
+        state.drag = null;
+        [state.start, state.length] = state.dragFrom;
+        syncControls(); scoreSeam(); draw();
+    });
     // Space plays and the arrows nudge the start, but never in place of what a field, a button or an open sheet does.
     window.addEventListener('keydown', event => {
         const target = event.target;

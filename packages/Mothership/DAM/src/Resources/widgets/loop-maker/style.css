@@ -206,7 +206,8 @@
     inset: 0;
     width: 100%;
     height: 100%;
-    touch-action: none;
+    /* A sideways drag edits the region; an upward or downward one scrolls the page, as anywhere else. */
+    touch-action: pan-y;
 }
 
 .lm-ruler {
@@ -439,7 +440,8 @@
 }
 
 @media (pointer: coarse) {
-    .lm .tk-btn {
+    .lm .tk-btn,
+    .lm-slider input[type="range"] {
         height: 44px;
     }
 }
@@ -508,6 +510,13 @@
     }
 }
 
+/* A phone held sideways is short: the wave gives up height so Play is in view at rest. */
+@media (max-width: 959px) and (max-height: 520px) {
+    .lm-wave {
+        height: clamp(96px, 36vh, 320px);
+    }
+}
+
 /* A folded screen (the kit says how a tool learns of it), nothing on the fold. Open like a book: the stage left of the
    fold, the controls right of it, and with no track the drop zone on the left. Held like a laptop: the stage above the
    fold, where it is watched, and the controls below it, near the hand; with no track the drop zone below. */
@@ -546,7 +555,8 @@
 }
 
 /* On a fold the stage is one screen tall: the wave takes what the other rows leave, and gives up height before the
-   transport does. Above a tabletop fold that can be little. */
+   transport does. Above a tabletop fold that can be little, so there the rows sit closer, the help line goes (the
+   manual has it) and the wave may be a strip, which keeps Play and both figures above the fold. */
 :root[data-fold] .lm-wave {
     flex: 1 1 0;
     height: auto;
@@ -554,6 +564,19 @@
     max-height: 360px;
 }
 
+:root[data-fold="rows"] .lm-stage {
+    gap: 10px;
+    padding-bottom: 16px;
+}
+
+:root[data-fold="rows"] .lm-transport {
+    row-gap: 10px;
+}
+
+:root[data-fold="rows"] .lm-help {
+    display: none;
+}
+
 :root[data-fold="rows"] .lm-wave {
-    min-height: 96px;
+    min-height: 64px;
 }

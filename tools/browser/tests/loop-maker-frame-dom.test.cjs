@@ -35,8 +35,8 @@ const withBridge = ({ bar }) => {
 const launch = () => require(playwrightPath).chromium.launch({ headless: true, channel: process.env.MOTHERSHIP_BROWSER_CHANNEL || 'chrome' });
 
 // Serves the tool, and the kit beside it, from disk at the path Home serves it from.
-async function open(browser, { bridge = null, width = 1440, height = 900 } = {}) {
-    const page = await browser.newPage({ viewport: { width, height }, reducedMotion: 'reduce' });
+async function open(browser, { bridge = null, width = 1440, height = 900, touch = false } = {}) {
+    const page = await browser.newPage({ viewport: { width, height }, reducedMotion: 'reduce', hasTouch: touch });
     page.setDefaultTimeout(10000);
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
@@ -233,6 +233,52 @@ browserTest('Loop Maker on a folded screen keeps every pane off the fold: the st
         assert.ok(controls.left >= 485, 'the controls start after it');
         assert.equal(await page.locator('.lm-controls').evaluate(pane => pane.scrollHeight > pane.clientHeight && getComputedStyle(pane).overflowY === 'auto'), true, 'the controls scroll inside their own pane');
         assert.equal(await pageScrolls(), 0);
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); }
+});
+
+browserTest('Loop Maker on the iPhone Duo: Play and both figures above a tabletop fold, Play in view held sideways, a swipe up the wave scrolls and edits nothing, a keypad with a colon, and 44 px targets', async () => {
+    const browser = await launch();
+    try {
+        const bottom = (page, selector) => page.locator(selector).evaluate(node => node.getBoundingClientRect().bottom);
+        const region = page => page.evaluate(() => [document.querySelector('[data-start]').value, document.querySelector('[data-length]').value]);
+
+        // Held like a laptop, in Home's frame: the tool is 669 × 761 and the fold runs from 286 to 326.
+        let { page, errors } = await open(browser, { bridge: { bar: true }, width: 669, height: 761, touch: true });
+        await loadDemo(page);
+        await page.evaluate(() => {
+            const root = document.documentElement;
+            root.dataset.fold = 'rows';
+            root.style.setProperty('--fold-start', '286px');
+            root.style.setProperty('--fold-end', '326px');
+        });
+        for (const selector of ['.lm-wave', '[data-play]', '[data-find-best]', '.lm-readout']) assert.ok(await bottom(page, selector) <= 286, `${selector} shows above the fold`);
+        assert.equal(await page.locator('.lm-stage').evaluate(pane => pane.scrollHeight - pane.clientHeight), 0, 'nothing in the stage waits under the fold');
+        // Under a finger every button, tick and slider is 44 px tall, and Duration asks for a keypad that has the colon m:ss needs.
+        const short = await page.evaluate(() => [...document.querySelectorAll('.tk-btn, .tk-check, input[type="range"]')]
+            .filter(node => node.checkVisibility() && node.getBoundingClientRect().height < 44).map(node => node.textContent.trim() || node.id));
+        assert.deepEqual(short, []);
+        assert.equal(await page.locator('[data-fill]').getAttribute('inputmode'), null);
+        assert.deepEqual(errors, []);
+        await page.close();
+
+        // Held sideways: 594 × 312, where the stage and the controls scroll as one.
+        ({ page, errors } = await open(browser, { bridge: { bar: true }, width: 594, height: 312, touch: true }));
+        await loadDemo(page);
+        assert.ok(await bottom(page, '[data-play]') <= 312, 'Play is in view at rest');
+        const finger = await page.context().newCDPSession(page);
+        const swipe = async distance => {
+            const wave = await page.locator('[data-overlay]').boundingBox();
+            await finger.send('Input.synthesizeScrollGesture', { x: Math.round(wave.x + wave.width * .6), y: Math.round(wave.y + wave.height * .7), ...distance, gestureSourceType: 'touch' });
+        };
+        const before = await region(page), scrolled = () => page.locator('.lm').evaluate(scroller => scroller.scrollTop);
+        const top = await scrolled();
+        await swipe({ yDistance: -100 });
+        assert.ok(await scrolled() >= top + 50, 'a swipe up that starts on the wave scrolls the tool');
+        assert.deepEqual(await region(page), before, 'and leaves the loop where it was');
+        await page.locator('.lm').evaluate(scroller => { scroller.scrollTop = 0; });
+        await swipe({ xDistance: -80 });
+        assert.notDeepEqual(await region(page), before, 'a sideways drag on the wave still moves the loop');
         assert.deepEqual(errors, []);
     } finally { await browser.close(); }
 });

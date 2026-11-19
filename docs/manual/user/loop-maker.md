@@ -9,7 +9,7 @@ Open **Loop Maker** from the **Tools** page. Have an MP3, WAV, M4A, or OGG file 
 ## Steps
 
 1. Drop an MP3, WAV, M4A, or OGG file onto the drop zone, select **Choose audio file**, or select **Load a demo track**.
-2. Drag the highlighted waveform region to move it. Drag either edge, by its line or the tabs at its top and bottom, to change its length. **Replace track** opens another file.
+2. Drag the highlighted waveform region to move it. Drag either edge, by its line or the tabs at its top and bottom, to change its length. On a touch screen drag sideways: a swipe up or down the waveform scrolls the page. **Replace track** opens another file.
 3. Select **Find best seam**, then use **Hear the seam** to audition the join. **Seam match** scores the join. Turning **Smart seam** on runs the same search.
 4. Adjust **Crossfade** until the repeat sounds clean. Under **Fades and loudness**, set a fade in or out, and turn on **Normalize to −1 dB** to raise a quiet loop without clipping. **Play loop** plays it with these settings.
 5. Select **Export** in the bar at the top. Choose one pass of the loop or **Repeat to fill a duration**, pick WAV or MP3, and select **Download**.

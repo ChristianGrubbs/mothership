@@ -512,6 +512,11 @@ kbd {
 }
 
 @media (pointer: coarse) {
+    .tk-btn,
+    .tk-check {
+        min-height: 44px;
+    }
+
     .tk-btn.is-quiet {
         width: 44px;
         height: 44px;
