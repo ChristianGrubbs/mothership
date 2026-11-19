@@ -38,8 +38,11 @@ function page({ connected }) {
 
 const launch = () => require(playwrightPath).chromium.launch({ headless: true, channel: process.env.MOTHERSHIP_BROWSER_CHANNEL || 'chrome' });
 
-async function open(browser, { connected = true, width = 1440, height = 900, fold = null, generate = null } = {}) {
-    const tab = await browser.newPage({ viewport: { width, height }, reducedMotion: 'reduce' });
+// Twelve Library images for the picker, one per style picture.
+const assets = catalog.presets.slice(0, 12).map((s, i) => ({ id: 500 + i, name: `${s.slug}.jpg`, title: s.title, url: `/thumb/${s.slug}` }));
+
+async function open(browser, { connected = true, width = 1440, height = 900, fold = null, generate = null, touch = false } = {}) {
+    const tab = await browser.newPage({ viewport: { width, height }, reducedMotion: 'reduce', hasTouch: touch, isMobile: touch });
     tab.setDefaultTimeout(10000);
     const errors = [];
     tab.on('pageerror', (error) => errors.push(error.message));
@@ -57,6 +60,8 @@ async function open(browser, { connected = true, width = 1440, height = 900, fol
         if (p === '/balance') return route.fulfill({ json: { ok: true, balance: { credits: 1240 } } });
         if (p === '/estimate') return route.fulfill({ json: { ok: true, estimate: { credits: 12 } } });
         if (p === '/generate') return route.fulfill({ json: generate || { ok: false, message: 'Generation could not start.' } });
+        if (p === '/folders') return route.fulfill({ json: { data: [{ id: 1, name: 'Campaigns', has_children: true }, { id: 2, name: 'Product shots', has_children: false }, { id: 3, name: 'Brand kit', has_children: false }] } });
+        if (p === '/assets') return route.fulfill({ json: { assets, has_more: false } });
         return route.fulfill({ status: 404, body: '' });
     });
     await tab.goto(origin + '/');
@@ -106,10 +111,11 @@ browserTest('on a narrow screen Styles opens as a sheet, picking a style closes 
         await card.locator('.sp-pick').click();
         assert.equal(await tab.locator('#sp-browse').evaluate((sheet) => sheet.open), false, 'picking closes the sheet');
         assert.equal(await tab.locator('#sp-title').textContent(), title);
-        const home = () => tab.evaluate(() => {
+        // The dialog's close event, which puts the pane back, runs a task after `open` turns false: wait for it.
+        const home = () => tab.waitForFunction(() => {
             const pane = document.getElementById('sp-styles');
             return pane.parentElement.id === 'stylepress' && pane.nextElementSibling?.id === 'sp-make';
-        });
+        }, null, { timeout: 2000 }).then(() => true, () => false);
         assert.equal(await home(), true, 'the pane is back before Make');
 
         await tab.click('#sp-change-style');
@@ -133,6 +139,44 @@ browserTest('on a phone the sheet shows two large cards, three compact ones or o
             columns[density] = await tab.locator('#sp-cards').evaluate((cards) => getComputedStyle(cards).gridTemplateColumns.split(' ').length);
         }
         assert.deepEqual(columns, { comfortable: 2, compact: 3, list: 1 });
+        assert.deepEqual(errors, []);
+    } finally {
+        await browser.close();
+    }
+});
+
+browserTest('in a short phone frame the Library picker shows its images above the foot, and every one can be picked', async () => {
+    const browser = await launch();
+    try {
+        // The closed phone held upright, as Home's tool panel frames it.
+        const { tab, errors } = await open(browser, { width: 382, height: 524 });
+        await tab.click('#sp-browse-assets');
+        await tab.locator('.sp-asset').first().waitFor();
+        const shown = await tab.evaluate(() => {
+            const sheet = document.getElementById('sp-asset-dialog');
+            const foot = sheet.querySelector('.tk-sheet-foot').getBoundingClientRect();
+            const lib = sheet.querySelector('.sp-lib').getBoundingClientRect();
+            const results = document.getElementById('sp-asset-results').getBoundingClientRect();
+            return Math.min(results.bottom, lib.bottom, foot.top) - Math.max(results.top, lib.top);
+        });
+        assert.ok(shown >= 96, `the images get room above the foot before any scrolling (${Math.round(shown)} px)`);
+        const spare = await tab.locator('#sp-asset-search').evaluate((input) => {
+            const cs = getComputedStyle(input);
+            const ctx = document.createElement('canvas').getContext('2d');
+            ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+            return input.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - ctx.measureText(input.placeholder).width;
+        });
+        assert.ok(spare >= 6, `the search's words fit beside Sort (${Math.round(spare)} px spare)`);
+
+        // The last image scrolls clear of the foot, and a press on it lands on the image, not on the foot.
+        const reached = await tab.locator('.sp-asset').last().evaluate((asset) => {
+            asset.scrollIntoView({ block: 'end' });
+            const r = asset.getBoundingClientRect();
+            return asset.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+        });
+        assert.equal(reached, true, 'the last image is reachable');
+        await tab.locator('.sp-asset').last().click();
+        assert.match(await tab.locator('#sp-asset-selection').textContent(), /^1 selected/);
         assert.deepEqual(errors, []);
     } finally {
         await browser.close();
@@ -200,6 +244,38 @@ browserTest('folded like a laptop, the filters take one row and the styles start
         assert.equal(await top('#sp-category'), await top('#sp-search'), 'search and the selects share a row');
         assert.ok(await top('.sp-card') < 349 - 100, 'at least 100 px of styles show above the fold');
         assert.ok(await top('#sp-make') >= 389, 'Make starts below the fold');
+        assert.deepEqual(errors, []);
+    } finally {
+        await browser.close();
+    }
+});
+
+browserTest('on a tabletop fold by touch, each filter shows its whole value and every tab is a 44 px press', async () => {
+    const browser = await launch();
+    try {
+        const { tab, errors } = await open(browser, { width: 669, height: 867, fold: { fold: 'rows', start: 349, end: 389 }, touch: true });
+        // Each value must fit the field's text box with 6 px to spare, since a phone's fonts set a little wider.
+        const cut = await tab.evaluate(() => {
+            const ctx = document.createElement('canvas').getContext('2d');
+            const room = (el) => {
+                const cs = getComputedStyle(el);
+                ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+                return { cs, width: el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 6 };
+            };
+            const out = [];
+            for (const select of document.querySelectorAll('.sp-find select')) {
+                const { width } = room(select);
+                const texts = select.id === 'sp-category' ? [select.options[0].text] : [...select.options].map((o) => o.text);
+                texts.filter((t) => ctx.measureText(t).width > width).forEach((t) => out.push(`${select.id}: ${t}`));
+            }
+            const search = document.getElementById('sp-search');
+            const { width } = room(search);
+            if (ctx.measureText(search.placeholder).width > width) out.push(`sp-search: ${search.placeholder}`);
+            return out;
+        });
+        assert.deepEqual(cut, [], 'no filter value is cut');
+        const narrow = await tab.$$eval('.sp-tabs .tk-seg-opt', (opts) => opts.map((o) => [o.textContent.trim(), o.getBoundingClientRect().width]).filter(([, w]) => w < 44));
+        assert.deepEqual(narrow, [], 'every tab is at least 44 px wide');
         assert.deepEqual(errors, []);
     } finally {
         await browser.close();

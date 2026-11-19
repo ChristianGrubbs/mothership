@@ -805,8 +805,17 @@
 }
 
 :root[data-fold="rows"] .sp-find {
-    grid-template-columns: minmax(0, 1fr) 156px 112px 148px;
+    grid-template-columns: minmax(0, 1fr) 146px 108px 158px;
     gap: 8px;
+}
+
+/* Tighter side padding so each select's longest value ("Sort: Relevance") fits whole; the chevron keeps its place. */
+:root[data-fold="rows"] .sp-find .tk-select {
+    padding: 0 28px 0 10px;
+}
+
+:root[data-fold="rows"] .sp-search .tk-input {
+    padding: 0 10px;
 }
 
 :root[data-fold="rows"] .sp-search,
@@ -1060,15 +1069,43 @@
         height: calc(100% - 24px);
     }
 
+    /* One scroller: the folders, the search and the images move together. Two stacked scrollers let the folders,
+       search and status fill a short sheet and squeeze the images to nothing under the foot. */
     .sp-lib {
-        grid-template-columns: minmax(0, 1fr);
-        grid-template-rows: auto minmax(0, 1fr);
+        display: block;
+        overflow-y: auto;
+        overscroll-behavior: contain;
     }
 
     .sp-lib-tree {
         max-height: 168px;
         border-right: 0;
         border-bottom: 1px solid var(--line);
+    }
+
+    .sp-lib-main {
+        display: block;
+    }
+
+    .sp-asset-grid {
+        overflow: visible;
+    }
+
+    /* Search and sort share one row, with tighter side padding so the search's words fit whole. */
+    .sp-asset-tools .tk-input {
+        flex-basis: 150px;
+        padding: 0 10px;
+    }
+
+    .sp-asset-tools .tk-select {
+        padding: 0 28px 0 10px;
+    }
+}
+
+/* A short sheet (the closed phone upright): the folder list keeps to about two rows, so images show without scrolling. */
+@media (max-width: 719px) and (max-height: 640px) {
+    .sp-lib-tree {
+        max-height: 104px;
     }
 }
 
@@ -1128,6 +1165,10 @@
 
     .sp-density .tk-seg-opt {
         width: 44px;
+    }
+
+    .sp-tabs .tk-seg-opt {
+        min-width: 44px;
     }
 }
 
