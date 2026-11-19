@@ -72,6 +72,19 @@
     }
 
     // --- Find a video ---------------------------------------------------------------------------------------
+    // Download takes the focus without the browser scrolling for it. Where the found video is not all in view, the
+    // pane it is in then brings its card's top to the pane's top edge, so no line of the card is left cut by that edge:
+    // Safari on iPhone painted a title line that a focus scroll had cut outside its pane, across a tabletop fold. Where
+    // the card is taller than its pane, Download is a scroll down from the title, in reading order.
+    function revealFound() {
+        addButton.focus({ preventScroll: true });
+        const scroller = [found.closest('.tk-pane'), main].find(node => node && /auto|scroll/.test(getComputedStyle(node).overflowY));
+        if (!scroller) return;
+        const view = scroller.getBoundingClientRect(), card = found.getBoundingClientRect();
+        if (card.top >= view.top && card.bottom <= view.bottom) return;
+        scroller.scrollTop += card.top - view.top;
+    }
+
     urlField.addEventListener('input', () => urlField.removeAttribute('aria-invalid'));
     finder.addEventListener('submit', async event => {
         event.preventDefault();
@@ -103,7 +116,7 @@
             smaller.checked = false;
             offerSmaller();
             found.hidden = false; mark();
-            addButton.focus();
+            revealFound();
         } catch (failure) {
             show(error, failure.message);
             help.hidden = false;

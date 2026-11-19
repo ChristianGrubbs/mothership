@@ -287,6 +287,11 @@
     .vd .tk-btn {
         height: 44px;
     }
+
+    /* 16 px, as the kit's own fields under touch: Safari on iPhone zooms into a smaller one. */
+    .vd-field .tk-input {
+        font-size: 16px;
+    }
 }
 
 /* One scroller: the link, then the downloads under it. */
