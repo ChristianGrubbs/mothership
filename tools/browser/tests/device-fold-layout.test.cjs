@@ -190,3 +190,69 @@ browserTest('the Directory column shrinks below its desktop minimum rather than 
         await browser.close();
     }
 });
+
+// Safari on iPhone Duo fires resize and the posture change before it updates the viewport segments, and changes the
+// segment media queries after. Chromium changes the size and the segments together, so it cannot show that order. Here
+// the segments change with no resize, and the test raises the change event on the page's own segment media query lists.
+browserTest('a fold that arrives after the resize still reaches an open page, through the segment media queries', async () => {
+    const browser = await launchBrowser({playwrightPath: process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH});
+    const state = page => page.evaluate(() => ({
+        fold: document.documentElement.dataset.fold ?? null,
+        gap: document.documentElement.style.getPropertyValue('--fold-gap'),
+        start: [...document.querySelectorAll('[data-fold-split]')].map(el => el.style.getPropertyValue('--fold-start')),
+    }));
+    const settle = page => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    async function openLive(viewport, rects) {
+        const page = await browser.newPage({viewport});
+        await page.addInitScript(rects => {
+            window.foldRects = rects;
+            Object.defineProperty(window, 'viewport', {configurable: true, get: () => ({segments: window.foldRects
+                ? window.foldRects.map(rect => new DOMRect(...rect)) : [new DOMRect(0, 0, innerWidth, innerHeight)]})});
+            // Every segment media query list the page asks for, so the test can raise its change event.
+            const matchMedia = window.matchMedia.bind(window);
+            window.segmentLists = [];
+            window.matchMedia = query => { const list = matchMedia(query); if (/viewport-segments/.test(query)) window.segmentLists.push(list); return list; };
+        }, rects);
+        await page.route('http://mothership.test/**', route => route.fulfill({contentType: 'text/html', body: `<!doctype html><html><body>${body}</body></html>`}));
+        await page.goto('http://mothership.test/');
+        await settle(page);
+
+        return page;
+    }
+    // The segments change and nothing else does, then the segment media queries change.
+    const segmentsChange = async (page, rects) => {
+        const queries = await page.evaluate(rects => {
+            window.foldRects = rects;
+            for (const list of window.segmentLists) list.dispatchEvent(new Event('change'));
+            return window.segmentLists.map(list => list.media);
+        }, rects);
+        await settle(page);
+
+        return queries;
+    };
+    try {
+        const freshFlat = await state(await openLive({width: 951, height: 585}, null));
+        const freshBook = await state(await openLive({width: 951, height: 585}, book(951)));
+        assert.equal(freshBook.fold, 'columns');
+
+        // Open flat to book at the same size: the segments arrive with no resize.
+        const page = await openLive({width: 951, height: 585}, null);
+        assert.deepEqual(await state(page), freshFlat);
+        assert.deepEqual((await segmentsChange(page, book(951))).sort(), ['(horizontal-viewport-segments: 2)', '(vertical-viewport-segments: 2)']);
+        assert.deepEqual(await state(page), freshBook);
+
+        // Book to open flat.
+        await segmentsChange(page, null);
+        assert.deepEqual(await state(page), freshFlat);
+
+        // Tabletop to closed on its side: the resize comes while the two segments are still reported, then they go.
+        const tabletop = await openLive({width: 669, height: 867}, [[0, 0, 669, 433], [0, 473, 669, 394]]);
+        assert.equal((await state(tabletop)).fold, 'rows');
+        await tabletop.setViewportSize({width: 678, height: 340});
+        await settle(tabletop);
+        await segmentsChange(tabletop, null);
+        assert.deepEqual(await state(tabletop), await state(await openLive({width: 678, height: 340}, null)));
+    } finally {
+        await browser.close();
+    }
+});

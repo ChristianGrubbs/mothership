@@ -148,6 +148,72 @@ browserTest('book pose, right to left: the sentence stays right of the hinge and
     }
 }));
 
+// The bar's set menu as a tool with many saved sets has it: twelve, the open one with a 60-character name, and the item
+// held at the menu's foot. The poses are WebKit's sizes, with no hinge, the 40 px hinge and the size Safari reported.
+const LONG_SET = 'Harbour at dusk with the tide out and the lamps lit along it';
+const showSets = page => page.evaluate(name => {
+    const item = (role, label) => {
+        const button = document.createElement('button');
+        const span = document.createElement('span');
+
+        button.type = 'button';
+        button.setAttribute('role', role);
+        if (role === 'menuitemradio') button.setAttribute('aria-checked', 'false');
+        span.textContent = label;
+        button.append(span);
+
+        return button;
+    };
+    const menu = document.querySelector('[data-tool-sets-menu]');
+
+    document.querySelector('[data-tool-note]').hidden = true;
+    document.querySelector('[data-tool-sets]').hidden = false;
+    document.querySelector('[data-tool-set-name]').textContent = name;
+    menu.replaceChildren(...Array.from({length: 12}, (_, i) => item('menuitemradio', i ? `Palette ${i + 1}` : name)), item('menuitem', 'Manage saved palettes…'));
+    menu.hidden = false;
+}, LONG_SET);
+const TABLETOPS = [
+    {pose: 'no hinge', viewport: {width: 669, height: 867}, fold: 'rows', segments: {'a-height': 433, 'b-top': 433, 'b-height': 434}},
+    {pose: '40 px hinge', viewport: {width: 669, height: 867}, fold: 'rows', segments: {'a-height': 413, 'b-top': 453, 'b-height': 414}},
+    {pose: 'Safari size', viewport: {width: 669, height: 825}, fold: 'rows', segments: {'a-height': 348, 'b-top': 350, 'b-height': 475}},
+];
+const BOOKS = [
+    {pose: 'no hinge', viewport: {width: 951, height: 585}, fold: 'columns', segments: {'a-width': 475, 'b-width': 476, 'trailing-left': 475, 'trailing-width': 476}},
+    {pose: '40 px hinge', ...BOOK},
+    {pose: 'Safari size', viewport: {width: 951, height: 543}, fold: 'columns', segments: {'a-width': 474, 'b-width': 476, 'trailing-left': 475, 'trailing-width': 476}},
+];
+
+browserTest('tabletop pose: the set menu ends 12 px above the fold, with the item at its foot wholly above it', () => withBrowser(async browser => {
+    for (const view of TABLETOPS) {
+        const page = await framePage(browser, view);
+
+        await showSets(page);
+        const fold = view.segments['a-height'];
+        const menu = await box(page, '[data-tool-sets-menu]');
+        const manage = await box(page, '[data-tool-sets-menu] [role="menuitem"]');
+
+        assert.ok(menu.bottom <= fold - 12 + .5, `${view.pose}: the menu ends at ${menu.bottom}, under 12 px above the fold at ${fold}`);
+        assert.ok(manage.top >= menu.top && manage.bottom <= menu.bottom, `${view.pose}: Manage ${manage.top}-${manage.bottom} is held inside the menu`);
+        await page.close();
+    }
+}));
+
+browserTest('book pose: a long set name keeps the tool\'s name and the set button 12 px before the fold', () => withBrowser(async browser => {
+    for (const view of BOOKS) {
+        const page = await framePage(browser, view);
+
+        await showSets(page);
+        const fold = view.segments['a-width'];
+
+        for (const selector of ['.bridge-toolbar-name', '[data-tool-sets-btn]']) {
+            const item = await box(page, selector);
+
+            assert.ok(item.right <= fold - 12 + .5, `${view.pose}: ${selector} ends at ${item.right}, under 12 px before the fold at ${fold}`);
+        }
+        await page.close();
+    }
+}));
+
 browserTest('without a fold the message fills the stage and the tool is left alone', () => withBrowser(async browser => {
     const page = await framePage(browser, NO_FOLD);
     const note = await box(page, '[data-tool-note]');
