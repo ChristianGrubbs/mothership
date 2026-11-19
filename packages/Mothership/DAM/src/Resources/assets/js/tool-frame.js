@@ -22,6 +22,8 @@
         const ask = $('[data-tool-ask]'), question = $('[data-tool-question]'), accept = $('[data-tool-ask-accept]'), cancel = $('[data-tool-ask-cancel]');
         const notice = $('[data-tool-notice]'), noticeText = $('[data-tool-notice-text]');
         const back = $('[data-tool-back]'), reload = $('[data-tool-reload]'), status = $('[data-tool-status]');
+        const sets = $('[data-tool-sets]'), setsBtn = $('[data-tool-sets-btn]'), setName = $('[data-tool-set-name]'), setsMenu = $('[data-tool-sets-menu]');
+        const exportButtons = root.querySelectorAll('[data-tool-export]'), libraryButtons = root.querySelectorAll('[data-tool-library]'), foot = $('[data-tool-foot]');
         const launchId = globalThis.crypto?.randomUUID?.() || `tool-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
         const began = performance.now();
         const track = ({name, props}) => {
@@ -52,6 +54,8 @@
         url.searchParams.set('embed', '1');
         url.searchParams.set('theme', theme());
         url.searchParams.set('account', root.dataset.user);
+        // This page draws the tool's bar, so the tool need not draw its own way to Export and its saved sets.
+        url.searchParams.set('bar', '1');
         if (id === 'looper') url.searchParams.set('apiBase', root.dataset.homeBase + '/service/looper');
 
         const iframe = document.createElement('iframe');
@@ -61,6 +65,21 @@
 
         const post = (type, payload) => iframe.contentWindow?.postMessage({protocol: PROTOCOL, type, payload}, location.origin);
         const sendTheme = () => post('theme', {theme: theme()});
+        // Where the fold of a folded screen crosses the tool's own box, in the tool's pixels. A framed page is told
+        // of one viewport segment only, so the tool cannot find the fold itself. A fold that misses the box is none.
+        const sendFold = () => {
+            let segments;
+            try { segments = window.viewport?.segments; } catch { segments = null; }
+            const box = iframe.getBoundingClientRect();
+            let fold = null;
+            if (segments?.length === 2 && box.width > 0 && box.height > 0) {
+                const [a, b] = segments;
+                if (b.left >= a.right) fold = {mode: 'columns', start: a.right - box.left, end: b.left - box.left, size: box.width};
+                else if (b.top >= a.bottom) fold = {mode: 'rows', start: a.bottom - box.top, end: b.top - box.top, size: box.height};
+            }
+            const crosses = fold && fold.start > 0 && fold.end < fold.size;
+            post('fold', crosses ? {mode: fold.mode, start: Math.round(fold.start), end: Math.round(fold.end)} : {mode: null});
+        };
         const currentDocument = () => { try { return iframe.contentDocument; } catch { return null; } };
 
         // What the tool has told us, each fact tied to the document that said it: a reload or a move inside the frame
@@ -132,18 +151,99 @@
         cancel.addEventListener('click', () => dismissAsk());
         accept.addEventListener('click', () => { const action = pending?.action; dismissAsk(); action?.(); });
 
-        const leave = () => { leaving = true; clearTimeout(slow); if (!launched) finishLaunch({phase: 'abandoned'}); location.assign(returnTo); };
+        const leave = to => { leaving = true; clearTimeout(slow); if (!launched) finishLaunch({phase: 'abandoned'}); location.assign(to || returnTo); };
         // A tool that has not opened holds nothing, whatever it has or has not promised.
-        const askClose = opener => {
+        const askClose = (opener, to) => {
             const work = booted && mayHoldWork();
-            raiseAsk({text: work ? words['ask-close-work'] : words['ask-close'], label: work ? words['discard-close'] : words.close, discards: work, opener, action: leave});
+            raiseAsk({text: work ? words['ask-close-work'] : words['ask-close'], label: work ? words['discard-close'] : words.close, discards: work, opener, action: () => leave(to)});
         };
+
+        // The bar's status line: a setting that could not be saved, or what the tool reports (a file saved to the
+        // Library, with a link to it). The words are the tool's; they are set as text, and a link must stay in the app.
+        const showStatus = shown => {
+            status.replaceChildren(typeof shown?.text === 'string' ? shown.text.slice(0, 200) : '');
+            status.classList.toggle('is-error', shown?.tone === 'error');
+            let href = '';
+            try { const to = new URL(shown.link.url, location.href); if (to.origin === location.origin && typeof shown.link.label === 'string') href = to.href; } catch { href = ''; }
+            if (!href) return;
+            const link = document.createElement('a');
+            link.href = href;
+            link.textContent = shown.link.label.slice(0, 60);
+            link.dataset.noAjaxNav = '';
+            link.addEventListener('click', leaveLink);
+            status.append(' ', link);
+        };
+
+        // What the tool says it has (the bridge's chrome call): its saved sets, Export, Save to Library. The bar shows
+        // a control only while the tool's current document offers it, and tells the tool what was pressed.
+        const command = (name, extra = {}) => post('command', {name, ...extra});
+        const closeSets = ({focus = false} = {}) => {
+            if (setsMenu.hidden) return false;
+            setsMenu.hidden = true;
+            setsBtn.setAttribute('aria-expanded', 'false');
+            if (focus) setsBtn.focus();
+            return true;
+        };
+        const openSets = () => {
+            setsMenu.hidden = false;
+            setsBtn.setAttribute('aria-expanded', 'true');
+            (setsMenu.querySelector('[aria-checked="true"]') || setsMenu.querySelector('button'))?.focus();
+        };
+        const menuItem = ({role, label, note, checked, press}) => {
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.setAttribute('role', role);
+            if (role === 'menuitemradio') item.setAttribute('aria-checked', String(checked));
+            const name = document.createElement('span');
+            name.textContent = label;
+            item.append(name);
+            if (note) { const small = document.createElement('small'); small.textContent = note; item.append(small); }
+            item.addEventListener('click', () => { closeSets(); press(); });
+            return item;
+        };
+        const showChrome = shown => {
+            const list = Array.isArray(shown?.sets) ? shown.sets.filter(set => typeof set?.id === 'string' && typeof set?.name === 'string').slice(0, 200) : [];
+            const name = typeof shown?.set === 'string' ? shown.set : '';
+            const manage = typeof shown?.manage === 'string' ? shown.manage.slice(0, 60) : '';
+            closeSets();
+            sets.hidden = !list.length && !manage;
+            setName.textContent = name || words.sets;
+            setsBtn.title = name;
+            setsMenu.setAttribute('aria-label', typeof shown?.setsLabel === 'string' ? shown.setsLabel.slice(0, 60) : words.sets);
+            const items = list.map(set => menuItem({role: 'menuitemradio', label: set.name, note: set.current === true ? words['sets-open'] : '', checked: set.current === true, press: () => { command('open-set', {id: set.id}); iframe.focus(); }}));
+            if (manage) {
+                if (items.length) { const rule = document.createElement('hr'); rule.setAttribute('role', 'separator'); items.push(rule); }
+                items.push(menuItem({role: 'menuitem', label: manage, press: () => { command('manage-sets'); iframe.focus(); }}));
+            }
+            setsMenu.replaceChildren(...items);
+            exportButtons.forEach(button => { button.hidden = shown?.export !== true; });
+            libraryButtons.forEach(button => { button.hidden = shown?.library !== true; });
+            foot.hidden = shown?.export !== true && !(shown?.library === true && libraryButtons.length);
+        };
+        setsBtn.addEventListener('click', () => { if (!closeSets()) openSets(); });
+        setsBtn.addEventListener('keydown', event => { if (event.key === 'ArrowDown' && setsMenu.hidden) { event.preventDefault(); openSets(); } });
+        // In the menu the arrow keys walk the items, Home and End jump, and Escape closes it and nothing else.
+        setsMenu.addEventListener('keydown', event => {
+            const items = [...setsMenu.querySelectorAll('button')], at = items.indexOf(document.activeElement);
+            const to = {ArrowDown: at + 1, ArrowUp: at - 1, Home: 0, End: items.length - 1}[event.key];
+            if (to !== undefined) { event.preventDefault(); items[(to + items.length) % items.length]?.focus(); }
+            else if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeSets({focus: true}); }
+            else if (event.key === 'Tab') closeSets();
+        });
+        // A press anywhere else closes the menu. A press inside the tool never reaches this page, but it takes the
+        // focus from this window, which says the same.
+        document.addEventListener('pointerdown', event => { if (!sets.contains(event.target)) closeSets(); }, {signal});
+        window.addEventListener('blur', () => closeSets(), {signal});
+        exportButtons.forEach(button => button.addEventListener('click', () => { command('export'); iframe.focus(); }));
+        libraryButtons.forEach(button => button.addEventListener('click', () => { command('library'); iframe.focus(); }));
         const reloadTool = () => {
             // What the old document reported is forgotten, and its promise to report is dropped and not taken again
             // (its ready message may still be on the way): until the new document promises, leaving asks.
             dirty = false;
             reportsWorkDocument = null;
             discardedDocument = currentDocument();
+            showChrome(null);
+            showStatus(null);
             setAway(false);
             showNote({text: words.reloading});
             armSlow();
@@ -152,11 +252,13 @@
 
         // A plain click on Back leaves at once when no work can be lost; otherwise it asks first. A click that opens
         // a new tab or window is left to the browser.
-        const leaveLink = event => {
+        // A function declaration, so the status line's link, built above, can use it.
+        function leaveLink(event) {
             if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
             event.preventDefault();
-            if (booted && mayHoldWork()) askClose(event.currentTarget); else leave();
-        };
+            const to = event.currentTarget.href;
+            if (booted && mayHoldWork()) askClose(event.currentTarget, to); else leave(to);
+        }
         back.addEventListener('click', leaveLink);
         $('[data-tool-note-back]').addEventListener('click', leaveLink);
         const askReload = opener => {
@@ -176,13 +278,15 @@
             clearTimeout(slow);
             let identity;
             try { identity = iframe.contentWindow?.__MOTHERSHIP_FRAME__?.widget; } catch { identity = null; }
-            if (identity === id) { booted = true; finishLaunch({phase: 'loaded'}); setAway(false); note.hidden = true; sendTheme(); post('active', {active: true}); return; }
+            if (identity === id) { booted = true; finishLaunch({phase: 'loaded'}); setAway(false); note.hidden = true; sendTheme(); sendFold(); post('active', {active: true}); return; }
             // A tool page names itself. A first load that does not is a broken session. A later one is the tool
             // moving on (to a file's page, say): a page gets the whole window, never a second copy of the app
             // inside the frame; a file stays here in view, under a band whose Reload is the way back to the tool.
             let moved = '', page = false;
             try { moved = booted ? iframe.contentWindow.location.href : ''; page = ['text/html', 'application/xhtml+xml'].includes(iframe.contentDocument?.contentType); } catch { moved = ''; }
             if (moved && moved !== 'about:blank' && page) { window.location.assign(moved); return; }
+            // The tool's page went, and what it offered in the bar went with it.
+            showChrome(null);
             if (moved && moved !== 'about:blank') { dirty = false; note.hidden = true; setAway(true); return; }
             finishLaunch({phase: 'error', error_code: 'frame_identity_missing'});
             showNote({text: words.failed, actions: true, lead: true});
@@ -192,7 +296,7 @@
         window.addEventListener('message', event => {
             if (event.source !== iframe.contentWindow || event.origin !== location.origin || event.data?.protocol !== PROTOCOL) return;
             const {type, payload} = event.data;
-            if (type === 'ready') sendTheme();
+            if (type === 'ready') { sendTheme(); sendFold(); }
             // A catalogue-style tool says in its ready message that it holds nothing (holdsWork:false): nothing typed
             // into it is work. holdsWork:true takes that back and is itself a report of work.
             if (type === 'ready' && typeof payload?.holdsWork === 'boolean') {
@@ -205,7 +309,9 @@
                 const current = currentDocument();
                 if (current && current !== discardedDocument) { reportsWorkDocument = current; discardedDocument = null; }
             }
-            if (type === 'preference-error') status.textContent = payload?.message || words.preferences;
+            if (type === 'preference-error') showStatus({text: payload?.message || words.preferences, tone: 'error'});
+            if (type === 'chrome') showChrome(payload);
+            if (type === 'notice') showStatus(payload);
             // A tool may send params as it finishes loading, before anyone touched it. With the bridge, work comes
             // through dirty, so its params are not counted; a frame without the bridge can not say, so they are.
             const work = ['dirty', 'media-loaded'].includes(type) || (type === 'params' && !reportsWork());
@@ -216,6 +322,15 @@
         const observer = new MutationObserver(sendTheme);
         observer.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
         signal.addEventListener('abort', () => observer.disconnect());
+        // The fold is told again whenever it or the tool's box moves: a new pose, a resized window, a band or the
+        // phone's action bar coming and going above or below the tool.
+        window.addEventListener('mothership:fold', sendFold, {signal});
+        window.addEventListener('resize', sendFold, {signal});
+        if ('ResizeObserver' in window) {
+            const sized = new ResizeObserver(sendFold);
+            sized.observe(iframe);
+            signal.addEventListener('abort', () => sized.disconnect());
+        }
         // Closing the tab, or the browser's own Back, asks through the browser while the tool holds reported work.
         window.addEventListener('beforeunload', event => { if (!leaving && dirty && !holdsNoWork()) { event.preventDefault(); event.returnValue = ''; } }, {signal});
 

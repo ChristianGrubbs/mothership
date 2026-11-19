@@ -1,0 +1,560 @@
+/* The tool kit: the app's colours and type, and the few parts every tool inside the tool frame shares. A tool links
+   this file as ../_kit/tool-kit.css, which resolves the same from the server and from disk. Each colour equals the
+   shell's token of the same name (packages/Mothership/Admin/src/Resources/assets/css/app.css); a test holds them
+   equal. The two typefaces are declared by the server in the tool's page; from disk the system faces stand in.
+
+   Accent jobs. Blue: keyboard focus and the one next step. Red: something failed, always with a sign or a word.
+   Every other hue in a tool is the person's own content. */
+:root {
+    color-scheme: light;
+    --ground: #EFEFEF;
+    --card: #FFFFFF;
+    --well: #F4F4F4;
+    --ctl: #EEEEEE;
+    --ink: #141414;
+    --ink-2: #575757;
+    --ink-3: #9A9A9A;
+    --line: rgba(0, 0, 0, .075);
+    --edge: rgba(0, 0, 0, .08);
+    --lift: 0 1px 0 rgba(0, 0, 0, .03), 0 1px 3px rgba(0, 0, 0, .05);
+    --act: #2D5BE3;
+    --act-hover: #2449C4;
+    --on-act: #FFFFFF;
+    --alert: #E5412D;
+    --alert-text: #B8301F;
+    --focus-ring: #2D5BE3;
+    --font-ui: "Instrument Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --font-mono: "Martian Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    /* The sheet's shade and its drop shadow are the kit's own: the shell has no dialog of this kind to share. */
+    --shade: rgba(0, 0, 0, .32);
+    --float: 0 24px 60px -24px rgba(0, 0, 0, .35), 0 0 0 1px var(--edge);
+}
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground: #0B0B0B;
+    --card: #161616;
+    --well: #1E1E1E;
+    --ctl: #222222;
+    --ink: #F2F2F2;
+    --ink-2: #A8A8A8;
+    --ink-3: #5E5E5E;
+    --line: rgba(255, 255, 255, .07);
+    --edge: rgba(255, 255, 255, .07);
+    --lift: inset 0 1px 0 rgba(255, 255, 255, .04);
+    --alert: #FF5A45;
+    --alert-text: #FF7A66;
+    --focus-ring: #8AA8FF;
+    --shade: rgba(0, 0, 0, .6);
+    --float: 0 24px 60px -24px rgba(0, 0, 0, .8), 0 0 0 1px var(--edge);
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+html,
+body {
+    height: 100%;
+    margin: 0;
+}
+
+body {
+    background: var(--card);
+    color: var(--ink);
+    font: 400 14.5px/1.45 var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+}
+
+h1,
+h2,
+h3,
+p {
+    margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+    color: inherit;
+    font: inherit;
+}
+
+button,
+select,
+label,
+summary {
+    -webkit-tap-highlight-color: transparent;
+}
+
+button {
+    cursor: pointer;
+}
+
+:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.tk-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.tk-mono {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.01em;
+}
+
+/* Buttons. One filled button (is-act) per state; the rest are cards, or plain glyphs (is-quiet). */
+.tk-btn {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-width: 0;
+    height: 40px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--card);
+    box-shadow: var(--lift), inset 0 0 0 1px var(--edge);
+    color: var(--ink);
+    font-size: 14.5px;
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.tk-btn:hover {
+    background: var(--well);
+}
+
+.tk-btn.is-act {
+    background: var(--act);
+    box-shadow: none;
+    color: var(--on-act);
+}
+
+.tk-btn.is-act:hover {
+    background: var(--act-hover);
+}
+
+.tk-btn.is-small {
+    height: 34px;
+    padding: 0 12px;
+    border-radius: 10px;
+    font-size: 13.5px;
+}
+
+.tk-btn.is-quiet {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 9px;
+    background: none;
+    box-shadow: none;
+    color: var(--ink-2);
+}
+
+.tk-btn.is-quiet:hover:not(:disabled) {
+    background: var(--ctl);
+    color: var(--ink);
+}
+
+.tk-btn.is-quiet[aria-pressed="true"] {
+    background: var(--ink);
+    color: var(--card);
+}
+
+.tk-btn:disabled {
+    cursor: default;
+    opacity: .4;
+}
+
+.tk-btn svg,
+.tk-ic {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.tk-link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--ink);
+    font-weight: 500;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+/* Fields: the label over the control. */
+.tk-field {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+    color: var(--ink-2);
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.tk-input,
+.tk-select {
+    width: 100%;
+    min-width: 0;
+    height: 40px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--ctl);
+    color: var(--ink);
+    font-size: 14.5px;
+    font-weight: 400;
+}
+
+.tk-input::placeholder {
+    color: var(--ink-2);
+}
+
+.tk-input[aria-invalid="true"] {
+    box-shadow: inset 0 0 0 1.5px var(--alert-text);
+}
+
+.tk-select {
+    padding-right: 34px;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23808080' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-position: right 10px center;
+    background-repeat: no-repeat;
+    background-size: 16px;
+}
+
+.tk-check {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 40px;
+    color: var(--ink);
+    font-size: 14.5px;
+}
+
+.tk-check input {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--act);
+}
+
+.tk-check small {
+    color: var(--ink-2);
+    font-size: 13px;
+}
+
+input[type="range"] {
+    accent-color: var(--ink);
+}
+
+/* A segment: one of a few, all in view. The chosen part is marked by its ground and its weight. */
+.tk-seg {
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 12px;
+    background: var(--ctl);
+}
+
+.tk-seg-opt {
+    display: grid;
+    place-items: center;
+    min-width: 0;
+    height: 36px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 9px;
+    background: none;
+    color: var(--ink-2);
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.tk-seg-opt:hover {
+    color: var(--ink);
+}
+
+.tk-seg-opt[aria-selected="true"],
+.tk-seg-opt[aria-checked="true"],
+.tk-seg-opt[aria-pressed="true"] {
+    background: var(--card);
+    box-shadow: var(--lift);
+    color: var(--ink);
+    font-weight: 600;
+}
+
+/* Panes: the regions of a tool (inputs, stage, inspector). Each scrolls by itself; lines part them. */
+.tk-panes {
+    display: grid;
+    height: 100%;
+    min-height: 0;
+}
+
+.tk-pane {
+    min-width: 0;
+    min-height: 0;
+    padding: 18px 16px 24px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+}
+
+.tk-pane + .tk-pane {
+    border-left: 1px solid var(--line);
+}
+
+.tk-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 6px 4px 8px;
+    color: var(--ink-2);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.tk-head .tk-mono {
+    font-weight: 400;
+}
+
+* + .tk-head {
+    margin-top: 22px;
+}
+
+.tk-note {
+    color: var(--ink-2);
+    font-size: 13px;
+}
+
+.tk-empty {
+    padding: 20px 16px;
+    border-radius: 12px;
+    background: var(--well);
+    color: var(--ink-2);
+    font-size: 14px;
+    text-align: center;
+    text-wrap: balance;
+}
+
+/* A sheet: the tool's own dialog (Export, Save to Library, the saved list). Title, the choices, a status line,
+   Cancel and at most one filled button. On a phone it rises from the foot of the screen. */
+.tk-sheet {
+    width: min(520px, calc(100% - 32px));
+    max-height: min(640px, calc(100% - 32px));
+    padding: 0;
+    border: 0;
+    border-radius: 18px;
+    background: var(--card);
+    box-shadow: var(--float);
+    color: var(--ink);
+    overflow: hidden;
+}
+
+.tk-sheet[open] {
+    display: flex;
+    flex-direction: column;
+}
+
+.tk-sheet::backdrop {
+    background: var(--shade);
+}
+
+.tk-sheet-head {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 12px 12px 20px;
+    border-bottom: 1px solid var(--line);
+}
+
+.tk-sheet-head h2 {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -.01em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tk-sheet-body {
+    display: grid;
+    flex: 1 1 auto;
+    align-content: start;
+    gap: 14px;
+    min-height: 0;
+    padding: 18px 20px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.tk-sheet-foot {
+    display: flex;
+    flex: none;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 12px 20px 16px;
+    border-top: 1px solid var(--line);
+}
+
+/* The status line says what happened to the last press. A failure carries its sign as well as its colour. */
+.tk-status {
+    flex: 1 1 12rem;
+    min-width: 0;
+    color: var(--ink-2);
+    font-size: 13.5px;
+}
+
+.tk-status.is-error {
+    color: var(--alert-text);
+    font-weight: 500;
+}
+
+.tk-status.is-error::before {
+    content: "✕ ";
+}
+
+.tk-status a {
+    color: var(--ink);
+    font-weight: 500;
+}
+
+/* A toast: what just happened, with Undo when there is one. */
+.tk-toast {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: calc(100% - 32px);
+    padding: 10px 12px 10px 16px;
+    border-radius: 12px;
+    background: var(--ink);
+    box-shadow: var(--float);
+    color: var(--card);
+    font-size: 14px;
+    transform: translateX(-50%);
+}
+
+.tk-toast .tk-link {
+    color: var(--card);
+}
+
+.tk-toast.is-error::before {
+    content: "✕";
+    font-weight: 700;
+}
+
+kbd {
+    display: inline-block;
+    min-width: 20px;
+    padding: 1px 5px;
+    border-radius: 5px;
+    background: var(--ctl);
+    color: var(--ink);
+    font: 500 11px var(--font-mono);
+    text-align: center;
+}
+
+@media (pointer: coarse) {
+    .tk-btn.is-quiet {
+        width: 44px;
+        height: 44px;
+    }
+
+    .tk-input,
+    .tk-select {
+        height: 44px;
+    }
+}
+
+@media (max-width: 719px) {
+    .tk-sheet {
+        width: 100%;
+        max-width: none;
+        max-height: calc(100% - 24px);
+        margin: auto 0 0;
+        border-radius: 18px 18px 0 0;
+    }
+
+    .tk-sheet-foot {
+        padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    }
+
+    .tk-sheet-foot .tk-btn {
+        flex: 1 1 0;
+        height: 48px;
+        border-radius: 14px;
+    }
+
+    .tk-sheet-foot .tk-status {
+        flex-basis: 100%;
+    }
+}
+
+/* A folded screen. A tool cannot see the fold from inside its frame, so the page that frames it says where the fold
+   crosses the tool (home-frame.js): <html data-fold="columns|rows">, with --fold-start and --fold-end as the strip's
+   near and far edge. A sheet and a toast keep whole to the far side: the right half of an open book, the lower half
+   of a screen folded like a laptop. A tool lays its own panes out against the same two numbers. Left-to-right only. */
+:root[data-fold="columns"] .tk-sheet {
+    left: var(--fold-end);
+    width: min(520px, calc(100% - var(--fold-end) - 32px));
+}
+
+:root[data-fold="rows"] .tk-sheet {
+    top: var(--fold-end);
+    max-height: min(640px, calc(100% - var(--fold-end) - 24px));
+}
+
+:root[data-fold="columns"] .tk-toast {
+    left: calc(var(--fold-end) + (100% - var(--fold-end)) / 2);
+    max-width: calc(100% - var(--fold-end) - 32px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        transition-duration: .01ms !important;
+    }
+}

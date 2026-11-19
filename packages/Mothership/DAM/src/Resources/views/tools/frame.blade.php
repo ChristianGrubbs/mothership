@@ -1,7 +1,7 @@
 @php
     $words = collect([
         'back', 'reload', 'cancel', 'close', 'discard-close', 'discard-reload', 'ask-close', 'ask-close-work',
-        'ask-reload', 'opening', 'reloading', 'slow', 'failed', 'file', 'preferences',
+        'ask-reload', 'opening', 'reloading', 'slow', 'failed', 'file', 'preferences', 'sets', 'sets-open',
     ])->mapWithKeys(fn (string $key): array => [$key => trans('dam::app.admin.dam.tools.frame.'.$key, ['tool' => $tool['title']])]);
 @endphp
 
@@ -37,8 +37,27 @@
 
             <h1 class="bridge-toolbar-name">{{ $tool['title'] }}</h1>
 
-            {{-- A tool's saved sets, Export and "Save to Library" go here when the tool is restyled into the frame. --}}
+            {{-- What the tool says it has (tool-frame.js): its saved sets, Export, and the one filled control,
+                 "Save to Library". Each shows once the tool offers it; a tool not yet restyled offers none. --}}
+            <div class="bridge-toolset" data-tool-sets hidden>
+                <button type="button" class="bridge-toolset-btn" data-tool-sets-btn aria-haspopup="menu" aria-expanded="false" aria-controls="tool-sets-menu">
+                    <span data-tool-set-name></span>
+                    <x-admin::bridge.icon name="chevron-down" :size="16" />
+                </button>
+
+                <div class="bridge-toolset-menu" id="tool-sets-menu" role="menu" data-tool-sets-menu hidden></div>
+            </div>
+
             <p class="bridge-toolbar-status" role="status" data-tool-status></p>
+
+            <button type="button" class="bridge-btn-card bridge-toolbar-act" data-tool-export hidden>
+                <x-admin::bridge.icon name="download" :size="16" />
+                <span>@lang('dam::app.admin.dam.tools.frame.export')</span>
+            </button>
+
+            @if ($canSave)
+                <button type="button" class="bridge-btn-act bridge-toolbar-act" data-tool-library hidden>@lang('dam::app.admin.dam.tools.frame.save-library')</button>
+            @endif
 
             <button type="button" class="bridge-btn-card bridge-toolbar-reload" data-tool-reload aria-label="@lang('dam::app.admin.dam.tools.frame.reload')">
                 <x-admin::bridge.icon name="rotate-cw" :size="16" />
@@ -77,6 +96,18 @@
                 </div>
             </div>
         </main>
+
+        {{-- On a phone the bar has no room for them, so Export and "Save to Library" sit under the tool, in reach. --}}
+        <footer class="bridge-toolfoot" data-tool-foot hidden>
+            <button type="button" class="bridge-btn-card" data-tool-export hidden>
+                <x-admin::bridge.icon name="download" :size="16" />
+                <span>@lang('dam::app.admin.dam.tools.frame.export')</span>
+            </button>
+
+            @if ($canSave)
+                <button type="button" class="bridge-btn-act" data-tool-library hidden>@lang('dam::app.admin.dam.tools.frame.save-library')</button>
+            @endif
+        </footer>
     </div>
 
     @push('scripts')
