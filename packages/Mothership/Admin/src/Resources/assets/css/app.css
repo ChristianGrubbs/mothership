@@ -2773,6 +2773,7 @@ a.bridge-tool-tile:hover .bridge-tool-well {
     color: var(--ink-2);
     font-size: 13.5px;
     line-height: 1.4;
+    overflow-wrap: anywhere;
 }
 
 .bridge-tool-foot {
@@ -2938,6 +2939,8 @@ a.bridge-tool-tile:hover .bridge-tool-well {
     max-height: min(420px, calc(100dvh - 88px));
     padding: 6px;
     overflow-y: auto;
+    /* Arrow keys stop a set short of the item held at the foot. */
+    scroll-padding-bottom: 56px;
     border-radius: 16px;
     background: var(--card);
     box-shadow: var(--lift), inset 0 0 0 1px var(--edge);
@@ -2988,10 +2991,17 @@ a.bridge-tool-tile:hover .bridge-tool-well {
     font-size: 12px;
 }
 
-.bridge-toolset-menu hr {
-    margin: 6px 4px;
-    border: 0;
-    border-top: 1px solid var(--line);
+/* Managing the sets stays in reach however long the list is: it holds the menu's foot while the sets scroll under it. */
+.bridge-toolset-menu [role="menuitem"] {
+    position: sticky;
+    bottom: 0;
+    border-radius: 0 0 10px 10px;
+    background: var(--card);
+}
+
+.bridge-toolset-menu [role="menuitemradio"] + [role="menuitem"] {
+    margin-top: 6px;
+    box-shadow: 0 -1px 0 var(--line), 0 6px 0 var(--card);
 }
 
 /* Book pose: the menu keeps to the leading screen, clear of the fold. */
@@ -3005,6 +3015,12 @@ html[data-fold="columns"] .bridge-toolset-menu {
 /* Export and Save to Library sit under the tool only on the phone form; the bar holds them everywhere else. */
 .bridge-toolfoot {
     display: none;
+}
+
+/* A sheet open inside the tool holds the one filled control, so the page's own actions step back until it closes. */
+.bridge-toolframe[data-tool-sheet] :is(.bridge-toolbar-act, .bridge-toolset, .bridge-toolfoot > *) {
+    opacity: .45;
+    pointer-events: none;
 }
 
 /* The question asked before work is lost: a band under the bar, so the tool stays in view while it is answered. */
@@ -3100,7 +3116,8 @@ html[data-fold="columns"] .bridge-toolset-menu {
         grid-template-columns: auto minmax(0, max-content) minmax(0, max-content) minmax(0, 1fr) auto auto auto;
         gap: 0;
         height: auto;
-        padding-block: 12px;
+        /* One pixel less below, for the bar's bottom line: 64 px in all. */
+        padding-block: 12px 11px;
     }
 
     .bridge-toolbar > * {
@@ -3166,7 +3183,7 @@ html[data-fold="columns"] .bridge-toolset-menu {
 /* A short window keeps the bar to 56 px, so the tool keeps the height. */
 @media (max-height: 500px) and (max-width: 1023px) {
     .bridge-toolbar {
-        padding-block: 8px;
+        padding-block: 8px 7px;
     }
 }
 
@@ -3174,7 +3191,7 @@ html[data-fold="columns"] .bridge-toolset-menu {
    wider window, an unfolded phone held upright or a closed one on its side, keeps the one-row band. */
 @media (max-width: 579px) {
     .bridge-toolbar {
-        padding: 8px 12px;
+        padding: 8px 12px 7px;
     }
 
     .bridge-toolbar > .bridge-toolbar-act {

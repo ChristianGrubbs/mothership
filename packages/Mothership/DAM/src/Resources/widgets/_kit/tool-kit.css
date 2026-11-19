@@ -267,6 +267,17 @@ button {
     accent-color: var(--act);
 }
 
+/* A browser draws a square ring round its own radio and checkbox, so the ring goes round the whole choice. */
+.tk-check input:focus-visible {
+    outline: none;
+}
+
+.tk-check:has(input:focus-visible) {
+    border-radius: 8px;
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 4px;
+}
+
 .tk-check small {
     color: var(--ink-2);
     font-size: 13px;
@@ -421,6 +432,11 @@ input[type="range"] {
     padding: 18px 20px;
     overflow-y: auto;
     overscroll-behavior: contain;
+}
+
+/* A scrolling body can take the keyboard's focus. Its ring stays inside, where the sheet does not clip it. */
+.tk-sheet-body:focus-visible {
+    outline-offset: -2px;
 }
 
 .tk-sheet-foot {

@@ -156,6 +156,13 @@
     grid-column: 1 / -1;
 }
 
+/* From 720 px the editor is a side pane about 300 px wide, too narrow for RGB beside HEX at the 16 px a field keeps. */
+@media (min-width: 720px) {
+    .ps-fields {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
 .ps-field-error {
     min-height: 0;
     color: var(--alert-text);

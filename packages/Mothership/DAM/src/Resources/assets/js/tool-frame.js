@@ -211,14 +211,16 @@
             setsBtn.title = name;
             setsMenu.setAttribute('aria-label', typeof shown?.setsLabel === 'string' ? shown.setsLabel.slice(0, 60) : words.sets);
             const items = list.map(set => menuItem({role: 'menuitemradio', label: set.name, note: set.current === true ? words['sets-open'] : '', checked: set.current === true, press: () => { command('open-set', {id: set.id}); iframe.focus(); }}));
-            if (manage) {
-                if (items.length) { const rule = document.createElement('hr'); rule.setAttribute('role', 'separator'); items.push(rule); }
-                items.push(menuItem({role: 'menuitem', label: manage, press: () => { command('manage-sets'); iframe.focus(); }}));
-            }
+            if (manage) items.push(menuItem({role: 'menuitem', label: manage, press: () => { command('manage-sets'); iframe.focus(); }}));
             setsMenu.replaceChildren(...items);
             exportButtons.forEach(button => { button.hidden = shown?.export !== true; });
             libraryButtons.forEach(button => { button.hidden = shown?.library !== true; });
             foot.hidden = shown?.export !== true && !(shown?.library === true && libraryButtons.length);
+        };
+        // A sheet open inside the tool holds the one filled control, so the bar's own actions step back until it closes.
+        const setSheet = open => {
+            root.toggleAttribute('data-tool-sheet', open);
+            [sets, ...exportButtons, ...libraryButtons].forEach(control => { control.inert = open; });
         };
         setsBtn.addEventListener('click', () => { if (!closeSets()) openSets(); });
         setsBtn.addEventListener('keydown', event => { if (event.key === 'ArrowDown' && setsMenu.hidden) { event.preventDefault(); openSets(); } });
@@ -243,6 +245,7 @@
             reportsWorkDocument = null;
             discardedDocument = currentDocument();
             showChrome(null);
+            setSheet(false);
             showStatus(null);
             setAway(false);
             showNote({text: words.reloading});
@@ -276,6 +279,7 @@
 
         iframe.addEventListener('load', () => {
             clearTimeout(slow);
+            setSheet(false);
             let identity;
             try { identity = iframe.contentWindow?.__MOTHERSHIP_FRAME__?.widget; } catch { identity = null; }
             if (identity === id) { booted = true; finishLaunch({phase: 'loaded'}); setAway(false); note.hidden = true; sendTheme(); sendFold(); post('active', {active: true}); return; }
@@ -312,6 +316,7 @@
             if (type === 'preference-error') showStatus({text: payload?.message || words.preferences, tone: 'error'});
             if (type === 'chrome') showChrome(payload);
             if (type === 'notice') showStatus(payload);
+            if (type === 'sheet') setSheet(payload?.open === true);
             // A tool may send params as it finishes loading, before anyone touched it. With the bridge, work comes
             // through dirty, so its params are not counted; a frame without the bridge can not say, so they are.
             const work = ['dirty', 'media-loaded'].includes(type) || (type === 'params' && !reportsWork());

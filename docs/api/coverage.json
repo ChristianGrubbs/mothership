@@ -1,18 +1,18 @@
 {
-  "accounted": 1598,
+  "accounted": 1599,
   "counts": {
     "api": 288,
     "authentication": 10,
     "head-alias": 495,
     "health": 1,
-    "internal": 760,
+    "internal": 761,
     "page": 2,
     "public-link": 40,
     "static": 2,
     "unsupported": 0
   },
   "missing": [],
-  "registered": 1598,
+  "registered": 1599,
   "routes": [
     {
       "id": "DELETE * /admin/ai-agent/agents/{id}",
@@ -6931,6 +6931,11 @@
     },
     {
       "id": "POST * /admin/tinymce/upload",
+      "kind": "internal",
+      "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory."
+    },
+    {
+      "id": "POST * /admin/tools/{widget}/library",
       "kind": "internal",
       "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory."
     },

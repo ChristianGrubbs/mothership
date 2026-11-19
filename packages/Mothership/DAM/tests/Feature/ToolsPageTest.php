@@ -1,7 +1,10 @@
 <?php
 
 use Carbon\CarbonImmutable;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Mothership\DAM\Models\Directory;
 use Mothership\User\Models\Admin;
 use Mothership\User\Models\Role;
 
@@ -26,6 +29,22 @@ function toolTiles(string $html): array
     }
 
     return $tiles;
+}
+
+/** What the server tells a tool's own page about itself. */
+function toolBootstrap(string $html): array
+{
+    preg_match('#window\.__MOTHERSHIP_FRAME__=(.*?);</script>#s', $html, $match);
+
+    return json_decode($match[1] ?? 'null', true, flags: JSON_THROW_ON_ERROR);
+}
+
+/** An account that may open the tools every account has, and may not upload. */
+function toolsNarrowAdmin(): Admin
+{
+    $role = Role::factory()->create(['permission_type' => 'custom', 'permissions' => ['settings']]);
+
+    return Admin::factory()->create(['role_id' => $role->id, 'timezone' => 'UTC']);
 }
 
 beforeEach(function () {
@@ -119,4 +138,63 @@ it('requires a signed-in account', function () {
 
     $this->get('/admin/tools')->assertRedirect(route('admin.session.create'));
     $this->get('/admin/tools/plaque')->assertRedirect(route('admin.session.create'));
+    $this->get('/admin/home/tools/_kit/tool-kit.css')->assertRedirect(route('admin.session.create'));
+    $this->post(route('admin.tools.library', ['widget' => 'plaque']))->assertRedirect(route('admin.session.create'));
+});
+
+it('serves the tool kit to any signed-in account, and nothing but its style sheets', function () {
+    $this->actingAs(toolsNarrowAdmin(), 'admin');
+
+    $kit = $this->get('/admin/home/tools/_kit/tool-kit.css')->assertOk();
+    expect($kit->headers->get('Content-Type'))->toStartWith('text/css');
+
+    $this->get('/admin/home/tools/_kit/no-such-sheet.css')->assertNotFound();
+    $this->get('/admin/home/tools/_kit/..%2Fpalette-studio%2Fapp.js')->assertNotFound();
+    // The kit is not a tool, so reading it is nobody's use of one.
+    expect(DB::table('dam_home_tool_uses')->count())->toBe(0);
+});
+
+it('offers Save to Library only to an account that may upload', function () {
+    // The bar's button and the phone form's, both hidden until the tool says it can save. The page's inline script
+    // names the selector too, so the buttons are counted by their markup.
+    expect(substr_count($this->get('/admin/tools/palette-studio')->assertOk()->getContent(), 'data-tool-library hidden'))->toBe(2);
+    $page = $this->get('/admin/home/tools/palette-studio/index.html')->assertOk()->getContent();
+    expect(toolBootstrap($page)['library']['save'])->toBe(route('admin.tools.library', ['widget' => 'palette-studio']))
+        // The tool is drawn in the app's own typefaces.
+        ->and($page)->toContain('<style data-tool-faces>');
+
+    $this->actingAs(toolsNarrowAdmin(), 'admin');
+    expect(substr_count($this->get('/admin/tools/palette-studio')->assertOk()->getContent(), 'data-tool-library hidden'))->toBe(0);
+    expect(toolBootstrap($this->get('/admin/home/tools/palette-studio/index.html')->assertOk()->getContent()))->not->toHaveKey('library');
+});
+
+it('saves a tool\'s file through the Library upload and records the tool that made it', function () {
+    Storage::fake(Directory::getAssetDisk());
+    $directory = Directory::factory()->create();
+
+    $response = $this->post(route('admin.tools.library', ['widget' => 'palette-studio']), [
+        'directory_id' => $directory->id,
+        'files'        => [UploadedFile::fake()->createWithContent('harbour.txt', 'tokens')],
+    ], ['Accept' => 'application/json'])->assertCreated()->assertJsonPath('success', true);
+
+    $saves = DB::table('dam_tool_saves')->get()->map(fn ($row) => [(int) $row->asset_id, (int) $row->admin_id, $row->widget])->all();
+    expect($saves)->toBe([[(int) $response->json('files.0.id'), (int) $this->toolsAdmin->id, 'palette-studio']]);
+});
+
+it('records nothing when a save is refused', function () {
+    Storage::fake(Directory::getAssetDisk());
+    $directory = Directory::factory()->create();
+    $file = fn () => UploadedFile::fake()->createWithContent('harbour.txt', 'tokens');
+    $headers = ['Accept' => 'application/json'];
+
+    // No folder: the Library's own rules answer.
+    $this->post(route('admin.tools.library', ['widget' => 'palette-studio']), ['files' => [$file()]], $headers)->assertUnprocessable();
+    // Only a tool may save, and only a tool that exists.
+    $this->post(route('admin.tools.library', ['widget' => 'rss']), ['directory_id' => $directory->id, 'files' => [$file()]], $headers)->assertNotFound();
+    $this->post(route('admin.tools.library', ['widget' => 'no-such-tool']), ['directory_id' => $directory->id, 'files' => [$file()]], $headers)->assertNotFound();
+
+    $this->actingAs(toolsNarrowAdmin(), 'admin');
+    $this->post(route('admin.tools.library', ['widget' => 'palette-studio']), ['directory_id' => $directory->id, 'files' => [$file()]], $headers)->assertForbidden();
+
+    expect(DB::table('dam_tool_saves')->count())->toBe(0);
 });

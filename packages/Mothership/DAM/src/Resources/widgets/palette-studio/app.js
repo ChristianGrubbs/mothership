@@ -394,6 +394,11 @@
         status.replaceChildren();
         status.classList.remove('is-error');
         sheet.showModal();
+        // The first control takes the focus, never a scrolling body. A text field is passed over: on a phone it would
+        // raise the keyboard over a sheet that was only opened.
+        const first = sheet.querySelector('.tk-sheet-body :is(button, select, input:not([type="text"], [type="file"])):not(:disabled)')
+            ?? sheet.querySelector('.tk-sheet-foot button:not(:disabled)');
+        first?.focus();
     }
 
     function showPane(name) {
@@ -446,7 +451,8 @@
             const text = `Saved ${plural(saved.count, 'file')} to ${folders.find(item => item.id === folder)?.name || 'the Library'}.`;
             $('[data-sheet="library"]').close();
             frame.notice({ text, ...(saved.url ? { link: { label: 'Open in Library', url: saved.url } } : {}) });
-            say(text);
+            // Where the page draws a bar, its status line says it once, with the link. Elsewhere the tool says it.
+            if (!frame.bar) say(text);
         } catch (error) {
             setLibrary({ message: error.message || 'The files could not be saved. Try again.', error: true });
         }

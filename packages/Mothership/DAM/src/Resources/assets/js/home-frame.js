@@ -34,6 +34,9 @@
     document.addEventListener('drop',()=>notify('dirty'),{capture:true});
     // An Escape that closes a sheet inside the tool is the tool's own: it is not passed on as a wish to leave.
     document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!document.querySelector('dialog[open]')){notify('escape');}});
+    // The page that frames this tool steps its own actions back while a sheet is open here, so one filled control shows.
+    let sheetOpen=false;
+    if(typeof MutationObserver==='function')new MutationObserver(()=>{const open=Boolean(document.querySelector('dialog[open]'));if(open!==sheetOpen){sheetOpen=open;notify('sheet',{open});}}).observe(document.documentElement,{attributes:true,attributeFilter:['open'],subtree:true});
     document.addEventListener('DOMContentLoaded',()=>{
         // reportsWork: the listeners above tell Home when work starts, so Home may close this tool
         // without asking while none has been reported.

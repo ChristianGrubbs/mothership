@@ -55,7 +55,8 @@ class ToolsController extends Controller
     public function save(Request $request, string $widget, HomeWidgetRegistry $registry, ToolSaves $saves): JsonResponse
     {
         $definition = $registry->allowed($widget);
-        abort_unless($definition['kind'] === 'tool', 404);
+        // Only a framed tool has the bridge that posts here; a native widget of the tool kind (Signal) has none.
+        abort_unless($definition['kind'] === 'tool' && isset($definition['entry']), 404);
         abort_unless(bouncer()->hasPermission('dam.asset.upload'), 403, trans('dam::app.admin.permissions.unauthorized'));
 
         $response = app(AssetController::class)->upload($request);
