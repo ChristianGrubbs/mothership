@@ -51,12 +51,14 @@
         line.dataset.state = error ? 'error' : '';
     }
     // ---- what the page around the tool is told about work --------------------------------------------------------------
-    // The editor is marked data-agh-ephemeral, so typing in it reports no work by itself: every change is kept on this
-    // device shortly after. Closing the tool loses work only while a change waits to be kept, or after this browser
-    // refused to keep one. The tool says it holds work while either is true (ready with holdsWork: true, and dirty, as
-    // the Video Downloader does), and holdsWork: false once the set is kept. It speaks only when that changes.
-    let toldHost = null;
-    function tellHost(holdsWork) {
+    // The editor is marked data-agh-ephemeral, so typing in it reports no work by itself: every change to the set is
+    // kept on this device shortly after. Closing the tool loses work only while a change waits to be kept, after this
+    // browser refused to keep one, or while an open preset draft has been edited (a draft lives in memory until it is
+    // added to the set). The tool says it holds work while any of these is true (ready with holdsWork: true, and
+    // dirty, as the Video Downloader does), and holdsWork: false once none is. It speaks only when that changes.
+    let keeping = 'kept', toldHost = null; // keeping: 'kept', 'waiting' or 'refused'
+    function tellHost() {
+        const holdsWork = keeping !== 'kept' || Boolean(state.draft && state.draftEdited);
         if (window.parent === window || holdsWork === toldHost) return;
         toldHost = holdsWork;
         const tell = (type, payload = {}) => window.parent.postMessage({ protocol: 'mothership-widget/v1', type, payload }, location.origin);
@@ -66,7 +68,8 @@
     function autosave() {
         clearTimeout(saveTimer);
         kept('Keeping…');
-        tellHost(true);
+        keeping = 'waiting';
+        tellHost();
         saveTimer = setTimeout(async () => {
             saveTimer = null;
             const attempt = ++keeps;
@@ -75,13 +78,14 @@
                 // A later change may be waiting, or already being kept: only the latest attempt speaks.
                 if (attempt !== keeps || saveTimer) return;
                 kept('Kept on this device');
-                tellHost(false);
+                keeping = 'kept';
             } catch (error) {
                 log('autosave.failed', { message: String(error) });
                 if (attempt !== keeps) return;
                 kept('Not kept: this browser refused to store the set. Export it to keep it.', true);
-                tellHost(true);
+                keeping = 'refused';
             }
+            tellHost();
         }, 600);
     }
 
@@ -514,7 +518,7 @@
         if (state.draft) { apply(); afterDraftChange(rebuild); return; }
         change(`${p.id}:${path}`, apply, { rebuild });
     }
-    function afterDraftChange(rebuild) { if (rebuild) renderInspector(); draw(); }
+    function afterDraftChange(rebuild) { state.draftEdited = true; tellHost(); if (rebuild) renderInspector(); draw(); }
     const inspector = $('[data-inspector]');
     inspector.addEventListener('input', event => {
         const input = event.target.closest('[data-k]');
@@ -592,6 +596,8 @@
         stop();
         const plaque = mine ? { ...JSON.parse(JSON.stringify(preset.plaque)), id: C.uid('p') } : C.fromPreset(preset);
         state.draft = plaque;
+        state.draftEdited = false;
+        tellHost();
         state.draftPreset = mine ? preset.id : null;
         $('[data-draft-banner]').hidden = false;
         $('[data-draft-name]').textContent = preset.name;
@@ -601,6 +607,7 @@
     function endDraft(commit) {
         const draft = state.draft;
         state.draft = null;
+        state.draftEdited = false;
         $('[data-draft-banner]').hidden = true;
         if (commit && draft) {
             if (state.draftPreset) presetLinks.set(draft.id, state.draftPreset);
@@ -608,6 +615,7 @@
             toast('Added to the set');
         } else { renderList(); renderInspector(); showStill(); updateButtons(); }
         state.draftPreset = null;
+        tellHost(); // added: the set's own save now carries the work; discarded: nothing is left to lose
     }
     async function savePreset(update) {
         const p = editing();
@@ -911,7 +919,7 @@
         log('import.done', { source, plaques: state.set.plaques.length, fixes: result.errors.length });
         return true;
     }
-    function endDraftSilently() { if (state.draft) { state.draft = null; state.draftPreset = null; $('[data-draft-banner]').hidden = true; } }
+    function endDraftSilently() { if (state.draft) { state.draft = null; state.draftEdited = false; state.draftPreset = null; $('[data-draft-banner]').hidden = true; tellHost(); } }
     async function openDialog() {
         $('[data-open-errors]').innerHTML = '';
         $('[data-paste-text]').value = '';

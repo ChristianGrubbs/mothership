@@ -13,8 +13,9 @@
 </head>
 <body>
     <!-- The set is kept on this device as it changes, so typing here is not reported as work: data-agh-ephemeral keeps
-         the page that frames the tool from asking before it closes. While a change waits to be kept, or after the
-         browser refused to keep one, app.js reports work itself (tellHost). The tool's name, "Open a set", Export and "Save to
+         the page that frames the tool from asking before it closes. While a change waits to be kept, after the
+         browser refused to keep one, or while an open preset draft has been edited, app.js reports work itself
+         (tellHost). The tool's name, "Open a set", Export and "Save to
          Library" are drawn by that page's bar (app.js tells it what to show); [data-own-bar] stands in where no bar is
          drawn. -->
     <main class="plq" data-plq data-agh-ephemeral data-view="plaques">
