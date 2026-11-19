@@ -179,6 +179,23 @@ html[data-fold="columns"] .bridge-tools-grid[data-fold-split] {
     grid-template-columns: calc(var(--fold-start, 50%) - 7px) minmax(0, 1fr);
     column-gap: calc(var(--fold-gap, 0px) + 14px);
 }
+/* Laptop, where the tiles are cards in columns: the first row fills the upper segment and stops 7px short of the fold,
+   and the next row starts 7px past the fold, past the hinge band when there is one. The fold sits in the grid's 14px
+   gutter, as in book pose. A first row taller than the room above the fold keeps its own height. */
+@container tools (width >= 440px) {
+    html[data-fold="rows"] .bridge-tools-grid[data-fold-split] {
+        grid-template-rows: minmax(calc(var(--fold-top, 0px) - 7px), auto);
+    }
+}
+@container tools (440px <= width < 680px) {
+    html[data-fold="rows"] .bridge-tools-grid[data-fold-split] > li:nth-child(n + 3):nth-child(-n + 4) { margin-top: var(--fold-gap, 0px); }
+}
+@container tools (680px <= width < 960px) {
+    html[data-fold="rows"] .bridge-tools-grid[data-fold-split] > li:nth-child(n + 4):nth-child(-n + 6) { margin-top: var(--fold-gap, 0px); }
+}
+@container tools (width >= 960px) {
+    html[data-fold="rows"] .bridge-tools-grid[data-fold-split] > li:nth-child(n + 5):nth-child(-n + 8) { margin-top: var(--fold-gap, 0px); }
+}
 
 /* Home's dialogs (upload, calendar, event editor, iPhone app), its tool workspace and its phone sheet.
    Book: inside the trailing segment, as the generic dialogs are; the calendar alone takes both segments (further down).
