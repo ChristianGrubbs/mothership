@@ -17,19 +17,23 @@ const playwrightPath = process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH;
 const browserTest = playwrightPath ? test : test.skip;
 const ORIGIN = 'https://home.test';
 
-// The shell's parts that Home lays out against, at the sizes the shell gives them on a phone: a 60px top bar, the page
-// scrolling inside #main-content, the analytics notice under it, a 78px tab bar fixed to the bottom, and the
-// assistant's round button floating bottom right. Headings and paragraphs carry no margins, as under the shell's reset.
+// The shell's parts that Home lays out against, at the sizes the shell gives them: a 60px top bar, the page scrolling
+// inside #main-content, the one-line analytics notice under it, and the assistant's round button floating bottom right.
+// In the shell's phone form a 78px tab bar is fixed to the bottom and the notice sits above it; every other screen has
+// the icon rail, 72px wide up to 1179px. Headings and paragraphs carry no margins, as under the shell's reset.
 const SHELL_STYLES = `@font-face{font-family:"Instrument Sans";font-weight:400 700;src:url(data:font/woff2;base64,${uiFont}) format("woff2")}
-:root{--font-ui:"Instrument Sans",sans-serif;--font-mono:ui-monospace,monospace}*{box-sizing:border-box}h1,h2,h3,p{margin:0}body{margin:0;font:15px/1.4 var(--font-ui)}
-.shell{display:flex;flex-direction:column;height:100vh}.shell>header{flex:none;height:60px}
+:root{--font-ui:"Instrument Sans",sans-serif;--font-mono:ui-monospace,monospace;--tabbar-space:0px}*{box-sizing:border-box}h1,h2,h3,p{margin:0}body{margin:0;font:15px/1.4 var(--font-ui)}
+.shell{display:flex;flex-direction:column;height:100vh;padding-inline-start:72px}.shell>header{flex:none;height:60px}
 #main-content{flex:1;min-height:0;overflow-y:auto;padding:12px 16px 0}
-footer[data-fold-wrap]{flex:none;padding:4px 16px;font-size:12px;line-height:1.35}
-[data-bridge-tabbar]{position:fixed;left:0;right:0;bottom:0;height:78px}
+footer[data-fold-wrap]{display:flex;flex:none;gap:.3em;margin-bottom:var(--tabbar-space);padding:4px 16px;font-size:12px;line-height:1.35;white-space:nowrap}
+.notice-short{display:none}
+[data-bridge-tabbar]{display:none;position:fixed;left:0;right:0;bottom:0;height:78px}
+@media (max-width:719px){.notice-long{display:none}.notice-short{display:inline}}
+@media (max-width:579px),(max-width:719px) and (min-height:501px){:root{--tabbar-space:calc(64px + max(14px,env(safe-area-inset-bottom,0px)))}.shell{padding-inline-start:0}[data-bridge-tabbar]{display:block}}
 .ap-fab{position:fixed;right:24px;bottom:24px;width:52px;height:52px;border-radius:50%}`;
 const shell = `<div class="shell"><header><a href="/admin/dam" class="bridge-top-upload" style="display:none" data-bridge-upload><span>Upload</span></a></header>
 <main id="main-content">${homeApp()}</main>
-<footer data-fold-wrap>The Mothership measures how its features are used, to improve them. <a href="/privacy">What is collected and how to opt out</a></footer></div>
+<footer data-fold-wrap><span class="notice-long">The Mothership measures how its features are used, to improve them.</span><span class="notice-short">Feature use is measured.</span><a href="/privacy"><span class="notice-long">What is collected and how to opt out</span><span class="notice-short">Details and opt-out</span></a></footer></div>
 <nav data-bridge-tabbar aria-label="Sections"></nav><button type="button" class="ap-fab" aria-label="Open the assistant"><svg width="24" height="24"></svg></button>`;
 
 // Five arrivals and something new: the tallest board and deck Home shows without a "more" line.
@@ -48,14 +52,14 @@ const manyArrivals = summary => { summary.lead.files = 186; summary.lead.since =
 const settled = page => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 const stacked = (width, height, gap) => { const top = Math.floor((height - gap) / 2); return [[0, 0, width, top], [0, top + gap, width, height - top - gap]]; };
 
-async function mount(browser, {width, height, segments = null, summary = arrivals, adjust = summary => summary, layoutFailures = 0}) {
+async function mount(browser, {width, height, segments = null, summary = arrivals, adjust = summary => summary, layoutFailures = 0, dir = 'ltr'}) {
     const page = await browser.newPage({viewport: {width, height}, reducedMotion: 'reduce'});
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     if (segments) {
         await page.addInitScript(rects => Object.defineProperty(window, 'viewport', {configurable: true,
             value: {segments: rects.map(rect => new DOMRect(...rect))}}), segments);
     }
-    await page.route(`${ORIGIN}/**`, route => route.fulfill({contentType: 'text/html', body: `<!doctype html>${shell}`}));
+    await page.route(`${ORIGIN}/**`, route => route.fulfill({contentType: 'text/html', body: `<!doctype html><html dir="${dir}">${shell}`}));
     await page.goto(`${ORIGIN}/admin/home`);
     await page.addStyleTag({content: `${SHELL_STYLES}${deviceCss}`});
     await page.addStyleTag({content: homeStyles});
@@ -199,6 +203,10 @@ browserTest('on its side the outer display stands the deck beside the board, wit
         assert.ok(found.action[3] <= found.notice[1] + 0.5, `the blue action ends above the notice: ${found.action} against ${found.notice}`);
         assert.ok(found.action[2] - found.action[0] >= 150, 'the action keeps a readable width');
         assert.ok(!meets(found.fab, found.deck) && !meets(found.fab, found.board), 'the assistant\'s button covers neither');
+        assert.equal(found.tabbar, null, 'this screen has the rail and no tab bar');
+        assert.ok(found.notice[3] - found.notice[1] <= 26 && found.notice[3] === 368, `the notice is one line on the bottom edge: ${found.notice}`);
+        const cell = await page.locator('[data-board-rows] .hm-k.k2 i').first().evaluate(node => ({width: node.getBoundingClientRect().width, type: parseFloat(getComputedStyle(node).fontSize)}));
+        assert.ok(cell.width >= 9 && cell.type >= 11, `the board stays readable: ${JSON.stringify(cell)}`);
         assert.equal(found.sideways, 0);
         assert.deepEqual(errors, []);
 
@@ -208,6 +216,150 @@ browserTest('on its side the outer display stands the deck beside the board, wit
         assert.ok(await many.page.locator('[data-board-more]').isVisible(), 'the line for the rest shows');
         assert.ok(full.action[3] <= full.notice[1] + 0.5 && !meets(full.fab, full.action), `with many arrivals the action ends above the notice: ${full.action} against ${full.notice}`);
         assert.deepEqual(many.errors, []);
+    } finally {
+        await browser.close();
+    }
+});
+
+browserTest('a phone on its side gets the same short, wide layout as the outer display', async () => {
+    const browser = await launchBrowser({playwrightPath});
+    try {
+        const {page, errors} = await mount(browser, {width: 667, height: 375, adjust: manyArrivals});
+        const found = await boxes(page);
+        assert.equal(found.time, null, 'the board keeps its phone columns');
+        assert.equal(found.side, null, 'the side cards wait in the sheet');
+        assert.ok(found.deck[0] >= found.board[2] - 0.5, `the deck stands beside the board: ${found.deck} and ${found.board}`);
+        assert.ok(found.action[3] <= found.notice[1] + 0.5, `the blue action ends above the notice: ${found.action} against ${found.notice}`);
+        assert.equal(found.sideways, 0);
+
+        // A row opens the sheet at its card; a screen tall enough for the cards on the page closes it and shows them.
+        await page.locator('[data-glance-open="away"]').click();
+        await settled(page);
+        const sheet = await page.evaluate(() => {
+            const rect = element => { const r = element.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; };
+            const body = document.querySelector('[data-sheet-body]');
+            return {open: document.querySelector('[data-side-sheet]').open, close: rect(document.querySelector('[data-sheet-close]')), body: rect(body), away: rect(document.querySelector('[data-away]')),
+                room: body.scrollHeight - body.clientHeight - body.scrollTop};
+        });
+        assert.ok(sheet.open, 'the row opens the sheet');
+        assert.ok(sheet.close[1] >= 0 && sheet.close[3] <= 375 && sheet.close[3] - sheet.close[1] >= 44, `Close is in view and full size: ${sheet.close}`);
+        assert.ok(Math.abs(sheet.away[1] - sheet.body[1]) <= 4 || sheet.room <= 1, `the sheet opens at the tapped card: ${JSON.stringify(sheet)}`);
+        await page.setViewportSize({width: 667, height: 501});
+        await page.waitForFunction(() => !document.querySelector('[data-side-sheet]').open && document.querySelector('[data-grid] > [data-side]'));
+        assert.ok((await boxes(page)).side, 'the side cards are back on the page');
+        assert.deepEqual(errors, []);
+    } finally {
+        await browser.close();
+    }
+});
+
+// One fresh and one seen landing, each with pictures, so Cargo draws a shelf of each kind.
+const cargoSummary = () => {
+    const picture = id => ({id, name: `Study ${id}`, type: 'image', extension: 'png', url: `/admin/dam/${id}`, thumbnail: `/thumbnail-${id}`});
+    const row = (key, status, files, ids) => ({key, status, source: 'craft', producer: 'claude-code', title: `Harbour study ${key}`, files, bytes: 2048, failed_files: 0,
+        at: new Date().toISOString(), kinds: [{extension: 'png', count: files}], previews: ids.map(picture)});
+    const rows = [row('asset:1', 'landed', 6, [1, 2, 3]), row('asset:2', 'seen', 4, [4, 5, 6])];
+    return window.__homeSummary({lead: {available: true, state: 'new', files: 6, bytes: 2048, since: null}, board: {rows, moving: [], cargo: rows, more: 0, truncated: false, docked: []}});
+};
+const shelves = page => page.evaluate(() => {
+    const centre = document.querySelector('.hm-centre').getBoundingClientRect();
+    return [...document.querySelectorAll('[data-cargo] .hm-shelf')].map(node => ({
+        seen: node.classList.contains('is-seen'), tile: parseFloat(node.style.getPropertyValue('--tile')), overflow: node.scrollWidth - node.clientWidth,
+        outside: [...node.querySelectorAll('.hm-pic')].filter(pic => { const r = pic.getBoundingClientRect(); return r.left < centre.left - 0.5 || r.right > centre.right + 0.5; }).length,
+    }));
+});
+// The narrow column's tiles: at most 150px for fresh pictures and 110px for seen ones, inside the column.
+const narrowShelves = (found, where) => {
+    assert.deepEqual(found.map(shelf => shelf.seen), [false, true], `a fresh and a seen shelf at ${where}`);
+    for (const shelf of found) {
+        assert.ok(shelf.tile > 0 && shelf.tile <= (shelf.seen ? 110 : 150), `the narrow tile size at ${where}: ${JSON.stringify(shelf)}`);
+        assert.ok(shelf.overflow <= 1 && shelf.outside === 0, `the shelf stays inside its column at ${where}: ${JSON.stringify(shelf)}`);
+    }
+};
+
+browserTest('Cargo pictures take the narrow size in the leading half and on a phone on its side, and follow a change of layout', async () => {
+    const browser = await launchBrowser({playwrightPath});
+    try {
+        const {page, errors} = await mount(browser, {width: 1024, height: 768, summary: cargoSummary});
+        await page.locator('[data-cargo] .hm-shelf').first().waitFor();
+        assert.ok((await shelves(page)).some(shelf => shelf.tile > (shelf.seen ? 110 : 150)), 'the wide layout gives the pictures more room');
+        // Narrowing into the folded halves redraws the shelves at the narrow size, clear of the fold.
+        await page.setViewportSize({width: 951, height: 585});
+        await page.waitForFunction(() => [...document.querySelectorAll('[data-cargo] .hm-shelf')].every(node => parseFloat(node.style.getPropertyValue('--tile')) <= (node.classList.contains('is-seen') ? 110 : 150)));
+        await settled(page);
+        narrowShelves(await shelves(page), '951 after a resize');
+        assert.deepEqual(await acrossFold(page, [475.5, 475.5]), [], 'no picture lies across the middle of the screen');
+        assert.equal((await boxes(page)).sideways, 0);
+        assert.deepEqual(errors, []);
+
+        for (const [width, height] of [[951, 585], [667, 375]]) {
+            const fresh = await mount(browser, {width, height, summary: cargoSummary});
+            await fresh.page.locator('[data-cargo] .hm-shelf').first().waitFor();
+            narrowShelves(await shelves(fresh.page), `${width}x${height}`);
+            assert.equal((await boxes(fresh.page)).sideways, 0);
+            assert.deepEqual(fresh.errors, []);
+            await fresh.page.close();
+        }
+    } finally {
+        await browser.close();
+    }
+});
+
+browserTest('without the assistant\'s button the notice is one line, and a small phone keeps the tallest board\'s action above it', async () => {
+    const browser = await launchBrowser({playwrightPath});
+    try {
+        const {page, errors} = await mount(browser, {width: 375, height: 553, adjust: manyArrivals});
+        assert.ok((await boxes(page)).notice[3] - (await boxes(page)).notice[1] >= 44, 'with the button the strip carries it');
+        await page.locator('.ap-fab').evaluate(button => button.remove());
+        await settled(page);
+        const found = await boxes(page);
+        assert.ok(found.notice[3] - found.notice[1] <= 26, `the notice is one line: ${found.notice}`);
+        assert.ok(found.notice[3] <= found.tabbar[1] + 0.5, 'the notice sits above the tab bar');
+        assert.ok(found.action[3] <= found.notice[1] + 0.5, `the blue action ends above the notice: ${found.action} against ${found.notice}`);
+        assert.deepEqual(errors, []);
+    } finally {
+        await browser.close();
+    }
+});
+
+// Everything that can be tapped or read as one block, and whether any of it lies across the fold's columns.
+const acrossFold = (page, [from, to]) => page.evaluate(([from, to]) => [...document.querySelectorAll('#main-content a[href], #main-content button, #main-content select, .hm-board, .hm-deck, .hm-card, .hm-land, .hm-tool')]
+    .filter(node => { const r = node.getBoundingClientRect(); return r.width && r.height && r.left < Math.max(to, from + 1) && r.right > Math.min(from, to - 1); })
+    .map(node => node.className || node.tagName), [from, to]);
+const halves = page => page.evaluate(() => { const box = selector => { const r = document.querySelector(selector).getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; }; return {centre: box('.hm-centre'), side: box('[data-grid] > [data-side]'), glance: document.querySelector('[data-glance]').getBoundingClientRect().height}; });
+
+browserTest('opened and held sideways, Home is two halves that meet at the fold, flat or folded', async () => {
+    const browser = await launchBrowser({playwrightPath});
+    try {
+        const flat = await mount(browser, {width: 951, height: 585});
+        const open = await halves(flat.page);
+        assert.equal(open.glance, 0, 'the row buttons go when their cards are on the screen');
+        assert.equal(await flat.page.locator('[data-board-rows] .hm-frow').first().locator('.hm-k i').evaluateAll(cells => cells.filter(cell => cell.getBoundingClientRect().width).length), 24);
+        assert.deepEqual(await acrossFold(flat.page, [475.5, 475.5]), [], 'nothing lies across the middle of the screen');
+        assert.equal((await boxes(flat.page)).sideways, 0);
+        assert.deepEqual(flat.errors, []);
+
+        // Folding moves nothing where the fold has no width.
+        const book = await mount(browser, {width: 951, height: 585, segments: [[0, 0, 475, 585], [475, 0, 476, 585]]});
+        const folded = await halves(book.page);
+        assert.ok(Math.abs(folded.centre[2] - open.centre[2]) <= 1 && Math.abs(folded.side[0] - open.side[0]) <= 1, `folding keeps the halves: ${folded.centre} and ${open.centre}`);
+        assert.deepEqual(await acrossFold(book.page, [475, 475]), []);
+
+        // A hinge with width, and a fold off the middle, in both reading directions.
+        for (const dir of ['ltr', 'rtl']) {
+            const hinge = await mount(browser, {width: 951, height: 585, dir, segments: [[0, 0, 440, 585], [480, 0, 471, 585]]});
+            const found = await halves(hinge.page);
+            assert.deepEqual(await acrossFold(hinge.page, [440, 480]), [], `nothing lies on the hinge in ${dir}`);
+            const [first, second] = dir === 'ltr' ? [found.centre, found.side] : [found.side, found.centre];
+            assert.ok(first[2] <= 440 && second[0] >= 480, `each half keeps to its side in ${dir}: ${first} and ${second}`);
+            assert.deepEqual(hinge.errors, []);
+        }
+
+        // Past this range the wide layout starts; below it Home is one column with its row buttons.
+        const wide = await halves((await mount(browser, {width: 1024, height: 768})).page);
+        assert.ok(wide.side[0] > wide.centre[2] && wide.glance === 0, 'at 1024 the cards stand beside the page');
+        const narrow = await halves((await mount(browser, {width: 899, height: 768})).page);
+        assert.ok(narrow.side[1] >= narrow.centre[3] - 0.5 && narrow.glance > 0, 'at 899 the page is one column');
     } finally {
         await browser.close();
     }
