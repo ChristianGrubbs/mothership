@@ -493,6 +493,24 @@ browserTest('a saved sound being renamed draws one edge, its field\'s, not the r
     } finally { await browser.close(); }
 });
 
+browserTest('on a touch screen the field that renames a saved sound is 16 px, where Safari would zoom into a smaller one', async () => {
+    const browser = await launch();
+    try {
+        const sizes = [];
+        for (const hasTouch of [true, false]) {
+            const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch, reducedMotion: 'reduce' });
+            await page.goto(pageUrl);
+            await page.locator('[data-name]').filter({ hasNotText: /^Sound$/ }).waitFor();
+            await saveTakes(page, 1);
+            await page.locator('[data-sheet="saved"] [role="option"]').first().click();
+            await page.locator('[data-rename]').click();
+            sizes.push(await page.locator('[data-rename-input]').evaluate(node => getComputedStyle(node).fontSize));
+            await page.close();
+        }
+        assert.deepEqual(sizes, ['16px', '14.5px'], 'touch, then a mouse');
+    } finally { await browser.close(); }
+});
+
 browserTest('the panes follow the tool\'s width, and nothing scrolls sideways', async () => {
     const browser = await launch();
     try {

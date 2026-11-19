@@ -64,8 +64,8 @@ const sheetOpen = (tool, name) => tool.locator(`[data-sheet="${name}"]`).evaluat
 
 // Serves the tool from disk at the path Home serves it from. Home's context answer (Library and AI) is not found, as
 // on a page that offers neither; the bridge, where there is one, offers the Library.
-async function open(browser, { bridge = false, framed = false, width = 1440, height = 900 } = {}) {
-    const page = await browser.newPage({ viewport: { width, height }, reducedMotion: 'reduce' });
+async function open(browser, { bridge = false, framed = false, width = 1440, height = 900, touch = false } = {}) {
+    const page = await browser.newPage({ viewport: { width, height }, hasTouch: touch, reducedMotion: 'reduce' });
     page.setDefaultTimeout(10000);
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
@@ -193,6 +193,33 @@ browserTest('Save to Library sends a render, the sound and the set file, remembe
         assert.equal(await page.evaluate(() => window.__told.notices.length), 1, 'the open sheet says it; the bar does not');
         assert.deepEqual(errors, []);
         await page.close();
+    } finally { await browser.close(); }
+});
+
+browserTest('on a touch screen no field is under 16 px, where Safari would zoom in; with a mouse the editor and the paste boxes keep their sizes', async () => {
+    const browser = await launch();
+    try {
+        const seen = {};
+        for (const touch of [true, false]) {
+            const { page, errors } = await open(browser, { touch, width: 1024, height: 768 });
+            assert.equal(await page.evaluate(() => matchMedia('(pointer: coarse)').matches), touch);
+            await addBlank(page);
+            await page.locator('.plq-edit .field input[type="text"]').first().waitFor({ state: 'attached' });
+            seen[touch ? 'touch' : 'mouse'] = await page.evaluate(() => {
+                const skip = ['checkbox', 'radio', 'range', 'color', 'file', 'hidden'];
+                const fields = [...document.querySelectorAll('input, select, textarea')].filter(node => !skip.includes(node.type));
+                const size = node => getComputedStyle(node).fontSize;
+                return {
+                    small: fields.filter(node => parseFloat(size(node)) < 16).map(node => `${node.outerHTML.slice(0, 70)} ${size(node)}`),
+                    editor: [...new Set(fields.filter(node => node.closest('.plq-edit .field')).map(size))],
+                    paste: [...new Set([...document.querySelectorAll('.plq-paste')].map(size))],
+                };
+            });
+            assert.deepEqual(errors, []);
+            await page.close();
+        }
+        assert.deepEqual(seen.touch.small, [], 'every field on a touch screen');
+        assert.deepEqual([seen.mouse.editor, seen.mouse.paste], [['14.5px'], ['12.5px']], 'with a mouse');
     } finally { await browser.close(); }
 });
 
