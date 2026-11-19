@@ -2169,8 +2169,28 @@ a.bridge-review-name:hover {
         padding: 0;
     }
 
+    /* In the icon rail every submenu is a fly-out beside the rail, the current page's too: opened inline, as it is
+       in the wide rail, its links would be cut off by the rail's 72 px. It shows on hover or focus like the others
+       (the sidebar's script holds it open; the hover rule is what is left if that script does not run). */
     .bridge-rail-row > .bridge-rail-flyout {
+        position: fixed;
         left: calc(var(--rail-w-collapsed) - 4px);
+        z-index: 100;
+        min-width: 200px;
+        padding: 6px;
+        background: var(--card);
+        border: 1px solid var(--edge);
+        border-radius: 14px;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, .14);
+    }
+
+    .bridge-rail-row > .bridge-rail-flyout.is-open {
+        display: none;
+    }
+
+    .bridge-rail-row:hover > .bridge-rail-flyout.is-open,
+    .bridge-rail-row:focus-within > .bridge-rail-flyout.is-open {
+        display: grid;
     }
 }
 
