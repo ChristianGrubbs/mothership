@@ -10,9 +10,10 @@
     />
 
     {{-- One tile per tool (ToolsController::index). A tile is one link; a tool this install has not set up is shown
-         to full admins only, as a tile that is not a link. The grid follows this block's own width (app.css, "Tools"). --}}
+         to full admins only, as a tile that is not a link. The grid follows this block's own width (app.css, "Tools");
+         on a folded screen it puts one column of tiles on each side of the fold (public/pwa/device.css). --}}
     <div class="bridge-tools" data-tools-page>
-        <ul class="bridge-tools-grid">
+        <ul class="bridge-tools-grid" data-fold-split>
             @foreach ($tiles as $tile)
                 <li>
                     @if ($tile['url'])

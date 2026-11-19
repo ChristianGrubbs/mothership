@@ -173,6 +173,12 @@ html[data-fold="columns"] .agh-grid[data-fold-split] {
     grid-template-columns: var(--fold-start, 1fr) minmax(0, 1fr);
     column-gap: var(--fold-gap, 0px);
 }
+/* Tools. Book: one column of tiles on each segment. The grid's 14px gap is split around the fold, so each column stops
+   7px short of it and no tile rests on it; the tiles keep their order. */
+html[data-fold="columns"] .bridge-tools-grid[data-fold-split] {
+    grid-template-columns: calc(var(--fold-start, 50%) - 7px) minmax(0, 1fr);
+    column-gap: calc(var(--fold-gap, 0px) + 14px);
+}
 
 /* Home's dialogs (upload, calendar, event editor, iPhone app), its tool workspace and its phone sheet.
    Book: inside the trailing segment, as the generic dialogs are; the calendar alone takes both segments (further down).
