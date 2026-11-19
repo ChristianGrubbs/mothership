@@ -10,7 +10,7 @@
 
 {{--
     The Bridge top bar (redesign v2): no fill and no rule, it sits on the ground above the page.
-    Wide screens show the command field and the theme segment; below 720px it becomes the phone bar
+    Wide screens show the command field and the theme segment; in the phone form of the shell it becomes the phone bar
     (lockup, search, bell, account) and the tab bar takes the navigation.
 --}}
 <header class="mothership-header bridge-top relative shrink-0 z-[10001]" data-fold-split>
@@ -52,7 +52,7 @@
             {{-- Feedback & bug reports: opens the layout's report dialog (dam::components.feedback.dialog); Alt+Shift+B too. --}}
             <button
                 type="button"
-                class="bridge-icon-btn max-[719px]:hidden"
+                class="bridge-icon-btn bridge-phone-hide"
                 aria-label="@lang('dam::app.admin.feedback.ui.open')"
                 aria-keyshortcuts="Alt+Shift+B"
                 title="@lang('dam::app.admin.feedback.ui.openShort') (Alt+Shift+B)"
@@ -261,7 +261,7 @@
     <x-slot:content class="p-4">
         <div class="h-[calc(100vh-100px)] overflow-auto journal-scroll">
             {{-- Phones: the top bar has no room for the theme segment, so the More drawer carries it. --}}
-            <div class="mb-4 min-[720px]:hidden">
+            <div class="mb-4 bridge-phone-only">
                 <v-dark></v-dark>
             </div>
 
