@@ -471,7 +471,67 @@ private func processCheck(
         snapshot.ollama = OllamaReading(version: "0.40.16", loadedModels: count)
         let value = healthRows(snapshot: snapshot, overall: .online)[4].value
         #expect(value == "\(count) loaded")
-        #expect(!flapCells(value, count: 14).contains("…"))
+        #expect(!flapCells(value, count: FlapBoardCells.status).contains("…"))
+    }
+}
+
+@Test func downBridgesAndContainersReadInFull() {
+    func bridgesValue(_ bridges: [BridgeReading]) -> String {
+        healthRows(snapshot: HealthSnapshot(bridges: bridges), overall: .degraded)[3].value
+    }
+    let optimizer = BridgeReading(name: "Optimizer", ok: true)
+    let ai = BridgeReading(name: "AI", ok: true)
+    let video = BridgeReading(name: "Video", ok: true)
+    func down(_ bridge: BridgeReading) -> BridgeReading { BridgeReading(name: bridge.name, ok: false) }
+    #expect(bridgesValue([optimizer, ai, down(video)]) == "Video down")
+    #expect(bridgesValue([down(optimizer), ai, video]) == "Optimizer down")
+    #expect(bridgesValue([optimizer, down(ai), down(video)]) == "AI, Video down")
+    #expect(bridgesValue([down(optimizer), down(ai), video]) == "1 of 3 up")
+    #expect(bridgesValue([down(optimizer), down(ai), down(video)]) == "All 3 down")
+    #expect(bridgesValue([]) == "Not set up")
+
+    func containersValue(down names: [String]) -> String {
+        let reading = ContainerReading(running: 13 - names.count, total: 13, notRunning: names)
+        return healthRows(snapshot: HealthSnapshot(containers: reading), overall: .degraded)[1].value
+    }
+    #expect(containersValue(down: ["fpm"]) == "fpm down")
+    #expect(containersValue(down: ["scheduler"]) == "scheduler down")
+    #expect(containersValue(down: ["vectorization_queue"]) == "12 of 13 up")
+    #expect(containersValue(down: ["fpm", "redis"]) == "11 of 13 up")
+}
+
+@Test func everyRowReadsInFullOnTheBoard() {
+    let roles = [
+        "postgres", "mailpit", "ai_index_queue", "nginx", "elasticsearch", "queue", "fpm", "vectorization_queue",
+        "looper", "panorama_queue", "stylepress_queue", "scheduler", "redis",
+    ]
+    var snapshots: [HealthSnapshot] = [healthy, HealthSnapshot()]
+    for role in roles {
+        var snapshot = healthy
+        snapshot.containers = ContainerReading(running: 12, total: 13, notRunning: [role])
+        snapshots.append(snapshot)
+    }
+    var many = healthy
+    many.containers = ContainerReading(running: 3, total: 13, notRunning: Array(roles.prefix(10)))
+    many.site = SiteReading(publicStatus: 530, publicMs: 300, originStatus: 502)
+    many.tunnel = TunnelReading(jobRunning: true, readyConnections: 0)
+    many.bridges = [BridgeReading(name: "Optimizer", ok: false), BridgeReading(name: "AI", ok: false),
+                    BridgeReading(name: "Video", ok: true)]
+    many.ollama = OllamaReading(version: nil, loadedModels: 0)
+    snapshots.append(many)
+    var unreadable = HealthSnapshot()
+    unreadable.unreadable = [.containers, .bridges]
+    snapshots.append(unreadable)
+    for snapshot in snapshots {
+        for overall in [Overall.online, .degraded, .offline, .restarting] {
+            for row in healthRows(snapshot: snapshot, overall: overall) {
+                #expect(row.value.count <= FlapBoardCells.status, "\(row.name): \(row.value)")
+            }
+        }
+    }
+    for (isChecking, checkFailed) in [(true, false), (false, true), (false, false)] {
+        let value = craftRowValue(status: nil, isChecking: isChecking, checkFailed: checkFailed)
+        #expect(value.count <= FlapBoardCells.status - 1, "ArtCraft keeps one cell for its arrow: \(value)")
     }
 }
 

@@ -23,9 +23,9 @@ extension EnvironmentValues {
 }
 
 enum FlapMetrics {
-    static let rowCells = 25
-    static let nameCells = 10
-    static let stripCells = 16
+    static let rowCells = FlapBoardCells.row
+    static let nameCells = FlapBoardCells.name
+    static let stripCells = FlapBoardCells.strip
     static let padding: CGFloat = 16
     static let lampColumn: CGFloat = 22
     static let cellGap: CGFloat = 2

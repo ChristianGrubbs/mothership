@@ -12,6 +12,14 @@ public enum FlapTiming {
     public static let squash = 0.82
 }
 
+/// The panel board's width in cells. A service row's status gets what the name and the gap after it leave.
+public enum FlapBoardCells {
+    public static let row = 25
+    public static let name = 10
+    public static let strip = 16
+    public static let status = row - name - 1
+}
+
 public let flapBlank: Character = " "
 private let flapPassing = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 
