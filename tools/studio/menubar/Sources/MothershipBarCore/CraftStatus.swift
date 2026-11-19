@@ -118,16 +118,18 @@ public struct ConfirmCopy: Sendable, Equatable {
     public var message: String
     public var button: String
     public var isDestructive: Bool
+    /// True while the answer the person needs is still being read, so the button stays off.
+    public var isWaiting = false
 }
 
 /// What the panel says before an action that interrupts someone.
-public func confirmCopy(for kind: ActionKind, mcp: CraftMCPStatus?) -> ConfirmCopy {
+public func confirmCopy(for kind: ActionKind, mcp: CraftMCPStatus?, queues: QueueCheck? = nil) -> ConfirmCopy {
     switch kind {
     case .stop:
         ConfirmCopy(
             title: "Stop the site?", message: "Visitors get an error until you start it again.",
             button: "Stop Site", isDestructive: true
-        )
+        ).adding(queues, verb: "Stopping", anyway: "Stop Anyway")
     case .craftEngines:
         ConfirmCopy(
             title: "Update the engines?",
@@ -144,7 +146,7 @@ public func confirmCopy(for kind: ActionKind, mcp: CraftMCPStatus?) -> ConfirmCo
         ConfirmCopy(
             title: "Restart the site?", message: "Visitors get an error for about 3 minutes.",
             button: "Restart Site", isDestructive: false
-        )
+        ).adding(queues, verb: "Restarting", anyway: "Restart Anyway")
     }
 }
 

@@ -52,6 +52,28 @@ struct ActionRunner: Sendable {
         return id
     }
 
+    /// Reads how much work the site still has. Nil means it could not be read.
+    func queueReading() async -> QueueReading? {
+        guard let script = Bundle.main.url(forResource: "stack-action", withExtension: "sh") else { return nil }
+        let result = await runCommand(
+            "/bin/zsh",
+            [script.path, "queue-read", "queue-read", config.wrapperPath, BarPaths.actions.path, config.containerBinary],
+            timeout: 45
+        )
+        guard result.succeeded, let reading = parseQueueReading(result.text) else {
+            BarLog.write(
+                "warn", "queue.read_failed", loc: "ActionRunner.queueReading",
+                ctx: ["exit": "\(result.exitCode)", "timed_out": "\(result.timedOut)"]
+            )
+            return nil
+        }
+        BarLog.write(
+            "info", "queue.read", loc: "ActionRunner.queueReading",
+            ctx: ["jobs": "\(reading.jobs)", "uploads": "\(reading.uploads)"]
+        )
+        return reading
+    }
+
     /// The action recorded on disk, for reattaching after the app restarts.
     func recorded() -> Current? {
         guard let text = try? String(contentsOf: Self.currentFile, encoding: .utf8) else { return nil }
