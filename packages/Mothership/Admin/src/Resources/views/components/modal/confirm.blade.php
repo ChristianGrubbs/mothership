@@ -39,9 +39,15 @@
                     v-if="isOpen"
                 >
                     <div class="flex min-h-full items-end justify-center p-5 sm:items-center sm:p-0">
+                        {{--
+                            On a phone folded flat the dialog is centred on the lower half, so it gives up the tab bar's
+                            height at both ends to keep its buttons clear of the bar. Held like a book, it stays within
+                            the screen's height. Either way a long message scrolls inside.
+                        --}}
                         <div
                             ref="dialog"
-                            class="w-full max-w-[400px] z-[999] absolute left-1/2 top-1/2 rounded-lg bg-white dark:bg-cherry-800 box-shadow max-md:w-[90%] -translate-x-1/2 -translate-y-1/2"
+                            data-admin-modal-panel
+                            class="flex flex-col w-full max-w-[400px] z-[999] absolute left-1/2 top-1/2 rounded-lg bg-white dark:bg-cherry-800 box-shadow max-md:w-[90%] -translate-x-1/2 -translate-y-1/2 [html[data-fold=rows]_&&]:!max-h-[calc(var(--seg-b-height)-2*(var(--tabbar-h)+env(safe-area-inset-bottom))-2rem)] [html[data-fold=columns]_&&]:max-h-[calc(100dvh-2rem)]"
                             role="alertdialog"
                             aria-modal="true"
                             :aria-labelledby="`${idPrefix}-title`"
@@ -57,8 +63,9 @@
                             </div>
 
                             <div
+                                ref="message"
                                 :id="`${idPrefix}-message`"
-                                class="px-4 py-3 text-gray-600 dark:text-gray-300 text-left"
+                                class="min-h-0 overflow-y-auto px-4 py-3 text-gray-600 dark:text-gray-300 text-left"
                             >
                                 @{{ message }}
                             </div>
@@ -227,9 +234,20 @@
                     }
                 },
 
-                {{-- Tab and Shift+Tab cycle between the dialog's buttons instead of leaving for the page behind the overlay. --}}
+                {{--
+                    Tab and Shift+Tab cycle between the dialog's buttons instead of leaving for the page behind the overlay.
+                    A message cut short by the screen joins the cycle, so the keyboard can scroll the rest of it into view.
+                --}}
                 keepFocusInside(event) {
-                    const controls = [...(this.$refs.dialog?.querySelectorAll('button:not([disabled])') ?? [])];
+                    const message = this.$refs.message;
+
+                    if (message && message.scrollHeight > message.clientHeight + 1) {
+                        message.tabIndex = 0;
+                    } else {
+                        message?.removeAttribute('tabindex');
+                    }
+
+                    const controls = [...(this.$refs.dialog?.querySelectorAll('[tabindex="0"], button:not([disabled])') ?? [])];
 
                     if (! controls.length) {
                         return;
