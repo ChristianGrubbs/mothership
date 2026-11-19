@@ -8,7 +8,7 @@ const homeSource=homeScripts.at(-1);
 
 const markup=homeApp({tag:'main'});
 const row='[data-grid] [data-board-rows] .hm-frow';
-const tile='[data-grid] [data-section="apps"] [data-open="looper"]';
+// Calendar shows once Home has read a layout that has it; Home starts every root with it hidden.
 
 async function homePage(browser,layoutDelay){
     const page=await browser.newPage({viewport:{width:1200,height:900},reducedMotion:'reduce'});
@@ -16,7 +16,7 @@ async function homePage(browser,layoutDelay){
     await page.addScriptTag({content:homeAnswersSource});
     await page.evaluate(delay=>{
         const response=data=>new Response(JSON.stringify(data),{status:200,headers:{'Content-Type':'application/json'}});
-        const catalog=[{id:'looper',title:'Video Loop Refiner',description:'Build a seamless loop.',icon:'looper',kind:'tool',settings:{},url:'https://home.test/tools/looper/index.html'}];
+        const catalog=[{id:'looper',title:'Video Loop Refiner',description:'Build a seamless loop.',icon:'looper',kind:'tool',settings:{},url:'https://home.test/tools/looper/index.html'},{id:'calendar',title:'Calendar',description:'Events.',icon:'calendar',kind:'native',settings:{}}];
         const landed={status:'landed',source:'craft',producer:'blender',title:'Hull study',files:2,bytes:1024,at:new Date().toISOString(),previews:[]};
         window.__layoutCalls=0;
         window.fetch=async url=>{
@@ -47,10 +47,10 @@ async function remount(page){
     });
 }
 
-// Waits until the board has answered and the shelf is drawn, which is when Home has finished starting.
-const settled=page=>page.waitForFunction(selectors=>selectors.every(selector=>document.querySelector(selector))&&document.querySelector('[data-board-rows] .hm-sr')?.textContent.includes('Hull study'),[row,tile]);
+// Waits until the board has answered and Calendar is offered, which is when Home has finished starting.
+const settled=page=>page.waitForFunction(selector=>document.querySelector(selector)&&document.querySelector('[data-calendar-open]')?.hidden===false&&document.querySelector('[data-board-rows] .hm-sr')?.textContent.includes('Hull study'),row);
 
-browserTest('a root rebuilt after Home rendered gets one live board and one live tile, not copies',async()=>{
+browserTest('a root rebuilt after Home rendered gets one live board and one Docked card, not copies',async()=>{
     const {chromium}=require(playwrightPath);
     const browser=await chromium.launch({headless:true,channel:process.env.MOTHERSHIP_BROWSER_CHANNEL||'chrome'});
     try{
@@ -60,8 +60,9 @@ browserTest('a root rebuilt after Home rendered gets one live board and one live
         await page.waitForFunction(()=>window.__layoutCalls===2);
         await settled(page);
         assert.equal(await page.locator(row).count(),1);
-        assert.equal(await page.locator(tile).count(),1);
-        assert.equal(await page.locator('[data-section="apps"] [data-tools-end]').count(),1);
+        // The Docked card is painted again inside the foot Home keeps, not beside a copy of the old paint.
+        assert.equal(await page.locator('[data-docked] h2').count(),1);
+        assert.equal(await page.locator('[data-docked] [data-phone-open]').count(),1);
         // The rebuilt root's own controls are live.
         await page.locator('[data-phone-open]').click();
         assert.equal(await page.locator('[data-phone-dialog]').evaluate(node=>node.open),true);
@@ -92,7 +93,6 @@ browserTest('Home starts the root an SPA mount rebuilt after Home had already st
         assert.equal((await page.locator('[data-status]').textContent()).trim(),'');
         assert.equal(await page.locator('[data-mothership-home]').count(),1);
         assert.equal(await page.locator(row).count(),1);
-        assert.equal(await page.locator(tile).count(),1);
         await page.close();
     }finally{
         await browser.close();
@@ -112,7 +112,6 @@ browserTest('a second copy of home.js does not start a root the first already st
         await page.evaluate(()=>window.__releaseFirstLayout());
         await settled(page);
         assert.equal(await page.locator(row).count(),1);
-        assert.equal(await page.locator(tile).count(),1);
         await page.close();
     }finally{
         await browser.close();

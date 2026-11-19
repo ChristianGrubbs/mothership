@@ -61,9 +61,9 @@ async function mount(browser, {width, height, segments = null, dir = 'ltr'}) {
 // [name, what to click, the overlay, an overlay to open first]
 const OVERLAYS = [
     ['upload', '[data-bridge-upload]', '[data-upload-dialog]'],
-    ['calendar', '[data-calendar-open]', '[data-calendar-dialog]'],
-    ['event editor', '[data-calendar-dialog] [data-cal-add]', '[data-cal-dialog]', '[data-calendar-open]'],
-    ['iPhone app', '[data-section="apps"] [data-phone-open]', '[data-phone-dialog]'],
+    ['calendar', '#hm-cargo [data-calendar-open]', '[data-calendar-dialog]'],
+    ['event editor', '[data-calendar-dialog] [data-cal-add]', '[data-cal-dialog]', '#hm-cargo [data-calendar-open]'],
+    ['iPhone app', '[data-docked] [data-phone-open]', '[data-phone-dialog]'],
     ['phone sheet', '[data-glance-open]', '[data-side-sheet]'],
 ];
 

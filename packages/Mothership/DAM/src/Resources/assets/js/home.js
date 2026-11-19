@@ -15,8 +15,9 @@
         const grid = $('[data-grid]');
         // A root the SPA mount rebuilt carries copies of whatever the replaced one had rendered: cards
         // without handlers, appended dialogs and menus. Start from the server markup's empty state.
-        root.querySelectorAll('[data-board-rows],[data-deck],[data-glance],[data-needs],[data-cargo],[data-docked],[data-signal],[data-away],[data-saved-links]').forEach(slot=>slot.replaceChildren());
+        root.querySelectorAll('[data-board-rows],[data-deck],[data-glance],[data-needs],[data-cargo],[data-docked-body],[data-signal],[data-away-body],[data-saved-links]').forEach(slot=>slot.replaceChildren());
         root.querySelector('[data-section="links"]').hidden=true;
+        root.querySelector('[data-calendar-open]').hidden=true;
         root.querySelectorAll('[data-cal-dialog],[data-access-menu]').forEach(element=>element.remove());
         root.querySelectorAll('dialog[open]').forEach(dialog=>dialog.removeAttribute('open'));
         $('[data-status]').textContent = '';
@@ -50,7 +51,7 @@
             catch(error){const slow=['TimeoutError','AbortError'].includes(error?.name);status(slow?'Home is taking too long to load.':error.message,true);const retry=document.createElement('button');retry.type='button';retry.className='agh-button';retry.dataset.homeRetry='';retry.textContent='Retry';retry.onclick=()=>{status('Loading your Home…');load();};$('[data-status]').append(' ',retry);}
         }
         // The layout's catalogue says whether this account has the calendar.
-        function paintCalendar(){$('[data-tools-end]').hidden=!catalog.some(item=>item.id==='calendar');}
+        function paintCalendar(){$('[data-calendar-open]').hidden=!catalog.some(item=>item.id==='calendar');}
         document.addEventListener('mothership:navigate:success',()=>{
             if(root.isConnected)return;
             lifecycle.abort();
@@ -121,7 +122,7 @@
         function showCalendar(filter){const api=calendarApi();if(!api)return;if(!calendarMounted){api.mount(root.querySelector('[data-slot="coming"] [data-id="calendar"]'));calendarMounted=true;}if(filter)api.show(filter);if(!calendarDialog.open)calendarDialog.showModal();}
         calendarDialog.addEventListener('click',event=>{if(event.target.closest('[data-calendar-close]'))calendarDialog.close();},{signal});
 
-        // The iPhone app is the installed web app: its tile opens the three steps.
+        // The iPhone app is the installed web app: Add your iPhone, at the foot of Docked, opens the three steps.
         const phoneDialog=$('[data-phone-dialog]');let phoneOpener=null;
         root.addEventListener('click',event=>{
             const opener=event.target.closest('[data-phone-open]');

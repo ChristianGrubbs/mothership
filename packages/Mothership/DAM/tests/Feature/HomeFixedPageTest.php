@@ -18,9 +18,8 @@ it('serves the fixed sections with nothing to customize', function () {
     $this->get('/admin/home')->assertOk()
         ->assertSee('Arrivals board')
         ->assertSee('Cargo')
-        ->assertSee('Tools')
         ->assertSee('Calendar')
-        ->assertSee('iPhone app')
+        ->assertSee('Add your iPhone')
         ->assertSee('Add to Home Screen')
         ->assertSee('data-calendar-dialog', false)
         ->assertDontSee('Customize Home')
@@ -112,14 +111,19 @@ it('leaves Transfers and the Icon Library to their own places, with no link on H
         ->assertDontSee('https://icons.example.org/', false);
 });
 
-it('keeps every tool launcher reachable from the Tools shelf', function () {
+it('keeps Calendar, the iPhone steps and saved links on Home without a Tools shelf', function () {
     config(['dam-home.video_api' => 'https://video.example.test']);
 
+    // Calendar beside Open in Library in Cargo's head; Add your iPhone at the foot of Docked; saved links at the
+    // foot of Away from ship, each after the part the summary paints.
     $this->get('/admin/home')->assertOk()
-        ->assertSee('data-tools', false)
-        ->assertSee('data-calendar-open', false)
-        ->assertSee('data-phone-open', false);
+        ->assertDontSee('data-section="apps"', false)
+        ->assertDontSee('id="hm-tools-title"', false)
+        ->assertSeeInOrder(['id="hm-cargo"', 'data-calendar-open', 'Open in Library'], false)
+        ->assertSeeInOrder(['data-docked', 'data-docked-body', 'data-phone-open', 'data-signal'], false)
+        ->assertSeeInOrder(['data-away', 'data-away-body', 'data-saved-links', '</aside>'], false);
 
+    // The tools stay in the catalogue, for the Tools page.
     $downloader = collect($this->getJson('/admin/home/layout')->assertOk()->json('catalog'))->firstWhere('id', 'video-downloader');
 
     expect($downloader['kind'])->toBe('tool')->and($downloader['url'])->not->toBeEmpty();

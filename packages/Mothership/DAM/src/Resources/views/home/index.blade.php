@@ -42,29 +42,27 @@
                     <div class="hm-sec" id="hm-cargo">
                         <h2>Cargo</h2>
                         <span class="hm-mono">What landed, newest first</span>
+                        <button type="button" class="hm-sec-link is-quiet" data-calendar-open hidden><svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4z M4 10h16 M8 3v5 M16 3v5"/></svg>Calendar</button>
                         <a class="hm-sec-link" href="{{ route('admin.dam.assets.index') }}">Open in Library <svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v10M7 17 17 7"/></svg></a>
                     </div>
                     <ol class="hm-log" data-m="arrive" data-cargo></ol>
                 </div>
+            </div>
 
-                {{-- TODO 2026-11-18: remove when Phase 5b ships --}}
-                <section class="hm-tools" aria-labelledby="hm-tools-title" data-section="apps">
-                    <h2 id="hm-tools-title">Tools</h2>
-                    <ul class="hm-tool-list" data-tools>
-                        <li data-tools-end><button type="button" class="hm-tool" data-calendar-open><svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4z M4 10h16 M8 3v5 M16 3v5"/></svg><span>Calendar</span></button></li>
-                        <li><button type="button" class="hm-tool" data-id="phone-app" data-phone-open><svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2.500h8A1.500 1.500 0 0 1 17.500 4v16a1.500 1.500 0 0 1-1.500 1.500H8A1.500 1.500 0 0 1 6.500 20V4A1.500 1.500 0 0 1 8 2.500z M11 18.500h2"/></svg><span>iPhone app</span></button></li>
-                    </ul>
-                    <div data-section="links" hidden>
+            {{-- The summary paints each card's body; its foot is Home's own and stays through every repaint. --}}
+            <aside class="hm-side" aria-label="Around the ship" data-side>
+                <section class="hm-card hm-dock" id="hm-docked" data-docked>
+                    <div data-docked-body></div>
+                    <p class="hm-foot"><button type="button" class="hm-foot-link" data-id="phone-app" data-phone-open><svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2.500h8A1.500 1.500 0 0 1 17.500 4v16a1.500 1.500 0 0 1-1.500 1.500H8A1.500 1.500 0 0 1 6.500 20V4A1.500 1.500 0 0 1 8 2.500z M11 18.500h2"/></svg>Add your iPhone</button></p>
+                </section>
+                <section class="hm-card hm-signal" id="hm-signal" data-signal data-id="rss"></section>
+                <section class="hm-card hm-away" id="hm-away" data-away>
+                    <div data-away-body></div>
+                    <div class="hm-foot" data-section="links" hidden>
                         <h3 class="hm-mono">Your saved links</h3>
                         <div class="hm-saved-links" data-saved-links></div>
                     </div>
                 </section>
-            </div>
-
-            <aside class="hm-side" aria-label="Around the ship" data-side>
-                <section class="hm-card hm-dock" id="hm-docked" data-docked></section>
-                <section class="hm-card hm-signal" id="hm-signal" data-signal data-id="rss"></section>
-                <section class="hm-card hm-away" id="hm-away" data-away></section>
             </aside>
         </div>
 

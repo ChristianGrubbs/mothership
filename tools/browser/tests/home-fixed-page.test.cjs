@@ -14,7 +14,7 @@ const ORIGIN='https://home.test';
 const tool=(id,title)=>({id,title,description:`${title} description`,icon:id,kind:'tool',settings:{},url:`${ORIGIN}/tools/${id}/index.html`});
 
 // `summary` is the page script that answers /summary: a function of the page's __homeSummary helper.
-async function mount(browser,{fixture={},catalog=[],summary=null,width=1280,prepare=null,clock=false}={}){
+async function mount(browser,{fixture={},catalog=[],links=[],summary=null,width=1280,prepare=null,clock=false}={}){
     const page=await browser.newPage({viewport:{width,height:900},reducedMotion:'reduce'});
     if(clock)await page.clock.install();
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
@@ -23,17 +23,17 @@ async function mount(browser,{fixture={},catalog=[],summary=null,width=1280,prep
     await page.goto(`${ORIGIN}/admin/home`);
     await page.addStyleTag({content:`*{box-sizing:border-box}body{margin:0}${homeStyles}`});
     await page.addScriptTag({content:homeAnswersSource});
-    await page.evaluate(({catalog,summary})=>{
+    await page.evaluate(({catalog,links,summary})=>{
         const response=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json'}});
         const answer=summary?(0,eval)(`(${summary})`):null;
         window.__requests=[];window.__summaryCalls=0;
         window.fetch=async(url,options={})=>{
             const address=String(url);window.__requests.push(`${options.method||'GET'} ${address}`);
-            if(address.endsWith('/layout'))return response({catalog,widgets:catalog.map(({id,settings})=>({id,settings})),links:[]});
+            if(address.endsWith('/layout'))return response({catalog,widgets:catalog.map(({id,settings})=>({id,settings})),links});
             if(address.endsWith('/summary')&&answer){window.__summaryCalls++;const body=answer(window.__summaryCalls);return body===null?response({message:'The ship did not answer.'},503):response(body);}
             return response(window.__homeAnswer(address)??{});
         };
-    },{catalog,summary:summary?summary.toString():null});
+    },{catalog,links,summary:summary?summary.toString():null});
     if(prepare)await page.evaluate(prepare);
     for(const content of homeScripts)await page.addScriptTag({content});
     await page.waitForFunction(()=>window.__requests.some(entry=>entry.endsWith('/layout'))&&!document.querySelector('[data-board]').hasAttribute('aria-busy'));
@@ -228,20 +228,34 @@ browserTest('a role without the Library gets no board and an honest count of wha
     }finally{await browser.close();}
 });
 
-browserTest('Home draws no tool to launch, and offers the calendar only to an account that has it',async()=>{
+browserTest('Home draws no tool to launch, puts Calendar beside Open in Library for an account that has it, and lists saved links at the foot of Away from ship',async()=>{
     const browser=await launchBrowser({playwrightPath});
+    // Calendar sits in the head of Cargo, which shows once the library has a file.
+    const withCargo=()=>{
+        const row={key:'asset:1',status:'landed',source:'craft',producer:'claude-code',title:'Harbour study',files:1,bytes:2048,failed_files:0,at:new Date().toISOString(),kinds:[{extension:'png',count:1}],previews:[]};
+        return window.__homeSummary({lead:{available:true,state:'new',files:1,bytes:2048,since:null},board:{rows:[row],cargo:[row],more:0,truncated:false,docked:[]}});
+    };
     try{
         // Tools open from the Tools page: a catalogue full of them puts nothing to launch on Home.
         const tools=[tool('looper','Video Loop Refiner'),tool('video-downloader','Video Downloader'),tool('vectorization','Vectorization')];
-        let {page,errors}=await mount(browser,{catalog:tools});
-        await page.waitForFunction(()=>!document.querySelector('[data-calendar-open]').checkVisibility());
+        let {page,errors}=await mount(browser,{catalog:tools,summary:withCargo});
+        await page.locator('#hm-cargo').waitFor();
+        assert.equal(await page.locator('[data-calendar-open]').isHidden(),true,'no Calendar for an account without it');
         assert.equal(await page.locator('[data-open]').count(),0);
+        assert.equal(await page.locator('[data-section="links"]').isHidden(),true,'no saved links, no group');
         assert.deepEqual(errors,[]);
         await page.close();
 
-        // The opener starts hidden here, so it shows only once the catalogue has been read.
-        ({page,errors}=await mount(browser,{catalog:[...tools,{...tool('calendar','Calendar'),kind:'widget',url:null}],prepare:()=>{document.querySelector('[data-calendar-open]').parentElement.hidden=true;}}));
-        await page.waitForFunction(()=>document.querySelector('[data-calendar-open]').checkVisibility());
+        ({page,errors}=await mount(browser,{catalog:[...tools,{...tool('calendar','Calendar'),kind:'widget',url:null}],links:[{title:'Print shop order form',url:'https://example.edu/print'}],summary:withCargo}));
+        const calendar=page.locator('[data-calendar-open]');
+        await calendar.waitFor();
+        const [opener,library]=await Promise.all([calendar,page.locator('#hm-cargo a.hm-sec-link')].map(locator=>locator.boundingBox()));
+        assert.ok(Math.abs(opener.y+opener.height/2-(library.y+library.height/2))<1&&opener.x+opener.width<library.x,'Calendar sits just before Open in Library, on its line');
+        const saved=page.locator('[data-away] [data-section="links"]');
+        await saved.waitFor();
+        assert.deepEqual(await saved.locator('a').allTextContents(),['Print shop order form ↗']);
+        // The group is the card's foot, under what the summary paints there.
+        assert.equal(await page.locator('[data-away]').evaluate(card=>card.lastElementChild.matches('[data-section="links"]')&&card.querySelector('[data-away-body]').textContent.includes('Nothing away from ship')),true);
         assert.deepEqual(errors,[]);
         await page.close();
     }finally{await browser.close();}
@@ -279,27 +293,43 @@ browserTest('on a phone the side column opens in a sheet and goes back when it c
     }finally{await browser.close();}
 });
 
-browserTest('the iPhone tile opens its steps and closing returns focus to the tile',async()=>{
+browserTest('Add your iPhone, at the foot of Docked, opens its steps and closing returns focus to it, on the page and in the phone sheet',async()=>{
     const browser=await launchBrowser({playwrightPath});
     try{
-        const {page,errors}=await mount(browser,{catalog:[tool('looper','Video Loop Refiner')]});
-        const tile=page.locator('[data-section="apps"] [data-phone-open]'),dialog=page.locator('[data-phone-dialog]');
-        const open=()=>dialog.evaluate(node=>node.open),focused=()=>page.evaluate(()=>document.activeElement?.hasAttribute('data-phone-open'));
+        let {page,errors}=await mount(browser,{catalog:[tool('looper','Video Loop Refiner')]});
+        let opener=page.locator('[data-docked] [data-phone-open]');
+        const dialog=()=>page.locator('[data-phone-dialog]');
+        const open=()=>dialog().evaluate(node=>node.open),focused=()=>page.evaluate(()=>document.activeElement?.hasAttribute('data-phone-open'));
+        assert.equal((await opener.textContent()).trim(),'Add your iPhone');
+        // The summary has painted the card's body; the foot is the card's last part and outlives that paint.
+        assert.equal(await page.locator('[data-docked]').evaluate(card=>card.lastElementChild.contains(card.querySelector('[data-phone-open]'))&&card.querySelector('[data-docked-body] h2')!==null),true);
         assert.equal(await open(),false);
-        await tile.click();
+        await opener.click();
         assert.equal(await open(),true);
-        assert.equal(await dialog.evaluate(node=>node.matches(':modal')),true);
-        assert.equal(await dialog.locator('.agh-phone-steps li').count(),3);
-        assert.equal(await page.locator('.agh-workspace').count(),0,'the tile is not a tool launcher');
-
-        await dialog.locator('[data-phone-close]').click();
+        assert.equal(await dialog().evaluate(node=>node.matches(':modal')),true);
+        assert.equal(await dialog().locator('.agh-phone-steps li').count(),3);
+        await dialog().locator('[data-phone-close]').click();
         assert.equal(await open(),false);assert.equal(await focused(),true);
 
         // Keyboard: Enter opens, Escape closes, and focus comes back the same way.
-        await tile.focus();await page.keyboard.press('Enter');
+        await opener.focus();await page.keyboard.press('Enter');
         assert.equal(await open(),true);
         await page.keyboard.press('Escape');
         assert.equal(await open(),false);assert.equal(await focused(),true);
+        assert.deepEqual(errors,[]);
+        await page.close();
+
+        // On a phone the card is in the sheet: the steps open over it, and closing them leaves the sheet open on the link.
+        ({page,errors}=await mount(browser,{width:390}));
+        await page.locator('[data-glance-open="docked"]').click();
+        const sheet=page.locator('[data-side-sheet]');
+        opener=sheet.locator('[data-docked] [data-phone-open]');
+        await opener.click();
+        assert.equal(await open(),true);
+        await page.keyboard.press('Escape');
+        assert.equal(await open(),false);
+        assert.equal(await sheet.evaluate(node=>node.open),true,'the sheet stays open under the steps');
+        assert.equal(await focused(),true);
         assert.deepEqual(errors,[]);
         await page.close();
     }finally{await browser.close();}
