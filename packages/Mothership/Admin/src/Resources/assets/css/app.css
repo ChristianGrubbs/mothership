@@ -3022,9 +3022,10 @@ html[data-fold="columns"] .bridge-toolset {
     max-width: min(220px, calc((var(--seg-a-width) - 92px) / 2));
 }
 
-/* Tabletop pose: the menu ends 12 px above the fold, so the item pinned at its foot is never on it. */
+/* Tabletop pose: the menu ends 12 px above the fold, so the item pinned at its foot is never on it. 71 px is the
+   menu's top (58 px), that 12 px, and 1 px for Safari, which reports the upper screen's height half a pixel taller. */
 html[data-fold="rows"] .bridge-toolset-menu {
-    max-height: min(420px, calc(var(--seg-a-height) - 70px));
+    max-height: min(420px, calc(var(--seg-a-height) - 71px));
 }
 
 /* Export and Save to Library sit under the tool only on the phone form; the bar holds them everywhere else. */
