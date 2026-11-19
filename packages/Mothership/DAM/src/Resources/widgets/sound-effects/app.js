@@ -954,9 +954,13 @@ function openExport() {
 let folders = null;
 // A save holds the sheet until the Library answers: its choices stay as sent, also when the sheet is reopened.
 let saving = false;
+// A save that fails after its sheet was closed is said at once, and again in the sheet the next time it opens.
+let failure = '';
 function setLibrary({ message = '', error = false } = {}) {
     const none = Array.isArray(folders) && !folders.length;
     const picked = $('[data-save-wav]').checked || $('[data-save-settings]').checked;
+    // With no folder to save into there is nothing to choose: the sheet says so and offers no ticks.
+    $('[data-save-wav]').closest('fieldset').hidden = none;
     $('[data-folder-field]').hidden = none;
     $('[data-folder-empty]').hidden = !none;
     for (const sel of ['[data-save-wav]', '[data-save-settings]', '[data-folder]']) $(sel).disabled = saving;
@@ -974,14 +978,16 @@ async function openLibrary() {
         $('[data-save-settings-name]').textContent = `${fileName(state.current.name, 'json')} · opens again with Import`;
     }
     showSheet('library');
-    if (folders) { setLibrary(); return; }
+    const kept = failure ? { message: failure, error: true } : {};
+    failure = '';
+    if (folders) { setLibrary(kept); return; }
     setLibrary({ message: 'Finding your folders…' });
     try {
         folders = await frame.folders();
         const select = $('[data-folder]');
         select.innerHTML = folders.map(f => `<option value="${esc(f.id)}">${'  '.repeat(f.depth)}${esc(f.name)}</option>`).join('');
         if (folders.some(f => f.id === state.settings.folder)) select.value = state.settings.folder;
-        setLibrary();
+        setLibrary(kept);
     } catch (error) {
         folders = null;
         setLibrary({ message: `${error.message || 'Your folders could not be read.'} Close this and try again.`, error: true });
@@ -996,6 +1002,7 @@ async function saveToLibrary() {
     if ($('[data-save-wav]').checked) files.push({ name: fileName(sound.name, 'wav'), blob: new Blob([encodeWav(renderSamples(sound.params, sound.seed, rate), rate)], { type: 'audio/wav' }) });
     if ($('[data-save-settings]').checked) files.push({ name: fileName(sound.name, 'json'), blob: new Blob([JSON.stringify(libraryJson([sound], rate), null, 2)], { type: 'application/json' }) });
     saving = true;
+    failure = '';
     setLibrary();
     let failed = null;
     try {
@@ -1012,11 +1019,19 @@ async function saveToLibrary() {
     } finally {
         saving = false;
     }
-    if (failed) {
-        setLibrary({ message: failed.message || 'The files could not be saved. Try again.', error: true });
+    if (!failed) return;
+    const message = failed.message || 'The files could not be saved. Try again.';
+    if ($('[data-sheet="library"]').open) {
+        setLibrary({ message, error: true });
         // Save was disabled while it ran, which dropped the focus; give it back so Enter tries again.
-        if ($('[data-sheet="library"]').open) $('[data-library-go]').focus();
+        $('[data-library-go]').focus();
+        return;
     }
+    // The sheet was closed while it saved: the bar says so now (the tool's own line where there is no bar).
+    failure = message;
+    setLibrary();
+    frame.notice({ text: `Not saved to the Library. ${message}`, tone: 'error' });
+    if (!frame.bar) status(`Not saved to the Library. ${message}`, { tone: 'error', ms: 8000 });
 }
 
 /* ------------------------------------------------------------ wiring */

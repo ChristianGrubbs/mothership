@@ -38,7 +38,10 @@ step. The same files work inside the tool page (`/admin/tools/sound-effects`) an
   the chosen sample rate; ZIP entries are stored, uncompressed, with UTF-8 names). Its button says which.
 - **Save to Library**, inside the tool page only: the sound as a WAV and its settings as a one-sound library JSON, which
   Import opens again, into a folder the account may upload to. Both files are made from the sound as it was when Save
-  was pressed, and the folder is remembered.
+  was pressed, and the folder is remembered. An account with no such folder is told so, with nothing to tick.
+  - A refused save says why in the sheet, and Save has the focus again.
+  - When the sheet was closed while the save ran, the bar says it was not saved, and the sheet says why the next time
+    it opens. Palette Studio does the same.
 - **Keyboard**, while focus is in the tool and not in a field or control that uses the key: Space plays, S saves,
   the arrow keys move through saved sounds. With a sheet open only the saved-sounds list takes keys: the arrows, Home
   and End move through it, F2 renames and Delete deletes.
