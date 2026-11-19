@@ -108,6 +108,59 @@ browserTest('on the outer display upright, a set with plaques keeps the preview 
     } finally { await browser.close(); }
 });
 
+browserTest('an empty set shows its heading and every way to start whole on the outer display and folded, and a wide tool keeps the 16:9 stage', async () => {
+    const browser = await launch();
+    try {
+        const whole = async (page, label) => {
+            const stage = await box(page, '[data-stage]');
+            const cut = await page.evaluate(stage => [...document.querySelectorAll('.plq-start h2, .plq-start p, .plq-start .tk-btn')]
+                .filter(node => node.checkVisibility())
+                .filter(node => { const r = node.getBoundingClientRect(); return r.top < stage.top - .5 || r.bottom > stage.bottom + .5 || r.left < stage.left - .5 || r.right > stage.right + .5; })
+                .map(node => node.textContent.trim().slice(0, 30)), stage);
+            assert.deepEqual(cut, [], `${label}: nothing cut by the stage`);
+            // Safari holds a box to its max-height even when its min-height asks for more; Chromium lets the min-height
+            // win. A stage taller than its own cap fits the ways to start here and cuts them on the iPhone.
+            const cap = await page.locator('[data-stage]').evaluate(node => getComputedStyle(node).maxHeight);
+            assert.ok(cap === 'none' || stage.height <= parseFloat(cap) + .5, `${label}: the stage is ${stage.height} px under a ${cap} cap, which Safari keeps it to`);
+            return stage;
+        };
+        // Generate… joins the ways to start where the page offers AI; the tool shows it then, as here.
+        const offerGenerate = async page => { await page.locator('[data-ai-open]').evaluateAll(buttons => buttons.forEach(button => { button.hidden = false; })); await settled(page); };
+        // The outer display upright, with the page's foot and without it (the buttons wrap to a second row, or a third),
+        // and on its side under Safari's bars and the page's: the stage's cap there leaves no room for the buttons.
+        for (const [width, height] of [[382, 463], [382, 524], [678, 287]]) {
+            const { page, errors } = await open(browser, { width, height });
+            await whole(page, `${width} x ${height}`);
+            await offerGenerate(page);
+            await whole(page, `${width} x ${height} with Generate…`);
+            assert.deepEqual(errors, []);
+            await page.close();
+        }
+        let { page, errors } = await open(browser, { width: 669, height: 761 });
+        await fold(page, 'rows', 286, 326);
+        await offerGenerate(page);
+        assert.ok((await whole(page, 'tabletop with Generate…')).bottom <= 286, 'the stage ends above the fold');
+        assert.deepEqual(await across(page, 'y', 286, 326), [], 'nothing to tap on the fold');
+        await page.close();
+        ({ page, errors } = await open(browser, { width: 1440, height: 900, touch: false }));
+        const wide = await whole(page, '1440 x 900');
+        assert.ok(Math.abs(wide.width / wide.height - 16 / 9) < .01, `the stage keeps its 16:9 box: ${wide.width} x ${wide.height}`);
+        // A plaque gives the stage its frame's shape, at most 1.2:1 for a portrait frame. Deleting the last plaque
+        // must give the empty set its own box back, not keep that taller shape.
+        await addPlaques(page, 1);
+        await page.locator('[data-out="frame"]').evaluate(select => { select.value = 'portrait'; select.dispatchEvent(new Event('change', { bubbles: true })); });
+        await settled(page);
+        const portrait = await box(page, '[data-stage]');
+        assert.ok(portrait.height > wide.height + 1, `a portrait frame makes the stage taller: ${portrait.height} px`);
+        await page.locator('[data-action="delete"]').first().evaluate(button => button.click());
+        await page.locator('[data-empty] [data-action="add-blank"]').waitFor();
+        await settled(page);
+        const emptied = await whole(page, '1440 x 900 after the last plaque is deleted');
+        assert.ok(Math.abs(emptied.height - wide.height) < 1, `the emptied stage is ${emptied.height} px tall, not ${wide.height}`);
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); }
+});
+
 browserTest('held sideways on a short screen, the tool scrolls as one and its page never moves', async () => {
     const browser = await launch();
     try {

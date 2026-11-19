@@ -49,12 +49,14 @@
     padding: 18px 20px 14px;
 }
 
+/* The stage's height cap is a property, so an empty set can hand it to the shape that keeps the box (below). */
 .plq-stage {
+    --plq-stage-cap: 52vh;
     position: relative;
     display: grid;
     place-items: center;
     width: 100%;
-    max-height: 52vh;
+    max-height: var(--plq-stage-cap);
     aspect-ratio: 16 / 9;
     overflow: hidden;
     border-radius: 14px;
@@ -406,9 +408,31 @@
     display: none;
 }
 
+/* With no plaque, the stage holds the ways to start instead of a frame. It keeps its box where they fit and grows to
+   hold them where they don't: on a short tool (an iPhone Duo's outer display, upright or on its side) the buttons
+   wrap or the box is short, and the box cut off the heading above them and the buttons below. The box's own size is
+   kept by an empty 16:9 shape, under the stage's height cap, in the same cell as the ways to start; whichever is
+   taller sets the height. The stage itself has no cap here: Safari keeps a box to its max-height even when its
+   min-height asks for more. On a tabletop fold the stage fills its half, so the shape stays out. */
 .plq[data-empty-set] .plq-stage {
+    min-height: min-content;
+    max-height: none;
+    aspect-ratio: auto;
     background: none;
     box-shadow: none;
+}
+
+:root:not([data-fold="rows"]) .plq[data-empty-set] .plq-stage::before {
+    content: "";
+    grid-area: 1 / 1;
+    width: 100%;
+    max-height: var(--plq-stage-cap);
+    aspect-ratio: 16 / 9;
+}
+
+.plq[data-empty-set] .plq-start {
+    position: static;
+    grid-area: 1 / 1;
 }
 
 .plq-anchors button {
@@ -1109,7 +1133,7 @@
     }
 
     .plq-stage {
-        max-height: 40vh;
+        --plq-stage-cap: 40vh;
     }
 }
 
@@ -1164,7 +1188,7 @@
     }
 
     .plq-stage {
-        max-height: 26vh;
+        --plq-stage-cap: 26vh;
         min-height: 120px;
     }
 
@@ -1247,7 +1271,7 @@
     }
 
     .plq-stage {
-        max-height: 54vh;
+        --plq-stage-cap: 54vh;
     }
 }
 
@@ -1394,7 +1418,7 @@
 }
 
 :root[data-fold="columns"] .plq-stage {
-    max-height: 30vh;
+    --plq-stage-cap: 30vh;
 }
 
 /* Folded like a laptop: the stage alone on the upright half, where it is looked at, filling what the half leaves; on
