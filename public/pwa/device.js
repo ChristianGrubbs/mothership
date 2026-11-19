@@ -5,8 +5,8 @@
  * segments this marks <html data-fold="columns|rows"> and publishes each segment's box and the gap between them
  * as CSS custom properties; device.css lays the Library, the preview and the share page out around the fold from
  * those. Every other browser, and Duo with the flags off, gets nothing here: the ordinary responsive layout.
- * No user-agent or device checks; the segment geometry is the only input, and it is re-read on resize and on a
- * posture change. Elements marked [data-fold-split] also get --fold-start (columns: the width of their content box
+ * No user-agent or device checks; the segment geometry is the only input, and it is re-read on resize, on a
+ * posture change and when the segment media queries change. Elements marked [data-fold-split] also get --fold-start (columns: the width of their content box
  * on the leading side of the fold) or --fold-top (rows: the height above it), measured from their own box; elements
  * marked [data-fold-wrap] get --fold-rest (columns: how far the box runs past the fold) so their content wraps first.
  */
@@ -107,4 +107,13 @@
     addEventListener('resize', schedule);
     addEventListener('load', schedule, { once: true });
     try { navigator.devicePosture?.addEventListener('change', schedule); } catch (_) { /* Posture is a hint only. */ }
+    // Safari on iPhone Duo fires resize and the posture change before it updates the segments, so a fold, an unfold or a
+    // close on an open page would keep the old fold. The segment media queries change after the segments do. The lists
+    // are held on the global so they are never collected while they listen.
+    window.mothershipDevice = ['(horizontal-viewport-segments: 2)', '(vertical-viewport-segments: 2)'].map(query => {
+        const list = matchMedia(query);
+        try { list.addEventListener('change', schedule); } catch (_) { /* No segment media features here. */ }
+
+        return list;
+    });
 })();
