@@ -32,12 +32,21 @@ const notice=(()=>{
 const railRow=name=>`<div class="bridge-rail-row"><a href="#" class="bridge-rail-link" aria-label="${name}"><svg width="20" height="20"></svg><span class="bridge-rail-text">${name}</span></a></div>`;
 const tab=name=>`<a href="#"><svg width="22" height="22"></svg><span>${name}</span></a>`;
 const listRow=name=>`<div class="bridge-list-row"><div class="bridge-list-main">${name}</div><div class="bridge-list-status">Active</div><div class="bridge-list-actions"><button type="button">Copy link</button></div><div class="bridge-list-meta">Expires in 3 days</div></div>`;
-const PAGE=`<!doctype html><html><head><style>${builtStyles()}</style></head><body>
+// A row for the page that is open, with a submenu: what the rail draws on a Settings page (sidebar/row.blade.php).
+const parentRow=`<div class="bridge-rail-row active" data-menu-item><a href="#" class="bridge-rail-link" aria-current="page" aria-label="Settings"><svg width="20" height="20"></svg><span class="bridge-rail-text">Settings</span></a><div class="bridge-rail-flyout is-open" data-submenu><a href="#users" class="is-current"><span>Users</span></a><a href="#roles"><span>Roles</span></a><a href="#locales"><span>Locales and currencies</span></a></div></div>`;
+// The script the sidebar view ships for its submenus, so the page here runs what the app runs.
+const submenuScript=(()=>{
+    const found=read(`${ADMIN_VIEWS}/sidebar/index.blade.php`).match(/<script>\n([\s\S]*?)<\/script>/);
+    assert.ok(found&&found[1].includes('[data-submenu]'),'the sidebar view carries its submenu script in a plain script tag');
+    return found[1];
+})();
+// settings: 'parent' draws the Settings row as the open page with a submenu; 'scripted' also runs the view's script.
+const pageWith=settings=>`<!doctype html><html><head><style>${builtStyles()}</style></head><body>
 <div id="app" class="flex flex-col h-screen">
   <div class="flex flex-1 min-h-0 sidebar-not-collapsed">
     <div id="mothership-sidebar" class="bridge-rail bridge-phone-hide flex flex-col shrink-0 h-full">
       <div class="bridge-rail-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden"><nav class="bridge-rail-nav">${['Home','Library','Collections','Tools','Shared links','Upload requests','Inbox','Tag review','Trash'].map(railRow).join('')}</nav></div>
-      <div class="bridge-rail-foot"><nav class="bridge-rail-nav">${['Connections','Settings','Help'].map(railRow).join('')}</nav></div>
+      <div class="bridge-rail-foot"><nav class="bridge-rail-nav">${railRow('Connections')}${settings?parentRow:railRow('Settings')}${railRow('Help')}</nav></div>
     </div>
     <div class="bridge-column">
       <header class="bridge-top"><div class="bridge-top-actions"><button type="button" class="bridge-icon-btn bridge-phone-hide" data-feedback>?</button></div></header>
@@ -54,11 +63,12 @@ const PAGE=`<!doctype html><html><head><style>${builtStyles()}</style></head><bo
   </div>
   <nav class="bridge-tabbar" data-bridge-tabbar>${['Home','Library','Collections','Away'].map(tab).join('')}<button type="button"><svg width="22" height="22"></svg><span>More</span></button></nav>
   <footer data-fold-wrap class="bridge-notice shrink-0 border-t px-4 py-1 text-xs"><span class="bridge-notice-text"><span class="bridge-notice-long">${notice.text}</span><span class="bridge-notice-short">${notice.textShort}</span></span><a href="#"><span class="bridge-notice-long">${notice.link}</span><span class="bridge-notice-short">${notice.linkShort}</span></a></footer>
-</div></body></html>`;
+</div>${settings==='scripted'?`<script>${submenuScript}</script>`:''}</body></html>`;
+const PAGE=pageWith(null);
 
-async function shell(browser,width,height){
+async function shell(browser,width,height,body=PAGE){
     const page=await browser.newPage({viewport:{width,height},reducedMotion:'reduce'});
-    await page.route('http://mothership.test/**',route=>route.fulfill({contentType:'text/html',body:PAGE}));
+    await page.route('http://mothership.test/**',route=>route.fulfill({contentType:'text/html',body}));
     await page.goto('http://mothership.test/');
     return page;
 }
@@ -111,6 +121,78 @@ browserTest('the rail is words from 1180 px wide and icons from 720 to 1179',asy
             assert.equal(at.tabbar,null,`no tab bar at ${width} x ${height}`);
             assert.equal(at.sideways,0);
         }
+    }finally{await browser.close();}
+});
+
+browserTest('in the icon rail the open page\'s submenu is a fly-out beside the rail, not links cut off inside it',async()=>{
+    const browser=await launchBrowser({playwrightPath});
+    try{
+        // The submenu at one moment: null when it is not drawn, else where it is and whether each link can be pressed.
+        const submenu=page=>page.evaluate(()=>{
+            const menu=document.querySelector('[data-submenu]');
+            const box=menu.getBoundingClientRect();
+            if(getComputedStyle(menu).display==='none'||box.width===0)return null;
+            return {
+                position:getComputedStyle(menu).position,left:Math.round(box.left),right:Math.round(box.right),top:Math.round(box.top),bottom:Math.round(box.bottom),
+                rowTop:Math.round(menu.closest('.bridge-rail-row').getBoundingClientRect().top),
+                links:[...menu.querySelectorAll('a')].map(link=>{
+                    const at=link.getBoundingClientRect();
+                    // Not cut off and not under anything: the point at each end of the link's words is the link itself.
+                    const hit=x=>link.contains(document.elementFromPoint(x,at.top+at.height/2));
+                    const words=link.querySelector('span').getBoundingClientRect();
+                    return {inScreen:at.left>=0&&at.right<=innerWidth&&at.top>=0&&at.bottom<=innerHeight,reachable:hit(words.left+1)&&hit(words.right-1)};
+                }),
+            };
+        });
+        const usable=(at,label)=>{
+            for(const link of at.links)assert.deepEqual(link,{inScreen:true,reachable:true},`every submenu link can be read and pressed ${label}`);
+        };
+        const scripted=pageWith('scripted');
+
+        // The wide rail keeps the open page's submenu in the rail, under its row.
+        const wide=await submenu(await shell(browser,1180,800,scripted));
+        assert.equal(wide.position,'static');
+        assert.ok(wide.left>=0&&wide.right<=224,'the wide rail holds the submenu');
+        usable(wide,'in the wide rail');
+
+        // 951 x 585 is an iPhone Duo open and held sideways; 594 x 368 the same phone closed, where the rail scrolls.
+        for(const [width,height] of [[1179,800],[1024,768],[951,585],[720,900],[594,368]]){
+            const page=await shell(browser,width,height,scripted);
+            const rail=await readShell(page);
+            assert.equal(rail.rail[2],72,`icon rail at ${width} x ${height}`);
+            assert.equal(await submenu(page),null,`no submenu drawn at rest at ${width} x ${height}`);
+            assert.equal(rail.sideways,0);
+            const row=page.locator('.bridge-rail-row.active > .bridge-rail-link');
+            await row.scrollIntoViewIfNeeded();
+            await row.hover();
+            const open=await submenu(page);
+            assert.ok(open,`pointing at the row opens its submenu at ${width} x ${height}`);
+            assert.equal(open.position,'fixed');
+            assert.equal(open.left,68,'the fly-out starts at the rail\'s edge');
+            assert.ok(open.top<=open.rowTop&&open.bottom<=height-8,`the fly-out sits beside its row and inside the screen at ${width} x ${height}`);
+            usable(open,`at ${width} x ${height}`);
+            // The pointer can cross from the row onto a link, and the link works.
+            await page.locator('[data-submenu] a[href="#roles"]').click();
+            assert.equal(await page.evaluate(()=>location.hash),'#roles');
+        }
+
+        // By keyboard: focus on the row opens the fly-out, Tab reaches its links, and it shuts when focus leaves the rail.
+        const keys=await shell(browser,1024,768,scripted);
+        await keys.locator('.bridge-rail-row.active > .bridge-rail-link').focus();
+        usable(await submenu(keys),'with the row focused');
+        await keys.keyboard.press('Tab');
+        assert.equal(await keys.evaluate(()=>document.activeElement.getAttribute('href')),'#users');
+        await keys.locator('main').evaluate(node=>{node.tabIndex=-1;node.focus();});
+        assert.equal(await submenu(keys),null,'the fly-out shuts when focus leaves the rail');
+
+        // If the view's script does not run, the stylesheet alone still hides the submenu at rest and opens it beside
+        // the rail on hover (under its row, as the other rows' fly-outs fall back: the script is what docks them).
+        const plain=await shell(browser,1024,768,pageWith('parent'));
+        assert.equal(await submenu(plain),null);
+        await plain.locator('.bridge-rail-row.active > .bridge-rail-link').hover();
+        const fallback=await submenu(plain);
+        assert.equal(fallback.position,'fixed');
+        assert.equal(fallback.left,68);
     }finally{await browser.close();}
 });
 

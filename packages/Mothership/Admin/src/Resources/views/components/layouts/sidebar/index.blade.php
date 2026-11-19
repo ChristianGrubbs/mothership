@@ -337,6 +337,13 @@
                 #mothership-sidebar [data-menu-item].inactive [data-submenu] {
                     display: none !important;
                 }
+
+                /* The icon rail the stylesheet draws by width: there the current page's submenu is a fly-out too. */
+                @media (max-width: 1179px) {
+                    #mothership-sidebar [data-menu-item] [data-submenu] {
+                        display: none !important;
+                    }
+                }
             `;
 
             document.head.appendChild(style);
