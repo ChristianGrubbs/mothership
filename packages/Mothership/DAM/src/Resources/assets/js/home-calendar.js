@@ -111,7 +111,7 @@
             const people = state.people || [];
             const known = !task.assignee || people.some(person => person.id === task.assignee.id);
             return `<li class="agh-cal-task${task.parent_id ? ' is-sub' : ''}${task.status === 'done' ? ' is-done' : ''}" data-task="${task.id}">
-                <div class="agh-cal-task-line"><input type="checkbox" data-cal-done ${task.status === 'done' ? 'checked' : ''} aria-label="Done: ${esc(task.title)}" />
+                <div class="agh-cal-task-line"><label class="agh-cal-done"><input type="checkbox" data-cal-done ${task.status === 'done' ? 'checked' : ''} aria-label="Done: ${esc(task.title)}" /></label>
                 <span class="agh-cal-task-title"><strong>${esc(task.title)}</strong>${task.role ? `<em>${esc(task.role)}</em>` : ''}${task.status === 'in_progress' ? '<em class="is-progress">In progress</em>' : ''}${task.due_on ? `<small>due ${esc(dayLabel(task.due_on, {month: 'short', day: 'numeric'}))}</small>` : ''}</span>
                 <select data-cal-assign aria-label="Who has ${esc(task.title)}"><option value="">Unassigned</option>${known ? '' : `<option value="${task.assignee.id}" selected>${esc(task.assignee.name)}</option>`}${people.map(person => `<option value="${person.id}"${task.assignee?.id === person.id ? ' selected' : ''}>${esc(person.name)}${person.id === me() ? ' (me)' : ''}</option>`).join('')}</select>
                 ${!task.assignee ? '<button type="button" class="agh-button" data-cal-claim>Take it</button>' : task.status === 'open' && task.assignee.id === me() ? '<button type="button" class="agh-button" data-cal-start>Start</button>' : ''}
