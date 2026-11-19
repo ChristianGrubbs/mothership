@@ -160,8 +160,9 @@ matching (`suggestTopics`) offers topic presets from the same description.
   and the current row's Move buttons take a column beside the title.
 - Short tool under touch: when the tool frame is 640 px tall or less (the outer display, the open inner display flat
   or as a book, a phone on its side), the transport takes two rows and hides nothing. The first row has Play (its
-  glyph only, its name kept for assistive tech), the scrubber and the clock. The second has the frame steps, what to
-  play, Mute and Close-up. On the outer display upright the pane under it grows from 86 px to about 158. An ordinary
+  glyph only, its name kept for assistive tech), the scrubber, the clock and Close-up. The second has the frame steps,
+  what to play (every option shown in full) and Mute. The order is visual only: focus still goes Play, the steps, what
+  to play, Mute, Close-up, then the scrubber. On the outer display upright the pane under it grows from 86 px to about 158. An ordinary
   phone (a tool 664 px tall or more), tabletop, a mouse and the desktop keep the usual transport.
 - Export sheet: "Copy for an agent" takes its own row whenever the sheet itself is under 560 px wide (a container
   query), so a sheet on one half of an open Duo wraps the same way as a phone's.

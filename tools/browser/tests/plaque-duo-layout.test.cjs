@@ -355,6 +355,13 @@ const transport = page => page.evaluate(() => {
         height: Math.round(t.getBoundingClientRect().height),
         overflow: t.scrollWidth > t.clientWidth + 1,
         label: document.querySelector('[data-play-label]').getBoundingClientRect().width > 2,
+        // What to play has room for its longest option in full: the text plus the select's own padding (its chevron sits there).
+        scopeShort: (() => {
+            const select = document.querySelector('[data-scope]'), style = getComputedStyle(select), ctx = document.createElement('canvas').getContext('2d');
+            ctx.font = style.font;
+            const widest = Math.max(...[...select.options].map(o => ctx.measureText(o.textContent).width));
+            return Math.ceil(widest + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) - select.clientWidth);
+        })(),
         pane: pane.dataset.pane,
         visible: Math.round(Math.min(p.bottom, tool.bottom) - Math.max(p.top, tool.top)),
         play: at('[data-action="play"]'), scrub: at('[data-scrub]'), clock: at('[data-clock]'),
@@ -363,15 +370,17 @@ const transport = page => page.evaluate(() => {
     };
 });
 
-// Two rows: Play, the scrubber and the clock, then the steps, what to play, Mute and Close-up (when it applies), each a
+// Two rows: Play, the scrubber, the clock and Close-up (when it applies), then the steps, what to play and Mute, each a
 // 44 px target, none overlapping another or the transport's edges.
 function assertTwoRows(t, label) {
     assert.ok(t.height <= 100, `${label}: the transport takes two rows: ${t.height}`);
     assert.equal(t.overflow, false, `${label}: nothing overflows the row`);
     for (const name of ['play', 'scrub', 'clock', 'back', 'forward', 'scope', 'mute']) assert.ok(t[name], `${label}: ${name} stays in view`);
-    const first = ['play', 'scrub', 'clock'];
-    const second = ['back', 'forward', 'scope', 'mute', ...(t.closeUp ? ['closeUp'] : [])];
+    const first = ['play', 'scrub', 'clock', ...(t.closeUp ? ['closeUp'] : [])];
+    const second = ['back', 'forward', 'scope', 'mute'];
     for (const name of first) assert.ok(Math.abs(t[name].middle - t.play.middle) <= 4, `${label}: ${name} shares the first row`);
+    assert.ok(t.closeUp ? t.closeUp.left >= t.clock.right : true, `${label}: Close-up closes the first row`);
+    assert.ok(t.scrub.width >= 96 && t.scrub.height >= 44, `${label}: the scrubber keeps room to drag and a 44 px target: ${t.scrub.width} x ${t.scrub.height}`);
     for (const name of second) {
         assert.ok(Math.abs(t[name].middle - t.back.middle) <= 4 && t[name].top >= t.play.bottom, `${label}: ${name} sits on the second row`);
         assert.ok(t[name].height >= 44, `${label}: ${name} is a 44 px target: ${t[name].height}`);
@@ -385,6 +394,7 @@ function assertTwoRows(t, label) {
     }
     assert.ok(t.play.width >= 44 && t.play.height >= 44, `${label}: Play is a 44 px target`);
     assert.equal(t.label, false, `${label}: Play shows its glyph only`);
+    assert.ok(t.scopeShort <= 0, `${label}: what to play shows every option in full (short by ${t.scopeShort} px)`);
 }
 
 browserTest('on a short tool under touch the transport takes two rows, hides nothing, and the pane gains the room', async () => {
@@ -413,7 +423,7 @@ browserTest('on a short tool under touch the transport takes two rows, hides not
             await page.close();
         }
 
-        // Tight framing stands Close-up down; the two rows hold and Mute closes the second row.
+        // Tight framing stands Close-up down; the clock closes the first row and Mute the second, at the same edge.
         {
             const { page } = await open(browser, { width: 382, height: 463 });
             await addPlaques(page, 1);

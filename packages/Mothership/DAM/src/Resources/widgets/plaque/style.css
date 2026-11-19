@@ -1246,16 +1246,26 @@
 
 /* A short tool under touch (an iPhone Duo's outer display, the open inner display flat or as a book, a phone on its
    side): with 44 px targets the transport wrapped to three or four rows and left the pane under it 74 to 86 px. Here it
-   takes two rows and hides nothing: Play, the scrubber and the clock, then the frame steps, what to play, Mute and
-   Close-up. Play shows its glyph only; its name stays for assistive tech. The query reads the tool frame's own
+   takes two rows and hides nothing: Play, the scrubber, the clock and Close-up, then the frame steps, what to play and
+   Mute. Play shows its glyph only; its name stays for assistive tech. The order is visual only: focus still goes Play,
+   the steps, what to play, Mute, Close-up, then the scrubber. The query reads the tool frame's own
    viewport, so a tool 640 px tall or less qualifies whatever the device; an ordinary phone (664 and taller), tabletop,
    a mouse and the desktop keep the layout above. */
 @media (pointer: coarse) and (max-width: 1099px) and (max-height: 640px) {
+    /* Each row sizes on its own (a wrapping flex line with a full-width break between them), so the clock's width
+       never squeezes what to play on the row below. */
     .plq-transport {
-        display: grid;
-        grid-template-columns: 44px 44px minmax(0, 1fr) auto 44px;
+        display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        gap: 6px;
+        gap: 3px 6px;
+    }
+
+    .plq-transport::after {
+        content: "";
+        flex-basis: 100%;
+        order: 5;
+        height: 0;
     }
 
     .plq-transport-row {
@@ -1263,7 +1273,8 @@
     }
 
     .plq-transport .plq-play {
-        grid-area: 1 / 1;
+        flex: none;
+        order: 1;
         width: 44px;
         min-width: 0;
         padding: 0;
@@ -1285,26 +1296,34 @@
     }
 
     .plq-scrub {
-        grid-area: 1 / 2 / 2 / 4;
+        flex: 1 1 0;
+        order: 2;
+        width: auto;
+        min-width: 0;
         margin: 0;
     }
 
     .plq-clock {
-        grid-area: 1 / 4 / 2 / 6;
-        justify-self: end;
+        order: 3;
         margin: 0;
     }
 
+    /* Close-up closes the first row, so what to play has the room to show every option in full on the row below. */
+    .plq-closeup {
+        order: 4;
+    }
+
     .plq-transport [data-action="step-back"] {
-        grid-area: 2 / 1;
+        order: 6;
     }
 
     .plq-transport [data-action="step-forward"] {
-        grid-area: 2 / 2;
+        order: 7;
     }
 
     .plq-scope {
-        grid-area: 2 / 3;
+        flex: 1 1 0;
+        order: 8;
         min-width: 0;
     }
 
@@ -1313,26 +1332,7 @@
     }
 
     .plq-mute {
-        grid-area: 2 / 4;
-    }
-
-    .plq-closeup {
-        grid-area: 2 / 5;
-    }
-
-    /* Without Close-up (tight framing, or a wide stage), the last column goes: the clock and Mute share one, and Mute
-       closes the row under the clock's edge. */
-    .plq-transport:has(.plq-closeup[hidden]) {
-        grid-template-columns: 44px 44px minmax(0, 1fr) auto;
-    }
-
-    .plq-transport:has(.plq-closeup[hidden]) .plq-clock,
-    .plq-transport:has(.plq-closeup[hidden]) .plq-mute {
-        grid-column: 4 / 5;
-    }
-
-    .plq-transport:has(.plq-closeup[hidden]) .plq-mute {
-        justify-self: end;
+        order: 9;
     }
 }
 
