@@ -1,9 +1,23 @@
 # Sound Effect Maker
 
-A Home tool (`sound-effects`, always available) that makes short game-style sound effects in the browser. It is one
-self-contained file, `packages/Mothership/DAM/src/Resources/widgets/sound-effects/index.html`: inline CSS and JavaScript,
-the Web Audio API, no audio assets, no dependencies and no build step. The same file works served from Home and opened
-directly from disk.
+A tool (`sound-effects`, always available) that makes short game-style sound effects in the browser. Its folder,
+`packages/Mothership/DAM/src/Resources/widgets/sound-effects/`, holds `index.html`, `app.js` and `style.css`, drawn with
+the shared tool kit (`widgets/_kit/tool-kit.css`): the Web Audio API, no audio assets, no dependencies and no build
+step. The same files work inside the tool page (`/admin/tools/sound-effects`) and opened directly from disk.
+
+## Layout
+
+- **Sound:** the sound's name and whether it is saved, the wave (press it to replay), its length and peak, Play and
+  Save sound.
+- **Effects:** Start from an effect, Surprise me and Nudge, then Playback (sample rate, master volume, play after each
+  edit) and the shortcuts.
+- **Shape:** Shape it, with Simple and Advanced.
+- From 720 px wide, Sound sits over Effects in one scroller with Shape beside them (400 px, 360 px under 1100 px).
+  Narrower, Sound stays on top and a segment under it picks Effects or Shape. On a folding phone the page that frames
+  the tool says where the fold is: on a book fold Shape goes right of it; on a tabletop fold the sound stays above it,
+  and the segment with Effects or Shape goes below.
+- Inside the tool page the page's bar names the sound and lists the saved sounds, and holds Export and Save to Library.
+  Opened from disk, the tool shows its own Saved sounds… and Export… buttons instead.
 
 ## What it does
 
@@ -16,12 +30,18 @@ directly from disk.
 - **Render:** one function, `renderSamples(params, seed, sampleRate)`, computes the sound sample by sample into a
   `Float32Array`; noise comes from a seeded generator (mulberry32), so the same parameters, seed and sample rate give
   identical samples. Playback copies them into an `AudioBuffer` and plays it through a single `AudioBufferSourceNode`.
-- **Library:** save, rename, duplicate, reorder and delete (with Undo). Kept in the frame's `localStorage`, which inside
-  Home is the per-account widget preference store (one value per key, at most 64 KB; the tool warns before the library
-  outgrows it). Export and import the whole library as JSON; download one sound as WAV or the whole library as a ZIP of
-  WAV files (16-bit PCM mono at the chosen sample rate; ZIP entries are stored, uncompressed, with UTF-8 names).
+- **Saved sounds:** Save sound (or S) keeps the sound. The Saved sounds sheet lists them, with Rename, Duplicate, Move
+  up, Move down and Delete (with Undo), and exports or imports the whole library as JSON. Kept in the frame's
+  `localStorage`, which inside the tool page is the per-account widget preference store (one value per key, at most
+  64 KB; a save that would outgrow it is refused, and the tool says so).
+- **Export:** a sheet that downloads this sound as a WAV or every saved sound as a ZIP of WAV files (16-bit PCM mono at
+  the chosen sample rate; ZIP entries are stored, uncompressed, with UTF-8 names). Its button says which.
+- **Save to Library**, inside the tool page only: the sound as a WAV and its settings as a one-sound library JSON, which
+  Import opens again, into a folder the account may upload to. Both files are made from the sound as it was when Save
+  was pressed, and the folder is remembered.
 - **Keyboard**, while focus is in the tool and not in a field or control that uses the key: Space plays, S saves,
-  the arrow keys move through saved sounds. F2 renames and Delete deletes in the list.
+  the arrow keys move through saved sounds. With a sheet open only the saved-sounds list takes keys: the arrows, Home
+  and End move through it, F2 renames and Delete deletes.
 
 ## Library JSON format (version 1)
 
@@ -74,7 +94,6 @@ The page also exposes these pure functions as `window.MothershipSoundEffects` (`
 
 ## Styles
 
-The page carries fallback colour tokens equal to Home's current light and dark tokens. Home tells the frame its theme
-(`data-theme` on `<html>`); opened from disk the system theme applies. A host may define `--host-paper`, `--host-wash`,
-`--host-ink`, `--host-soft`, `--host-line`, `--host-line-strong`, `--host-accent`, `--host-accent-strong`,
-`--host-on-accent` and `--host-tint` on the document to override the fallbacks; Home does not inject them today.
+The tool kit's colour tokens equal the shell's in both themes, and a test holds them equal. The page that
+frames the tool tells it the theme (`data-theme` on `<html>`) and, on a folding phone, where the fold crosses it
+(`data-fold`, `--fold-start` and `--fold-end`). Opened from disk the tool is light.
