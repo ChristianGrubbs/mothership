@@ -97,15 +97,19 @@ it('shows no Creative Hub apps now the in-app Hub is gone, even with dam.hub.ena
         ->assertDontSee('data-hub-apps', false);
 });
 
-it('links to Transfers from the Tools shelf only while Transfers can open', function () {
-    $this->get('/admin/home')->assertOk()->assertDontSee('<span>Send files</span>', false);
+it('leaves Transfers and the Icon Library to their own places, with no link on Home', function () {
+    config([
+        'dam.transfers.enabled'     => true,
+        'dam.transfers.origin'      => 'https://transfers.example.test',
+        'dam.transfers.shared_key'  => str_repeat('k', 40),
+        'dam-home.icon_library_url' => 'https://icons.example.org',
+    ]);
 
-    config(['dam.transfers.enabled' => true, 'dam.transfers.origin' => 'https://transfers.example.test', 'dam.transfers.shared_key' => str_repeat('k', 40)]);
-
+    // Transfers is on the rail and the Icon Library on the Library page.
     $this->get('/admin/home')->assertOk()
-        ->assertSee('<span>Send files</span>', false)
-        ->assertSee(route('admin.dam.transfers.index'), false)
-        ->assertDontSee('data-block="send"', false);
+        ->assertDontSee('<span>Send files</span>', false)
+        ->assertDontSee('data-block="send"', false)
+        ->assertDontSee('https://icons.example.org/', false);
 });
 
 it('keeps every tool launcher reachable from the Tools shelf', function () {

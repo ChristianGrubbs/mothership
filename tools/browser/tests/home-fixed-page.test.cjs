@@ -5,8 +5,8 @@ const path=require('node:path');
 const {launchBrowser}=require('../launch-browser.cjs');
 const {homeApp,homeAnswersSource,homeScripts,homeStyles}=require('./support/home-fixture.cjs');
 
-// The fixed Home page's own parts: the arrivals board, the states it can be in, the Tools shelf, the
-// phone sheet and the dialogs. The workspace popup and Signal have their own files.
+// The fixed Home page's own parts: the arrivals board, the states it can be in, the phone sheet and the
+// dialogs. Signal has its own file; tools open from the Tools page, which has its own.
 const playwrightPath=process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH;
 const browserTest=playwrightPath?test:test.skip;
 const ORIGIN='https://home.test';
@@ -228,32 +228,20 @@ browserTest('a role without the Library gets no board and an honest count of wha
     }finally{await browser.close();}
 });
 
-browserTest('tools sit on the Tools shelf in the house order, and a tile opens its workspace',async()=>{
+browserTest('Home draws no tool to launch, and offers the calendar only to an account that has it',async()=>{
     const browser=await launchBrowser({playwrightPath});
     try{
-        const {page,errors}=await mount(browser,{catalog:[tool('vectorization','Vectorization'),{...tool('rss','Signal'),settings:{count:5,feed_id:null}},tool('mystery','Mystery tool'),tool('video-downloader','Video Downloader'),tool('looper','Video Loop Refiner')]});
-        const tiles=page.locator('[data-tools] [data-open]');
-        // Known tools first in their fixed order, an unknown tool after them. Signal is never a tile.
-        assert.deepEqual(await tiles.evaluateAll(items=>items.map(item=>item.dataset.open)),['looper','video-downloader','vectorization','mystery']);
-        const downloader=page.locator('[data-open="video-downloader"]');
-        assert.equal(await downloader.locator('span').textContent(),'Video Downloader');
-        assert.equal(await page.locator('.agh-workspace').count(),0);
+        // Tools open from the Tools page: a catalogue full of them puts nothing to launch on Home.
+        const tools=[tool('looper','Video Loop Refiner'),tool('video-downloader','Video Downloader'),tool('vectorization','Vectorization')];
+        let {page,errors}=await mount(browser,{catalog:tools});
+        await page.waitForFunction(()=>!document.querySelector('[data-calendar-open]').checkVisibility());
+        assert.equal(await page.locator('[data-open]').count(),0);
+        assert.deepEqual(errors,[]);
+        await page.close();
 
-        await downloader.click();
-        const workspace=page.locator('.agh-workspace');
-        await workspace.locator('[data-tool-close]').waitFor();
-        assert.equal(await workspace.getAttribute('role'),'dialog');
-        assert.equal(await workspace.getAttribute('aria-label'),'Video Downloader');
-        const frame=new URL(await workspace.locator('iframe').getAttribute('src'));
-        assert.equal(frame.origin+frame.pathname,`${ORIGIN}/tools/video-downloader/index.html`);
-        assert.equal(await page.evaluate(()=>document.getElementById('app').hasAttribute('inert')),true);
-
-        // Closing hands focus back to the tile and Home is usable again.
-        await workspace.locator('[data-tool-close]').click();await workspace.locator('[data-tool-confirm-accept]').click();
-        await page.waitForFunction(()=>!document.querySelector('.agh-workspace'));
-        assert.equal(await page.evaluate(()=>document.getElementById('app').hasAttribute('inert')),false);
-        assert.equal(await page.evaluate(()=>document.activeElement?.dataset.open),'video-downloader');
-        assert.equal(await tiles.count(),4,'a redraw replaces the tiles, never adds to them');
+        // The opener starts hidden here, so it shows only once the catalogue has been read.
+        ({page,errors}=await mount(browser,{catalog:[...tools,{...tool('calendar','Calendar'),kind:'widget',url:null}],prepare:()=>{document.querySelector('[data-calendar-open]').parentElement.hidden=true;}}));
+        await page.waitForFunction(()=>document.querySelector('[data-calendar-open]').checkVisibility());
         assert.deepEqual(errors,[]);
         await page.close();
     }finally{await browser.close();}

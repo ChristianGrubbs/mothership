@@ -53,12 +53,6 @@
                     <ul class="hm-tool-list" data-tools>
                         <li data-tools-end><button type="button" class="hm-tool" data-calendar-open><svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4z M4 10h16 M8 3v5 M16 3v5"/></svg><span>Calendar</span></button></li>
                         <li><button type="button" class="hm-tool" data-id="phone-app" data-phone-open><svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2.500h8A1.500 1.500 0 0 1 17.500 4v16a1.500 1.500 0 0 1-1.500 1.500H8A1.500 1.500 0 0 1 6.500 20V4A1.500 1.500 0 0 1 8 2.500z M11 18.500h2"/></svg><span>iPhone app</span></button></li>
-                        @if ($transfers ?? null)
-                            <li><a class="hm-tool" href="{{ route('admin.dam.transfers.index') }}"><svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 3 10 14 M21 3l-7 18-4-7-7-4z"/></svg><span>Send files</span></a></li>
-                        @endif
-                        @if (filled($iconLibraryUrl = config('dam-home.icon_library_url')))
-                            <li><a class="hm-tool" href="{{ rtrim($iconLibraryUrl, '/') }}/" target="_blank" rel="noopener noreferrer"><svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v10M7 17 17 7"/></svg><span>Icon Library</span></a></li>
-                        @endif
                     </ul>
                     <div data-section="links" hidden>
                         <h3 class="hm-mono">Your saved links</h3>

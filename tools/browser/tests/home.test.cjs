@@ -18,31 +18,6 @@ test('reordering keeps settings and does not mutate the saved layout', () => {
     assert.equal(widgets[0].id, 'recent');
     assert.equal(moved[1].settings.limit, 6);
 });
-test('collapse retains a tool session while explicit discard removes it', () => {
-    const api = state();
-    assert.ok(api, 'Home state API exists');
-    const sessions = api.sessions();
-    const first = sessions.open('looper');
-    sessions.markDirty('looper', true);
-    sessions.collapse();
-    assert.equal(sessions.active, null);
-    assert.equal(sessions.open('looper'), first);
-    assert.equal(sessions.hasDirty(), true);
-    sessions.discard('looper');
-    assert.equal(sessions.hasDirty(), false);
-    assert.notEqual(sessions.open('looper'), first);
-});
-test('bridge rejects messages from a different frame or origin', () => {
-    const api = state();
-    assert.ok(api, 'Home state API exists');
-    const frame = {};
-    const base = { origin: 'https://assets.example', frame };
-    assert.equal(api.acceptMessage({ ...base, event: {origin:base.origin,source:{},data:{protocol:'mothership-widget/v1'}} }), false);
-    assert.equal(api.acceptMessage({ ...base, event: {origin:'https://else.example',source:frame,data:{protocol:'mothership-widget/v1'}} }), false);
-    assert.equal(api.acceptMessage({ ...base, event: {origin:base.origin,source:frame,data:{protocol:'mothership-widget/v1'}} }), true);
-    assert.equal(api.acceptMessage({ ...base, event: {origin:base.origin,source:frame,data:{protocol:'other-tool/v1'}} }), false);
-});
-
 test('legacy widths normalize once to version 2 spans without mutating the saved widget', () => {
     const api = state();
     const widget = {id:'rss',size:'large',settings:{feedId:12,count:8}};

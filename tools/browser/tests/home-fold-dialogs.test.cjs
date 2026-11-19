@@ -5,7 +5,7 @@ const path = require('node:path');
 const {launchBrowser} = require('../launch-browser.cjs');
 const {homeApp, homeAnswersSource, homeScripts, homeStyles} = require('./support/home-fixture.cjs');
 
-// Home's dialogs, tool workspace and phone sheet on a folded screen: public/pwa/device.css keeps every control in
+// Home's dialogs and phone sheet on a folded screen: public/pwa/device.css keeps every control in
 // them off the fold. The page is Home's own markup, stylesheet and scripts, so a renamed class fails here.
 const root = path.resolve(__dirname, '../../..');
 const deviceCss = fs.readFileSync(path.join(root, 'public/pwa/device.css'), 'utf8');
@@ -16,7 +16,7 @@ const browserTest = playwrightPath ? test : test.skip;
 const ORIGIN = 'https://home.test';
 
 const tool = (id, title) => ({id, title, description: `${title} description`, icon: id, kind: 'tool', settings: {}, url: `${ORIGIN}/tools/${id}/index.html`});
-const catalog = [tool('calendar', 'Calendar'), tool('video-downloader', 'Video Downloader')];
+const catalog = [tool('calendar', 'Calendar')];
 
 // Emulated poses (sanity values; no Apple source gives the hinge a width). Book: side by side. Laptop: stacked.
 // `first` is the first segment's width; left out, the fold is centred, as it is on the device.
@@ -65,7 +65,6 @@ const OVERLAYS = [
     ['event editor', '[data-calendar-dialog] [data-cal-add]', '[data-cal-dialog]', '[data-calendar-open]'],
     ['iPhone app', '[data-section="apps"] [data-phone-open]', '[data-phone-dialog]'],
     ['phone sheet', '[data-glance-open]', '[data-side-sheet]'],
-    ['tool workspace', '[data-open="video-downloader"]', '.agh-workspace'],
 ];
 
 // Opens each named overlay in turn and returns its box, the boxes of the controls shown inside it, and the calendar's
@@ -86,19 +85,18 @@ async function boxes(page, names) {
             return {box: rect(node), controls, clips: getComputedStyle(node).overflowY !== 'visible', month: part('.agh-cal-grid'), day: part('.agh-cal-side')};
         }, selector);
         await page.evaluate(() => {
-            document.querySelector('.agh-workspace [data-tool-close]')?.click(); document.querySelector('[data-tool-confirm-accept]')?.click();
             [...document.querySelectorAll('dialog[open]')].reverse().forEach(dialog => dialog.close());
         });
-        await page.waitForFunction(() => !document.querySelector('dialog[open], .agh-workspace'));
+        await page.waitForFunction(() => !document.querySelector('dialog[open]'));
     }
 
     return found;
 }
 
-browserTest('book pose keeps Home\'s dialogs and tool workspace off the fold', async () => {
+browserTest('book pose keeps Home\'s dialogs off the fold', async () => {
     const browser = await launchBrowser({playwrightPath});
     try {
-        const single = ['upload', 'event editor', 'iPhone app', 'tool workspace'];
+        const single = ['upload', 'event editor', 'iPhone app'];
         // Without segments the layer is inert: the dialogs sit centred, across the middle of the screen.
         const flat = await mount(browser, {width: BOOK.width, height: BOOK.height});
         const centred = await boxes(flat.page, [...single, 'calendar']);
@@ -136,11 +134,11 @@ browserTest('book pose keeps Home\'s dialogs and tool workspace off the fold', a
     }
 });
 
-browserTest('laptop pose keeps Home\'s dialogs and tool workspace inside the lower segment', async () => {
+browserTest('laptop pose keeps Home\'s dialogs inside the lower segment', async () => {
     const browser = await launchBrowser({playwrightPath});
     try {
         // At this width Home has no phone sheet: its rows scroll to the cards on the page.
-        const names = ['upload', 'calendar', 'event editor', 'iPhone app', 'tool workspace'];
+        const names = ['upload', 'calendar', 'event editor', 'iPhone app'];
         const flat = await mount(browser, {width: LAPTOP.width, height: LAPTOP.height});
         const resting = await boxes(flat.page, names);
         for (const [name, {box}] of Object.entries(resting)) assert.ok(box[1] < 433 && box[3] > 434, `${name} crosses the middle when nothing is folded: ${box}`);

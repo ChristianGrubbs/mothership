@@ -236,25 +236,5 @@
             const pictures = Math.min(previews, withMore);
             return {pictures, more: Math.max(0, files - pictures)};
         },
-        acceptMessage({event, frame, origin}) {
-            return event.source === frame && event.origin === origin
-                && event.data?.protocol === 'mothership-widget/v1';
-        },
-        sessions() {
-            const entries = new Map();
-            return {
-                active: null,
-                open(id) {
-                    if (!entries.has(id)) entries.set(id, {id, dirty: false});
-                    this.active = id;
-                    return entries.get(id);
-                },
-                collapse() { this.active = null; },
-                markDirty(id, dirty) { if (entries.has(id)) entries.get(id).dirty = Boolean(dirty); },
-                isDirty(id) { return Boolean(entries.get(id)?.dirty); },
-                hasDirty() { return [...entries.values()].some(entry => entry.dirty); },
-                discard(id) { entries.delete(id); if (this.active === id) this.active = null; },
-            };
-        },
     };
 })();
