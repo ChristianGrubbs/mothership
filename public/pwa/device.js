@@ -7,7 +7,7 @@
  * those. Every other browser, and Duo with the flags off, gets nothing here: the ordinary responsive layout.
  * No user-agent or device checks; the segment geometry is the only input, and it is re-read on resize, on a
  * posture change and when the segment media queries change. Elements marked [data-fold-split] also get --fold-start (columns: the width of their content box
- * on the leading side of the fold) or --fold-top (rows: the height above it), measured from their own box; elements
+ * on the leading side of the fold) or --fold-top (rows: the height above it, as if the page were scrolled to the top), measured from their own box; elements
  * marked [data-fold-wrap] get --fold-rest (columns: how far the box runs past the fold) so their content wraps first.
  */
 (() => {
@@ -42,11 +42,26 @@
         }
     };
 
+    // Where the element's top would be with the page and every scroller around it at the top. A rows split is measured
+    // from here, so it comes out the same wherever the reader has scrolled to. Inside a fixed box the page's scroll does
+    // not move it.
+    const topAtRest = (el, box) => {
+        let top = box.top;
+        for (let node = el; node; node = node.parentElement) {
+            if (node !== el && node !== document.scrollingElement) top += node.scrollTop;
+            if (getComputedStyle(node).position === 'fixed') return top;
+        }
+
+        return top + (document.scrollingElement?.scrollTop ?? 0);
+    };
+
     const measureSplits = () => {
         for (const el of document.querySelectorAll('[data-fold-split], [data-fold-wrap]')) {
             el.style.removeProperty('--fold-start');
-            el.style.removeProperty('--fold-top');
             el.style.removeProperty('--fold-rest');
+            // Rows keep --fold-top while it is re-measured: clearing it would shrink the rows above the fold for a moment,
+            // and a page scrolled past them would jump. The element's own top does not depend on it.
+            if (fold?.mode !== 'rows') el.style.removeProperty('--fold-top');
             if (!fold) continue;
             const box = el.getBoundingClientRect();
             const style = getComputedStyle(el);
@@ -61,7 +76,7 @@
                     : fold.a.right - (box.left + parseFloat(style.paddingLeft));
                 el.style.setProperty('--fold-start', px(start));
             } else {
-                el.style.setProperty('--fold-top', px(fold.a.bottom - (box.top + parseFloat(style.paddingTop))));
+                el.style.setProperty('--fold-top', px(fold.a.bottom - (topAtRest(el, box) + parseFloat(style.paddingTop))));
             }
         }
     };
