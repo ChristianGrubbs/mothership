@@ -35,8 +35,15 @@
     // An Escape that closes a sheet inside the tool is the tool's own: it is not passed on as a wish to leave.
     document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!document.querySelector('dialog[open]')){notify('escape');}});
     // The page that frames this tool steps its own actions back while a sheet is open here, so one filled control shows.
-    let sheetOpen=false;
-    if(typeof MutationObserver==='function')new MutationObserver(()=>{const open=Boolean(document.querySelector('dialog[open]'));if(open!==sheetOpen){sheetOpen=open;notify('sheet',{open});}}).observe(document.documentElement,{attributes:true,attributeFilter:['open'],subtree:true});
+    // A sheet that opens while the tool is still answering a press on the page's bar is the bar's (fromBar): when it
+    // closes, the page gives the focus back to the bar, since a sheet here can only give it back to what had it here.
+    // A press owns one sheet at most: the first that opens takes it, and a sheet the tool opens later is the tool's own,
+    // even while the press is still being answered (Save to Library reading its folders after its sheet is up).
+    let sheetOpen=false,fromBar=false,barPress=null;
+    if(typeof MutationObserver==='function')new MutationObserver(()=>{const open=Boolean(document.querySelector('dialog[open]'));if(open!==sheetOpen){sheetOpen=open;if(open){fromBar=Boolean(barPress);barPress=null;}notify('sheet',{open,fromBar});}}).observe(document.documentElement,{attributes:true,attributeFilter:['open'],subtree:true});
+    // A command's handler may open its sheet after an await. The press waits for it until the handler settles, and a
+    // task longer, so the observer above has seen the sheet it opened.
+    const answer=(handler,payload)=>{const press={};barPress=press;let result;try{result=handler(payload);}finally{Promise.resolve(result).finally(()=>setTimeout(()=>{if(barPress===press)barPress=null;},0));}};
     document.addEventListener('DOMContentLoaded',()=>{
         // reportsWork: the listeners above tell Home when work starts, so Home may close this tool
         // without asking while none has been reported.
@@ -60,7 +67,7 @@
         if(event.source!==window.parent||event.origin!==location.origin||event.data?.protocol!=='mothership-widget/v1')return;
         if(event.data.type==='theme')setTheme(event.data.payload?.theme);
         if(event.data.type==='fold')setFold(event.data.payload);
-        if(event.data.type==='command')commands.get(event.data.payload?.name)?.(event.data.payload);
+        if(event.data.type==='command'){const handler=commands.get(event.data.payload?.name);if(handler)answer(handler,event.data.payload);}
     });
     const originalFetch=window.fetch.bind(window);
     window.fetch=(input,options={})=>{
