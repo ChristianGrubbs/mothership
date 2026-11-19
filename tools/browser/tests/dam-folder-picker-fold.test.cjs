@@ -86,13 +86,16 @@ async function mount(page, {width, height, segments = null, dir = 'ltr'}) {
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
 
-// The dialog's box, the scrim's box, and every control the dialog shows, with its box.
+// The dialog's box, the scrim's box, every control the dialog shows, with its box, and the screen a fixed box fills. The
+// admin theme keeps a stable scrollbar gutter (html { scrollbar-gutter: stable }), so where the browser draws classic
+// scrollbars (a desktop, and CI) that screen is narrower than the window by the gutter. Phones overlay their scrollbars.
 const layout = page => page.evaluate(selector => {
     const box = el => { const r = el.getBoundingClientRect(); return {left: r.left, top: r.top, right: r.right, bottom: r.bottom}; };
     const dialog = document.querySelector('[data-folder-picker] [role="dialog"]');
     const scrim = document.querySelector('[data-folder-picker] > .bg-black\\/50');
 
     return {
+        screen: {width: document.documentElement.clientWidth, height: document.documentElement.clientHeight},
         fold: document.documentElement.dataset.fold ?? null,
         dialog: box(dialog),
         scrim: box(scrim),
@@ -125,12 +128,12 @@ browserTest('book pose puts the folder picker on the trailing segment, with no c
     for (const dir of ['ltr', 'rtl']) {
         await withPage(async page => {
             await mount(page, {...BOOK, dir});
-            const {fold, dialog, scrim, controls} = await layout(page);
+            const {screen, fold, dialog, scrim, controls} = await layout(page);
             assert.equal(fold, 'columns');
             // Right in left-to-right, left in right-to-left (device.js: --seg-trailing-*).
             const trailing = segmentBox(BOOK.segments[dir === 'rtl' ? 0 : 1]);
             assertInside(dialog, trailing, `book ${dir}`);
-            assertScrimCovers(scrim, BOOK, `book ${dir}`);
+            assertScrimCovers(scrim, screen, `book ${dir}`);
             const foldX = BOOK.segments[0][2];
             assert.deepEqual(controls.filter(c => c.left < foldX && c.right > foldX).map(c => c.name), [], `book ${dir}: no control crosses the fold`);
             assert.ok(controls.length >= 7, 'the controls were measured');
@@ -140,10 +143,10 @@ browserTest('book pose puts the folder picker on the trailing segment, with no c
 
 browserTest('tabletop puts the folder picker on the lower segment, with no control on the fold', () => withPage(async page => {
     await mount(page, TABLETOP);
-    const {fold, dialog, scrim, controls} = await layout(page);
+    const {screen, fold, dialog, scrim, controls} = await layout(page);
     assert.equal(fold, 'rows');
     assertInside(dialog, segmentBox(TABLETOP.segments[1]), 'tabletop');
-    assertScrimCovers(scrim, TABLETOP, 'tabletop');
+    assertScrimCovers(scrim, screen, 'tabletop');
     const foldY = TABLETOP.segments[1][1];
     assert.deepEqual(controls.filter(c => c.top < foldY && c.bottom > foldY).map(c => c.name), [], 'tabletop: no control crosses the fold');
 }));
@@ -152,16 +155,19 @@ browserTest('with no fold the folder picker stays centred on the screen', async 
     for (const size of FLAT) {
         await withPage(async page => {
             await mount(page, size);
-            const {fold, dialog, scrim} = await layout(page);
+            const {screen, fold, dialog, scrim} = await layout(page);
             assert.equal(fold, null, `${size.name}: no fold`);
-            assertInside(dialog, {left: 0, top: 0, right: size.width, bottom: size.height}, size.name);
-            assert.ok(Math.abs((dialog.left + dialog.right) / 2 - size.width / 2) <= 0.5, `${size.name}: centred across`);
-            assert.ok(Math.abs((dialog.top + dialog.bottom) / 2 - size.height / 2) <= 0.5, `${size.name}: centred down`);
-            // The picker's own size where the screen allows it: 360 wide, 520 tall. WebKit lays out in 1/64 px steps.
+            // With no fold the size limits are the window's (100vw, 100dvh, as before this change), so with a classic
+            // scrollbar's gutter the side margins shrink by half the gutter; the dialog still sits wholly on the screen.
+            const gutter = size.width - screen.width;
+            assertInside(dialog, {left: -gutter / 2, top: 0, right: screen.width + gutter / 2, bottom: screen.height}, size.name);
+            assert.ok(Math.abs((dialog.left + dialog.right) / 2 - screen.width / 2) <= 0.5, `${size.name}: centred across`);
+            assert.ok(Math.abs((dialog.top + dialog.bottom) / 2 - screen.height / 2) <= 0.5, `${size.name}: centred down`);
+            // The picker's own size where the window allows it: 360 wide, 520 tall. WebKit lays out in 1/64 px steps.
             const near = (actual, expected, what) => assert.ok(Math.abs(actual - expected) <= 0.5, `${size.name}: ${what} ${actual}, expected ${expected}`);
             near(dialog.right - dialog.left, Math.min(360, size.width - 32), 'width');
             near(dialog.bottom - dialog.top, Math.min(520, size.height - 32), 'height');
-            assertScrimCovers(scrim, size, size.name);
+            assertScrimCovers(scrim, screen, size.name);
         });
     }
 });
