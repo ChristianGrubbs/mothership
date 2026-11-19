@@ -236,25 +236,22 @@
             const pictures = Math.min(previews, withMore);
             return {pictures, more: Math.max(0, files - pictures)};
         },
-        acceptMessage({event, frame, origin}) {
-            return event.source === frame && event.origin === origin
-                && event.data?.protocol === 'mothership-widget/v1';
+        // Cargo's section shows while it has rows or offers Calendar, so an account with no files yet keeps the
+        // calendar. The bridge marks whether there are rows (data-empty "0" or "1", absent until the summary answers)
+        // and home.js shows Calendar from the catalogue; each calls this after painting its part.
+        showCargo(root) {
+            const section = root.querySelector('[data-cargo-section]');
+            const calendar = !root.querySelector('[data-calendar-open]').hidden;
+            section.hidden = section.dataset.empty !== '0' && !calendar;
+            root.querySelector('[data-cargo-empty]').hidden = section.dataset.empty !== '1';
+            window.MothershipHomeState.showCentre(root);
         },
-        sessions() {
-            const entries = new Map();
-            return {
-                active: null,
-                open(id) {
-                    if (!entries.has(id)) entries.set(id, {id, dirty: false});
-                    this.active = id;
-                    return entries.get(id);
-                },
-                collapse() { this.active = null; },
-                markDirty(id, dirty) { if (entries.has(id)) entries.get(id).dirty = Boolean(dirty); },
-                isDirty(id) { return Boolean(entries.get(id)?.dirty); },
-                hasDirty() { return [...entries.values()].some(entry => entry.dirty); },
-                discard(id) { entries.delete(id); if (this.active === id) this.active = null; },
-            };
+
+        // Home is one column, its side, while the centre has nothing for the person: no board (a role without the
+        // Library), nothing that needs them and no Cargo. The bridge and home.js each call this after painting a part.
+        showCentre(root) {
+            const empty = ['[data-board-object]', '[data-needs]', '[data-cargo-section]'].every(part => root.querySelector(part).hidden);
+            root.querySelector('[data-grid]').toggleAttribute('data-solo', empty);
         },
     };
 })();

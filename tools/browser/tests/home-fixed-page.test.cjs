@@ -5,8 +5,8 @@ const path=require('node:path');
 const {launchBrowser}=require('../launch-browser.cjs');
 const {homeApp,homeAnswersSource,homeScripts,homeStyles}=require('./support/home-fixture.cjs');
 
-// The fixed Home page's own parts: the arrivals board, the states it can be in, the Tools shelf, the
-// phone sheet and the dialogs. The workspace popup and Signal have their own files.
+// The fixed Home page's own parts: the arrivals board, the states it can be in, the phone sheet and the
+// dialogs. Signal has its own file; tools open from the Tools page, which has its own.
 const playwrightPath=process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH;
 const browserTest=playwrightPath?test:test.skip;
 const ORIGIN='https://home.test';
@@ -14,7 +14,7 @@ const ORIGIN='https://home.test';
 const tool=(id,title)=>({id,title,description:`${title} description`,icon:id,kind:'tool',settings:{},url:`${ORIGIN}/tools/${id}/index.html`});
 
 // `summary` is the page script that answers /summary: a function of the page's __homeSummary helper.
-async function mount(browser,{fixture={},catalog=[],summary=null,width=1280,prepare=null,clock=false}={}){
+async function mount(browser,{fixture={},catalog=[],links=[],summary=null,width=1280,prepare=null,clock=false}={}){
     const page=await browser.newPage({viewport:{width,height:900},reducedMotion:'reduce'});
     if(clock)await page.clock.install();
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
@@ -23,17 +23,17 @@ async function mount(browser,{fixture={},catalog=[],summary=null,width=1280,prep
     await page.goto(`${ORIGIN}/admin/home`);
     await page.addStyleTag({content:`*{box-sizing:border-box}body{margin:0}${homeStyles}`});
     await page.addScriptTag({content:homeAnswersSource});
-    await page.evaluate(({catalog,summary})=>{
+    await page.evaluate(({catalog,links,summary})=>{
         const response=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json'}});
         const answer=summary?(0,eval)(`(${summary})`):null;
         window.__requests=[];window.__summaryCalls=0;
         window.fetch=async(url,options={})=>{
             const address=String(url);window.__requests.push(`${options.method||'GET'} ${address}`);
-            if(address.endsWith('/layout'))return response({catalog,widgets:catalog.map(({id,settings})=>({id,settings})),links:[]});
+            if(address.endsWith('/layout'))return response({catalog,widgets:catalog.map(({id,settings})=>({id,settings})),links});
             if(address.endsWith('/summary')&&answer){window.__summaryCalls++;const body=answer(window.__summaryCalls);return body===null?response({message:'The ship did not answer.'},503):response(body);}
             return response(window.__homeAnswer(address)??{});
         };
-    },{catalog,summary:summary?summary.toString():null});
+    },{catalog,links,summary:summary?summary.toString():null});
     if(prepare)await page.evaluate(prepare);
     for(const content of homeScripts)await page.addScriptTag({content});
     await page.waitForFunction(()=>window.__requests.some(entry=>entry.endsWith('/layout'))&&!document.querySelector('[data-board]').hasAttribute('aria-busy'));
@@ -212,7 +212,7 @@ browserTest('a broken picture shows its file type, and Docked says when it read 
     }finally{await browser.close();}
 });
 
-browserTest('a role without the Library gets no board and an honest count of what it cannot see',async()=>{
+browserTest('a role without the Library gets no board, an honest count of what it cannot see, and Add your iPhone at the foot of Away from ship',async()=>{
     const browser=await launchBrowser({playwrightPath});
     const locked=()=>window.__homeSummary({lead:{available:false,reason:'not-permitted'},board:{available:false,reason:'not-permitted'},away:{shares:{available:false,count:null,reason:'not-permitted'},upload_requests:{available:false,count:null,reason:'not-permitted'}}});
     try{
@@ -223,37 +223,132 @@ browserTest('a role without the Library gets no board and an honest count of wha
         assert.equal(await page.locator('[data-glance-open="docked"]').count(),0,'no craft row for a board this role cannot read');
         assert.match(await page.locator('[data-glance-open="away"]').textContent(),/Links not available/);
         assert.deepEqual(await page.locator('[data-away] .hm-figs b').allTextContents(),['–','–','–']);
+        // Add your iPhone has nothing to do with the Library: with no Docked card it sits at the foot of Away from ship.
+        const opener=page.locator('[data-away] [data-phone-elsewhere] [data-phone-open]');
+        assert.equal(await opener.isVisible(),true,'a role without the Library still sees Add your iPhone');
+        assert.equal(await page.locator('[data-phone-open]:visible').count(),1);
+        await opener.click();
+        const dialog=page.locator('[data-phone-dialog]');
+        assert.equal(await dialog.evaluate(node=>node.matches(':modal')),true);
+        await dialog.locator('[data-phone-close]').click();
+        assert.equal(await page.evaluate(()=>document.activeElement?.closest('[data-phone-elsewhere]')!==null),true,'closing returns focus to the link');
+        assert.equal(await page.locator('[data-cargo-section]').isHidden(),true,'no Calendar in the catalogue, so no Cargo');
         assert.deepEqual(errors,[]);
         await page.close();
     }finally{await browser.close();}
 });
 
-browserTest('tools sit on the Tools shelf in the house order, and a tile opens its workspace',async()=>{
+// The centre has nothing for a role without the Library, so Home is its side column alone: one centred column, or
+// the leading half where the screen can fold (900 to 1023 px), and on a phone its cards are on the page.
+browserTest('a role without the Library gets Home as one column at every pose, never beside a blank one',async()=>{
     const browser=await launchBrowser({playwrightPath});
+    const locked=()=>window.__homeSummary({lead:{available:false,reason:'not-permitted'},board:{available:false,reason:'not-permitted'},away:{shares:{available:false,count:null,reason:'not-permitted'},upload_requests:{available:false,count:null,reason:'not-permitted'}}});
     try{
-        const {page,errors}=await mount(browser,{catalog:[tool('vectorization','Vectorization'),{...tool('rss','Signal'),settings:{count:5,feed_id:null}},tool('mystery','Mystery tool'),tool('video-downloader','Video Downloader'),tool('looper','Video Loop Refiner')]});
-        const tiles=page.locator('[data-tools] [data-open]');
-        // Known tools first in their fixed order, an unknown tool after them. Signal is never a tile.
-        assert.deepEqual(await tiles.evaluateAll(items=>items.map(item=>item.dataset.open)),['looper','video-downloader','vectorization','mystery']);
-        const downloader=page.locator('[data-open="video-downloader"]');
-        assert.equal(await downloader.locator('span').textContent(),'Video Downloader');
-        assert.equal(await page.locator('.agh-workspace').count(),0);
+        const {page,errors}=await mount(browser,{fixture:{library:false},summary:locked});
+        await page.waitForFunction(()=>document.querySelector('[data-glance]').children.length>0);
+        const layout=()=>page.evaluate(()=>{
+            const span=node=>{const box=node.getBoundingClientRect();return box.width&&box.height?[Math.round(box.left),Math.round(box.right)]:null;};
+            return {grid:span(document.querySelector('[data-grid]')),centre:span(document.querySelector('.hm-centre')),away:span(document.querySelector('[data-away]')),phones:[...document.querySelectorAll('[data-phone-open]')].filter(node=>node.checkVisibility()).length};
+        });
+        for(const [width,height] of [[1440,900],[951,543],[820,1180],[594,368],[390,844]]){
+            await page.setViewportSize({width,height});
+            const {grid,centre,away,phones}=await layout();
+            assert.equal(centre,null,`no centre column at ${width}`);
+            assert.ok(away,`Away from ship is on the page at ${width}`);
+            assert.equal(phones,1,`one Add your iPhone at ${width}`);
+            if(width>=900&&width<=1023)assert.ok(away[1]<=width/2,`at ${width} it keeps the leading half, off the fold: ${away}`);
+            else assert.ok(Math.abs(away[0]+away[1]-grid[0]-grid[1])<=2&&away[1]-away[0]<=640,`at ${width} it is one centred column: ${away} in ${grid}`);
+        }
+        // Folded like a book, the leading half ends where the first segment does.
+        await page.setViewportSize({width:951,height:585});
+        await page.evaluate(()=>{document.documentElement.dataset.fold='columns';document.documentElement.style.setProperty('--seg-a-right','440px');});
+        assert.ok((await layout()).away[1]<=440,'the column ends before the fold');
+        assert.deepEqual(errors,[]);
+        await page.close();
+    }finally{await browser.close();}
+});
 
-        await downloader.click();
-        const workspace=page.locator('.agh-workspace');
-        await workspace.locator('[data-tool-close]').waitFor();
-        assert.equal(await workspace.getAttribute('role'),'dialog');
-        assert.equal(await workspace.getAttribute('aria-label'),'Video Downloader');
-        const frame=new URL(await workspace.locator('iframe').getAttribute('src'));
-        assert.equal(frame.origin+frame.pathname,`${ORIGIN}/tools/video-downloader/index.html`);
-        assert.equal(await page.evaluate(()=>document.getElementById('app').hasAttribute('inert')),true);
+// Safari on iPhone does not focus a tapped button, so the dialog cannot hand the focus back to the element that had it.
+browserTest('closing the calendar gives the focus to Calendar, though the tap that opened it never focused it',async()=>{
+    const browser=await launchBrowser({playwrightPath});
+    const calendar={...tool('calendar','Calendar'),kind:'widget',url:null};
+    try{
+        // The dialog is Home's own; the calendar module that fills it is home-fold-dialogs' to load, so a stand-in fills in.
+        const {page,errors}=await mount(browser,{catalog:[calendar],prepare:()=>{window.MothershipHomeCalendar={create:()=>({mount(){},show(){}})};}});
+        const opener=page.locator('#hm-cargo [data-calendar-open]'),dialog=page.locator('[data-calendar-dialog]');
+        await opener.waitFor();
+        const onCalendar=()=>page.evaluate(()=>document.activeElement?.hasAttribute('data-calendar-open')===true);
+        // A click event with no focus first: what a tap in Safari on iPhone gives.
+        await opener.dispatchEvent('click');
+        assert.equal(await dialog.evaluate(node=>node.open),true);
+        await dialog.locator('[data-calendar-close]').dispatchEvent('click');
+        assert.equal(await dialog.evaluate(node=>node.open),false);
+        assert.equal(await onCalendar(),true,'closing gives the focus to Calendar');
+        assert.deepEqual(errors,[]);
+        await page.close();
+    }finally{await browser.close();}
+});
 
-        // Closing hands focus back to the tile and Home is usable again.
-        await workspace.locator('[data-tool-close]').click();await workspace.locator('[data-tool-confirm-accept]').click();
-        await page.waitForFunction(()=>!document.querySelector('.agh-workspace'));
-        assert.equal(await page.evaluate(()=>document.getElementById('app').hasAttribute('inert')),false);
-        assert.equal(await page.evaluate(()=>document.activeElement?.dataset.open),'video-downloader');
-        assert.equal(await tiles.count(),4,'a redraw replaces the tiles, never adds to them');
+browserTest('an account whose Library has no files yet still sees Calendar, in the head of an empty Cargo',async()=>{
+    const browser=await launchBrowser({playwrightPath});
+    const calendar={...tool('calendar','Calendar'),kind:'widget',url:null};
+    try{
+        // The default summary has no cargo: before, Cargo and with it Calendar stayed hidden.
+        let {page,errors}=await mount(browser,{catalog:[calendar]});
+        const opener=page.locator('#hm-cargo [data-calendar-open]');
+        await opener.waitFor();
+        await page.locator('[data-cargo-empty]').waitFor();
+        assert.equal((await page.locator('[data-cargo-empty]').textContent()).trim(),'Nothing has landed in your Library yet.');
+        assert.equal(await page.locator('[data-cargo]').isHidden(),true,'no empty list under the head');
+        // Opening the calendar from this link is home-fold-dialogs' case, which loads the calendar.
+        assert.equal(await opener.isVisible(),true);
+        assert.deepEqual(errors,[]);
+        await page.close();
+
+        // Without the calendar an empty Cargo stays hidden, as it was.
+        ({page,errors}=await mount(browser));
+        assert.equal(await page.locator('[data-cargo-section]').isHidden(),true);
+        assert.deepEqual(errors,[]);
+        await page.close();
+    }finally{await browser.close();}
+});
+
+browserTest('Home draws no tool to launch, puts Calendar beside Open in Library for an account that has it, and lists saved links at the foot of Away from ship',async()=>{
+    const browser=await launchBrowser({playwrightPath});
+    // Calendar sits in the head of Cargo, here with a file in it.
+    const withCargo=()=>{
+        const row={key:'asset:1',status:'landed',source:'craft',producer:'claude-code',title:'Harbour study',files:1,bytes:2048,failed_files:0,at:new Date().toISOString(),kinds:[{extension:'png',count:1}],previews:[]};
+        return window.__homeSummary({lead:{available:true,state:'new',files:1,bytes:2048,since:null},board:{rows:[row],cargo:[row],more:0,truncated:false,docked:[]}});
+    };
+    try{
+        // Tools open from the Tools page: a catalogue full of them puts nothing to launch on Home.
+        const tools=[tool('looper','Video Loop Refiner'),tool('video-downloader','Video Downloader'),tool('vectorization','Vectorization')];
+        let {page,errors}=await mount(browser,{catalog:tools,summary:withCargo});
+        await page.locator('#hm-cargo').waitFor();
+        assert.equal(await page.locator('[data-calendar-open]').isHidden(),true,'no Calendar for an account without it');
+        assert.equal(await page.locator('[data-open]').count(),0);
+        assert.equal(await page.locator('[data-section="links"]').isHidden(),true,'no saved links, no group');
+        assert.deepEqual(errors,[]);
+        await page.close();
+
+        ({page,errors}=await mount(browser,{catalog:[...tools,{...tool('calendar','Calendar'),kind:'widget',url:null}],links:[{title:'Print shop order form',url:'https://example.edu/print'}],summary:withCargo}));
+        const calendar=page.locator('[data-calendar-open]');
+        await calendar.waitFor();
+        const [opener,library]=await Promise.all([calendar,page.locator('#hm-cargo a.hm-sec-link')].map(locator=>locator.boundingBox()));
+        assert.ok(Math.abs(opener.y+opener.height/2-(library.y+library.height/2))<1&&opener.x+opener.width<library.x,'Calendar sits just before Open in Library, on its line');
+        // A narrow head wraps the two together, never one without the other (an outer display held sideways, a phone).
+        for(const [width,height] of [[594,368],[390,844],[382,524]]){
+            await page.setViewportSize({width,height});
+            const [left,right]=await Promise.all([calendar,page.locator('#hm-cargo a.hm-sec-link')].map(locator=>locator.boundingBox()));
+            assert.ok(Math.abs(left.y+left.height/2-(right.y+right.height/2))<1&&left.x+left.width<right.x,`Calendar stays just before Open in Library at ${width}: ${JSON.stringify([left,right])}`);
+        }
+        await page.setViewportSize({width:1280,height:900});
+        const saved=page.locator('[data-away] [data-section="links"]');
+        await saved.waitFor();
+        assert.deepEqual(await saved.locator('a').allTextContents(),['Print shop order form ↗']);
+        // The group is the card's foot, under what the summary paints there.
+        assert.equal(await page.locator('[data-away]').evaluate(card=>card.querySelector('[data-away-body]').nextElementSibling.matches('[data-section="links"]')&&card.querySelector('[data-away-body]').textContent.includes('Nothing away from ship')),true);
+        assert.equal(await page.locator('[data-cargo-empty]').isHidden(),true,'Cargo with a file has no empty line');
         assert.deepEqual(errors,[]);
         await page.close();
     }finally{await browser.close();}
@@ -291,27 +386,44 @@ browserTest('on a phone the side column opens in a sheet and goes back when it c
     }finally{await browser.close();}
 });
 
-browserTest('the iPhone tile opens its steps and closing returns focus to the tile',async()=>{
+browserTest('Add your iPhone, at the foot of Docked, opens its steps and closing returns focus to it, on the page and in the phone sheet',async()=>{
     const browser=await launchBrowser({playwrightPath});
     try{
-        const {page,errors}=await mount(browser,{catalog:[tool('looper','Video Loop Refiner')]});
-        const tile=page.locator('[data-section="apps"] [data-phone-open]'),dialog=page.locator('[data-phone-dialog]');
-        const open=()=>dialog.evaluate(node=>node.open),focused=()=>page.evaluate(()=>document.activeElement?.hasAttribute('data-phone-open'));
+        let {page,errors}=await mount(browser,{catalog:[tool('looper','Video Loop Refiner')]});
+        let opener=page.locator('[data-docked] [data-phone-open]');
+        const dialog=()=>page.locator('[data-phone-dialog]');
+        const open=()=>dialog().evaluate(node=>node.open),focused=()=>page.evaluate(()=>document.activeElement?.hasAttribute('data-phone-open'));
+        assert.equal((await opener.textContent()).trim(),'Add your iPhone');
+        assert.equal(await page.locator('[data-phone-open]:visible').count(),1,'Away from ship keeps its copy hidden while Docked shows');
+        // The summary has painted the card's body; the foot is the card's last part and outlives that paint.
+        assert.equal(await page.locator('[data-docked]').evaluate(card=>card.lastElementChild.contains(card.querySelector('[data-phone-open]'))&&card.querySelector('[data-docked-body] h2')!==null),true);
         assert.equal(await open(),false);
-        await tile.click();
+        await opener.click();
         assert.equal(await open(),true);
-        assert.equal(await dialog.evaluate(node=>node.matches(':modal')),true);
-        assert.equal(await dialog.locator('.agh-phone-steps li').count(),3);
-        assert.equal(await page.locator('.agh-workspace').count(),0,'the tile is not a tool launcher');
-
-        await dialog.locator('[data-phone-close]').click();
+        assert.equal(await dialog().evaluate(node=>node.matches(':modal')),true);
+        assert.equal(await dialog().locator('.agh-phone-steps li').count(),3);
+        await dialog().locator('[data-phone-close]').click();
         assert.equal(await open(),false);assert.equal(await focused(),true);
 
         // Keyboard: Enter opens, Escape closes, and focus comes back the same way.
-        await tile.focus();await page.keyboard.press('Enter');
+        await opener.focus();await page.keyboard.press('Enter');
         assert.equal(await open(),true);
         await page.keyboard.press('Escape');
         assert.equal(await open(),false);assert.equal(await focused(),true);
+        assert.deepEqual(errors,[]);
+        await page.close();
+
+        // On a phone the card is in the sheet: the steps open over it, and closing them leaves the sheet open on the link.
+        ({page,errors}=await mount(browser,{width:390}));
+        await page.locator('[data-glance-open="docked"]').click();
+        const sheet=page.locator('[data-side-sheet]');
+        opener=sheet.locator('[data-docked] [data-phone-open]');
+        await opener.click();
+        assert.equal(await open(),true);
+        await page.keyboard.press('Escape');
+        assert.equal(await open(),false);
+        assert.equal(await sheet.evaluate(node=>node.open),true,'the sheet stays open under the steps');
+        assert.equal(await focused(),true);
         assert.deepEqual(errors,[]);
         await page.close();
     }finally{await browser.close();}
