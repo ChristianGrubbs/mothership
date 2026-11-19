@@ -50,6 +50,42 @@ function checkWav(data, rate) {
     assert.equal(buf.readUInt32LE(40), buf.length - 44);
 }
 
+const launch = () => require(playwrightPath).chromium.launch({ headless: true, channel: process.env.MOTHERSHIP_BROWSER_CHANNEL || 'chrome' });
+const settled = page => page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+const sheetOpen = (page, name) => page.locator(`[data-sheet="${name}"]`).evaluate(sheet => sheet.open);
+const closeSheet = (page, name) => page.locator(`[data-sheet="${name}"] [data-sheet-close]`).click();
+// Opens a saved sound from the Saved sounds sheet, then closes the sheet.
+async function pick(page, name) {
+    await page.locator('[data-open-saved]').click();
+    await page.getByRole('option', { name }).click();
+    await closeSheet(page, 'saved');
+}
+
+// Stands in for home-frame.js: keeps what the tool told the page, and presses the bar's buttons.
+const withBridge = () => {
+    const handlers = {};
+    window.__told = { chrome: [], notices: [], saves: [] };
+    window.__press = (name, detail) => handlers[name]?.(detail);
+    window.MothershipFrame = {
+        bar: true,
+        library: true,
+        chrome(shown) { window.__told.chrome.push(shown); },
+        on(name, handler) { handlers[name] = handler; },
+        notice(shown) { window.__told.notices.push(shown); },
+        async folders() { return [{ id: '7', name: 'Sounds', depth: 0 }]; },
+        async save({ files, folder }) { window.__told.saves.push({ names: files.map(file => file.name), folder }); return { count: files.length, url: '/admin/dam/assets/1' }; },
+    };
+};
+async function open(browser, { bridge = false, width = 1440, height = 900 } = {}) {
+    const page = await browser.newPage({ viewport: { width, height }, reducedMotion: 'reduce' });
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    if (bridge) await page.addInitScript(withBridge);
+    await page.goto(pageUrl);
+    await page.locator('[data-name]').filter({ hasNotText: /^Sound$/ }).waitFor();
+    return { page, errors };
+}
+
 browserTest('renders deterministically and writes valid WAV, ZIP and JSON', async () => {
     const { chromium } = require(playwrightPath);
     const browser = await chromium.launch({ headless: true, channel: process.env.MOTHERSHIP_BROWSER_CHANNEL || 'chrome' });
@@ -133,6 +169,9 @@ browserTest('saves, keeps two sounds across a reload, downloads them, and keeps 
         assert.equal(await page.evaluate(() => window.__starts), starts + 1);
         await page.keyboard.press('ArrowUp');
         assert.equal(await page.locator('[aria-selected="true"] .sfx-item-name').textContent(), 'Coin pickup');
+        // The saved sounds live in a sheet; it opens on the list, so the arrow keys go on stepping through it.
+        await page.locator('[data-open-saved]').click();
+        assert.ok(await page.evaluate(() => document.activeElement.matches('[data-list]')), 'the list takes the focus');
         await page.getByRole('button', { name: 'Rename' }).click();
         const field = page.getByRole('textbox', { name: 'Sound name' });
         await field.fill('Gold coin');
@@ -142,6 +181,7 @@ browserTest('saves, keeps two sounds across a reload, downloads them, and keeps 
         assert.equal(await page.evaluate(() => window.__starts), before, 'Space in a text field types, it does not play');
         await field.press('Enter');
         assert.deepEqual(await names(), ['Gold coin', 'Explosion']);
+        await closeSheet(page, 'saved');
 
         // A page's localStorage writes reach the browser's shared store asynchronously. Before reloading, wait until a
         // second page of the same origin sees the saved library.
@@ -201,16 +241,20 @@ browserTest('saves, keeps two sounds across a reload, downloads them, and keeps 
         }), 'the first playback after a waveform change holds the new samples');
         await page.getByRole('radio', { name: 'Simple' }).click();
 
-        await page.getByRole('option', { name: /Gold coin/ }).click();
+        await pick(page, /Gold coin/);
+        // Export downloads this sound, or every saved sound as one ZIP; its button says which.
+        await page.locator('[data-open-export]').click();
         const [wav] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download WAV' }).click()]);
         assert.equal(wav.suggestedFilename(), 'Gold coin.wav');
         const wavPath = path.join(downloads, 'one.wav');
         await wav.saveAs(wavPath);
         checkWav(fs.readFileSync(wavPath), 44100);
+        await page.getByRole('radio', { name: /Every saved sound/ }).check();
         const [zip] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download all as ZIP' }).click()]);
         const zipPath = path.join(downloads, 'all.zip');
         await zip.saveAs(zipPath);
         assert.deepEqual(readZip(fs.readFileSync(zipPath)).map(e => e.name), ['01 Gold coin.wav', '02 Explosion.wav']);
+        await closeSheet(page, 'export');
 
         // A store that refuses the write leaves the library and the Saved state as they were.
         await page.getByRole('button', { name: 'Whoosh' }).click();
@@ -219,11 +263,12 @@ browserTest('saves, keeps two sounds across a reload, downloads them, and keeps 
         await page.keyboard.press('s');
         assert.deepEqual(await names(), ['Gold coin', 'Explosion']);
         assert.equal(await page.locator('[data-sound-state]').textContent(), 'Not saved');
-        await page.getByRole('option', { name: /Gold coin/ }).click();
+        await pick(page, /Gold coin/);
         await page.getByRole('button', { name: 'Nudge' }).click();
         await page.locator('[data-sfx]').focus();
         await page.keyboard.press('s');
         assert.equal(await page.locator('[data-sound-state]').textContent(), 'Changed since you saved it', 'a refused update stays unsaved');
+        await page.locator('[data-open-saved]').click();
         await page.getByRole('button', { name: 'Move down' }).click();
         await page.getByRole('button', { name: 'Delete' }).click();
         assert.deepEqual(await names(), ['Gold coin', 'Explosion'], 'a refused reorder or delete changes nothing');
@@ -238,12 +283,16 @@ browserTest('saves, keeps two sounds across a reload, downloads them, and keeps 
         assert.equal(await page.locator('[aria-selected="true"]').count(), 0);
         assert.equal(await page.locator('[data-name]').textContent(), 'Gold coin');
         assert.equal(await page.locator('[data-sound-state]').textContent(), 'Not saved');
-        await page.getByRole('status').getByRole('button', { name: 'Undo' }).click();
+        await page.locator('[data-sheet="saved"] .tk-status').getByRole('button', { name: 'Undo' }).click();
         assert.deepEqual(await names(), ['Gold coin', 'Explosion']);
         assert.equal(await page.locator('[aria-selected="true"] .sfx-item-name').textContent(), 'Gold coin');
+        await closeSheet(page, 'saved');
 
         for (const width of [360, 1440]) {
             await page.setViewportSize({ width, height: 900 });
+            // On a phone Shape shares the space under the sound with Effects; the segment picks it.
+            const shapeOpt = page.locator('[data-view-opt="shape"]');
+            if (await shapeOpt.isVisible()) await shapeOpt.click();
             for (const mode of ['Advanced', 'Simple']) {
                 await page.getByRole('radio', { name: mode }).click();
                 const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -255,4 +304,194 @@ browserTest('saves, keeps two sounds across a reload, downloads them, and keeps 
         await browser.close();
         fs.rmSync(downloads, { recursive: true, force: true });
     }
+});
+
+browserTest('alone, the tool shows its own way to its sheets and offers no Save to Library', async () => {
+    const browser = await launch();
+    try {
+        const { page, errors } = await open(browser);
+        assert.equal(await page.locator('[data-own-bar]').isVisible(), true);
+        assert.equal(await page.locator('[data-open-library]').isVisible(), false);
+
+        // With nothing saved, the saved-sounds sheet says so, and Export offers only this sound.
+        await page.locator('[data-open-saved]').click();
+        assert.equal(await page.locator('[data-empty]').isVisible(), true);
+        assert.equal(await page.getByRole('button', { name: 'Export all' }).isDisabled(), true);
+        await page.keyboard.press('Escape');
+        await page.locator('[data-open-export]').click();
+        assert.equal(await sheetOpen(page, 'export'), true);
+        assert.ok(await page.evaluate(() => document.activeElement.matches('input[type="radio"]')), 'the first choice takes the focus, never the scrolling body');
+        assert.equal(await page.getByRole('radio', { name: /Every saved sound/ }).isDisabled(), true);
+        // A shortcut under an open sheet does nothing; Escape closes the sheet.
+        await page.keyboard.press('s');
+        await page.keyboard.press('Escape');
+        assert.equal(await sheetOpen(page, 'export'), false);
+        assert.equal(await page.locator('[data-sound-state]').textContent(), 'Not saved', 'S under a sheet saves nothing');
+
+        // Saved from the tool, the toast says so; it gives way to a sheet, which has its own status line.
+        await page.locator('[data-sfx]').focus();
+        await page.keyboard.press('s');
+        assert.equal(await page.locator('[data-status]').textContent(), 'Saved Coin pickup');
+        await page.locator('[data-open-saved]').click();
+        assert.equal(await page.locator('[data-status]').isHidden(), true);
+        assert.deepEqual(errors, []);
+        await page.close();
+    } finally { await browser.close(); }
+});
+
+browserTest('in the frame, the bar speaks for the tool and a save sends the sound as it was when Save was pressed', async () => {
+    const browser = await launch();
+    try {
+        const { page, errors } = await open(browser, { bridge: true });
+        assert.equal(await page.locator('[data-own-bar]').isVisible(), false);
+        const said = () => page.evaluate(() => window.__told.chrome.at(-1));
+        assert.deepEqual(await said(), { set: 'Coin pickup', sets: [], setsLabel: 'Saved sounds', manage: 'Manage saved sounds…', export: true, library: true });
+
+        // Each saved sound is offered in the bar's menu, the open one marked; picking one opens it.
+        await page.locator('[data-sfx]').focus();
+        await page.keyboard.press('s');
+        await page.getByRole('button', { name: 'Explosion' }).click();
+        await page.locator('[data-sfx]').focus();
+        await page.keyboard.press('s');
+        const sets = (await said()).sets;
+        assert.deepEqual(sets.map(set => [set.name, set.current]), [['Coin pickup', false], ['Explosion', true]]);
+        await page.evaluate(id => window.__press('open-set', { id }), sets[0].id);
+        assert.equal(await page.locator('[data-name]').textContent(), 'Coin pickup');
+        assert.deepEqual((await said()).sets.map(set => set.current), [true, false]);
+
+        await page.evaluate(() => window.__press('export'));
+        assert.equal(await sheetOpen(page, 'export'), true);
+        await page.keyboard.press('Escape');
+        await page.evaluate(() => window.__press('manage-sets'));
+        assert.equal(await sheetOpen(page, 'saved'), true);
+        await page.keyboard.press('Escape');
+
+        await page.evaluate(() => window.__press('library'));
+        await page.locator('[data-folder] option', { hasText: 'Sounds' }).waitFor({ state: 'attached' });
+        // Nothing ticked is nothing to save.
+        await page.locator('[data-save-wav]').uncheck();
+        await page.locator('[data-save-settings]').uncheck();
+        assert.equal(await page.locator('[data-library-go]').isDisabled(), true);
+        await page.locator('[data-save-wav]').check();
+        await page.locator('[data-save-settings]').check();
+
+        // The Library takes its time: the save waits until the test lets it go, and the bridge keeps each file.
+        await page.evaluate(() => {
+            const bridge = window.MothershipFrame, save = bridge.save.bind(bridge);
+            window.__asked = 0;
+            bridge.save = args => {
+                window.__asked++;
+                return new Promise(done => { window.__finish = async () => {
+                    window.__sent = await Promise.all(args.files.map(async file => ({ name: file.name, type: file.blob.type, bytes: Array.from(new Uint8Array(await file.blob.arrayBuffer())) })));
+                    done(save(args));
+                }; });
+            };
+        });
+        await page.locator('[data-library-go]').click();
+        await page.waitForFunction(() => window.__asked === 1);
+        assert.equal(await page.locator('[data-library-go]').textContent(), 'Saving…');
+        assert.equal(await page.locator('[data-folder]').isDisabled(), true, 'the choices stay as sent');
+        // While it saves, the sheet is closed and the sound changed.
+        await page.keyboard.press('Escape');
+        await page.getByRole('button', { name: 'Whoosh' }).click();
+        await page.evaluate(() => window.__finish());
+        await page.waitForFunction(() => window.__told.notices.length === 1);
+
+        const sent = await page.evaluate(() => window.__sent);
+        assert.deepEqual(sent.map(file => [file.name, file.type]), [['Coin pickup.wav', 'audio/wav'], ['Coin pickup.json', 'application/json']]);
+        checkWav(sent[0].bytes, 44100);
+        const settings = JSON.parse(Buffer.from(sent[1].bytes).toString('utf8'));
+        assert.deepEqual(settings.sounds.map(sound => sound.name), ['Coin pickup'], 'the settings file is a library of the one sound Import opens again');
+        assert.deepEqual(await page.evaluate(() => window.__told.saves.map(save => save.folder)), ['7']);
+        assert.deepEqual(await page.evaluate(() => window.__told.notices[0]), { text: 'Saved 2 files to Sounds.', link: { label: 'Open in Library', url: '/admin/dam/assets/1' } });
+        assert.equal(await page.locator('[data-status]').isHidden(), true, 'the bar says it once; the tool keeps quiet');
+        // The next save starts from a free sheet, in the folder used last.
+        await page.evaluate(() => window.__press('library'));
+        assert.equal(await page.locator('[data-library-go]').textContent(), 'Save');
+        assert.equal(await page.locator('[data-folder]').inputValue(), '7');
+        assert.deepEqual(errors, []);
+        await page.close();
+    } finally { await browser.close(); }
+});
+
+browserTest('the panes follow the tool\'s width, and nothing scrolls sideways', async () => {
+    const browser = await launch();
+    try {
+        const { page } = await open(browser);
+        const box = selector => page.locator(selector).evaluate(node => { const b = node.getBoundingClientRect(); return { left: Math.round(b.left), top: Math.round(b.top) }; });
+        for (const [width, height] of [[1440, 900], [1024, 768], [768, 1024], [720, 900], [719, 900], [669, 867], [594, 368], [390, 844]]) {
+            await page.setViewportSize({ width, height });
+            await settled(page);
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), 0, `sideways at ${width}`);
+        }
+
+        for (const [width, height] of [[1440, 900], [768, 1024]]) {
+            await page.setViewportSize({ width, height });
+            await settled(page);
+            assert.equal(await page.locator('[data-view-opt="shape"]').isVisible(), false, `no segment at ${width}`);
+            const sound = await box('[data-pane="sound"]'), effects = await box('[data-pane="effects"]'), shape = await box('[data-pane="shape"]');
+            assert.ok(effects.left === sound.left && effects.top > sound.top, `Effects under the sound at ${width}`);
+            assert.ok(shape.left > sound.left && shape.top === sound.top, `Shape beside them at ${width}`);
+        }
+
+        await page.setViewportSize({ width: 390, height: 844 });
+        await settled(page);
+        const shown = () => page.evaluate(() => ['sound', 'effects', 'shape'].filter(name => document.querySelector(`[data-pane="${name}"]`).checkVisibility()));
+        assert.deepEqual(await shown(), ['sound', 'effects']);
+        await page.locator('[data-view-opt="shape"]').click();
+        assert.deepEqual(await shown(), ['sound', 'shape'], 'the sound stays; the segment swaps what is under it');
+        assert.equal(await page.locator('[data-view-opt="shape"]').getAttribute('aria-pressed'), 'true');
+        await page.close();
+    } finally { await browser.close(); }
+});
+
+browserTest('on a fold the panes and a sheet keep clear of the strip', async () => {
+    const browser = await launch();
+    try {
+        const { page } = await open(browser, { width: 951, height: 585 });
+        await page.evaluate(() => {
+            const html = document.documentElement;
+            html.dataset.fold = 'columns';
+            html.style.setProperty('--fold-start', '455px');
+            html.style.setProperty('--fold-end', '495px');
+        });
+        await settled(page);
+        const onStrip = await page.evaluate(() => [...document.querySelectorAll('main button, main input, main select, main canvas')].filter(node => {
+            const box = node.getBoundingClientRect();
+            return box.width > 0 && box.height > 0 && box.left < 495 && box.right > 455;
+        }).map(node => node.getAttribute('aria-label') || node.textContent.trim().slice(0, 30) || node.tagName));
+        assert.deepEqual(onStrip, []);
+        assert.equal(await page.locator('[data-view-opt="shape"]').isVisible(), false, 'each half shows its own part');
+
+        await page.locator('[data-open-export]').click();
+        await settled(page);
+        const sheet = await page.locator('[data-sheet="export"]').evaluate(node => { const box = node.getBoundingClientRect(); return { left: box.left, right: box.right }; });
+        assert.ok(sheet.left >= 495, `the sheet starts past the fold: ${sheet.left}`);
+        assert.ok(sheet.right <= 951, `the sheet stays on the screen: ${sheet.right}`);
+        await page.keyboard.press('Escape');
+
+        // Folded like a laptop: the sound alone above the fold; the segment and the pane it picks below.
+        await page.setViewportSize({ width: 669, height: 803 });
+        await page.evaluate(() => {
+            const html = document.documentElement;
+            html.dataset.fold = 'rows';
+            html.style.setProperty('--fold-start', '349px');
+            html.style.setProperty('--fold-end', '389px');
+        });
+        await settled(page);
+        const across = await page.evaluate(() => [...document.querySelectorAll('main button, main input, main select, main canvas')].filter(node => {
+            const box = node.getBoundingClientRect();
+            return box.width > 0 && box.height > 0 && box.top < 389 && box.bottom > 349;
+        }).map(node => node.getAttribute('aria-label') || node.textContent.trim().slice(0, 30) || node.tagName));
+        assert.deepEqual(across, []);
+        const edge = selector => page.locator(selector).evaluate(node => { const box = node.getBoundingClientRect(); return { top: box.top, bottom: box.bottom }; });
+        assert.ok((await edge('[data-pane="sound"]')).bottom <= 349, 'the sound ends above the fold');
+        assert.ok((await edge('[data-play]')).bottom <= 349, 'Play is above the fold');
+        assert.ok((await edge('[data-view-opt="shape"]')).top >= 389, 'the segment starts below the fold');
+        assert.ok((await edge('[data-pane="effects"]')).top >= 389, 'Effects is below the fold');
+        await page.locator('[data-view-opt="shape"]').click();
+        assert.equal(await page.locator('[data-pane="effects"]').isVisible(), false);
+        assert.ok((await edge('[data-pane="shape"]')).top >= 389, 'Shape takes its place');
+        await page.close();
+    } finally { await browser.close(); }
 });

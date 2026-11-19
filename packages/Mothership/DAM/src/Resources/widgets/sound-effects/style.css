@@ -1,0 +1,663 @@
+/* Sound Effect Maker, on the tool kit (../_kit/tool-kit.css). From 720 px of the tool's own width: one scroller with
+   the sound over the effects, and Shape beside it. Under 720 the sound stays on top and a segment picks Effects or
+   Shape under it, so a slider moved in Shape is seen and heard at once. Nothing here carries a hue: the wave is drawn
+   in ink, and blue is focus and the one next step only. */
+.sfx {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 400px;
+    height: 100%;
+    min-height: 0;
+    outline: none;
+}
+
+.sfx-work {
+    min-width: 0;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+}
+
+.sfx-work > .tk-pane {
+    overflow: visible;
+}
+
+.sfx [data-pane="effects"] {
+    padding: 18px 20px 24px;
+    border-top: 1px solid var(--line);
+}
+
+.sfx [data-pane="shape"] {
+    border-left: 1px solid var(--line);
+}
+
+.sfx-seg {
+    display: none;
+}
+
+.sfx-head-note {
+    color: var(--ink-2);
+    font-size: 12.5px;
+    font-weight: 400;
+    text-align: right;
+}
+
+/* The pane's own way to its sheets, where no bar is drawn above the tool. */
+.sfx-own {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+/* The sound: its name and state, the wave, the two figures and the transport. */
+.sfx-sound {
+    padding: 18px 20px 20px;
+}
+
+.sfx-sound-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px 12px;
+    margin-bottom: 12px;
+}
+
+.sfx-sound-head h2 {
+    min-width: 0;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -.01em;
+    overflow-wrap: anywhere;
+}
+
+.sfx-sound-state {
+    color: var(--ink-2);
+    font-size: 13px;
+}
+
+.sfx-sound-state[data-state="changed"] {
+    color: var(--ink);
+    font-weight: 600;
+}
+
+.sfx-sound-state[data-state="changed"]::before {
+    content: "● ";
+}
+
+.sfx-wave {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: clamp(150px, 30vh, 260px);
+    padding: 0;
+    border: 0;
+    border-radius: 14px;
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px var(--edge);
+    overflow: hidden;
+}
+
+.sfx-wave canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.sfx-wave-tip {
+    position: absolute;
+    right: 10px;
+    bottom: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--card);
+    color: var(--ink-2);
+    font-size: 12px;
+    pointer-events: none;
+}
+
+.sfx-readout {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px 28px;
+    margin: 16px 0;
+}
+
+.sfx-stat {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.sfx-stat strong {
+    font-size: 30px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.02em;
+    line-height: 1;
+}
+
+.sfx-stat span {
+    color: var(--ink-2);
+    font-size: 13px;
+}
+
+.sfx-stat[data-clip="true"] span::after {
+    content: " · clipped";
+    color: var(--ink);
+    font-weight: 600;
+}
+
+.sfx-progress {
+    margin-left: auto;
+    color: var(--ink-2);
+}
+
+.sfx-transport {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.sfx-transport .tk-btn {
+    height: 44px;
+}
+
+.sfx-play {
+    min-width: 136px;
+}
+
+.sfx-play svg {
+    fill: currentColor;
+}
+
+/* Effects: four tiles, each a fresh take on its effect; the one the sound came from is marked by its ground, a ring
+   and its weight. */
+.sfx-gens {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+    gap: 8px;
+}
+
+.sfx-gen {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    min-width: 0;
+    min-height: 84px;
+    padding: 12px 14px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--card);
+    box-shadow: var(--lift), inset 0 0 0 1px var(--edge);
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 500;
+    text-align: left;
+}
+
+.sfx-gen:hover {
+    background: var(--well);
+}
+
+.sfx-gen .tk-ic {
+    width: 20px;
+    height: 20px;
+    color: var(--ink-2);
+}
+
+.sfx-gen[aria-pressed="true"] {
+    background: var(--well);
+    box-shadow: inset 0 0 0 1.5px var(--ink);
+    font-weight: 600;
+}
+
+.sfx-gen[aria-pressed="true"] .tk-ic {
+    color: var(--ink);
+}
+
+.sfx-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.sfx-playback {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+    align-items: start;
+    gap: 16px 24px;
+}
+
+.sfx-hint {
+    margin-top: 4px;
+    color: var(--ink-2);
+    font-size: 12.5px;
+}
+
+.sfx-switch {
+    align-self: center;
+}
+
+.sfx-keys {
+    margin-top: 22px;
+}
+
+/* Sliders: the name and the value on one line, the track under them, then what the slider does. */
+.sfx-sliders {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+    gap: 14px 20px;
+}
+
+.sfx-slider {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.sfx-slider-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.sfx-slider-top label {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.sfx-slider output {
+    white-space: nowrap;
+}
+
+.sfx-slider input[type="range"] {
+    width: 100%;
+    height: 28px;
+    margin: 0;
+}
+
+.sfx-slider .sfx-hint {
+    margin-top: 0;
+}
+
+/* Shape it */
+.sfx-shape-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 6px 4px;
+}
+
+.sfx-shape-head .tk-head {
+    margin: 0;
+}
+
+.sfx-mode {
+    flex: none;
+    width: 200px;
+}
+
+.sfx-mode-note {
+    margin: 0 4px 16px;
+}
+
+.sfx-shapes {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+}
+
+/* The first group's heading follows the shape tiles, not a sibling, so the kit's heading gap is given here. */
+.sfx [data-groups] {
+    margin-top: 22px;
+}
+
+.sfx-shape {
+    display: grid;
+    justify-items: center;
+    gap: 4px;
+    min-width: 0;
+    padding: 10px 2px 8px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--card);
+    box-shadow: var(--lift), inset 0 0 0 1px var(--edge);
+    color: var(--ink-2);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.sfx-shape:hover {
+    background: var(--well);
+}
+
+.sfx-shape svg {
+    width: 36px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.sfx-shape[aria-checked="true"] {
+    background: var(--well);
+    box-shadow: inset 0 0 0 1.5px var(--ink);
+    color: var(--ink);
+    font-weight: 600;
+}
+
+/* Sheets */
+.sfx-choices {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.sfx-choices small {
+    display: block;
+}
+
+.sfx-choices .tk-check:has(input:disabled) {
+    color: var(--ink-2);
+}
+
+.sfx-count {
+    margin-right: auto;
+    color: var(--ink-2);
+}
+
+/* The list scrolls by itself, so the toolbar under it stays in view however many sounds there are and however short
+   the window. */
+.sfx-saved .tk-sheet-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.sfx-list {
+    display: grid;
+    flex: 0 1 auto;
+    align-content: start;
+    gap: 2px;
+    min-height: 0;
+    margin: 0;
+    padding: 4px;
+    border-radius: 12px;
+    background: var(--well);
+    list-style: none;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.sfx-saved .sfx-tools {
+    flex: none;
+}
+
+.sfx-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 6px 12px;
+    border-radius: 9px;
+    cursor: pointer;
+}
+
+.sfx-item:hover {
+    background: var(--ctl);
+}
+
+.sfx-item[aria-selected="true"] {
+    background: var(--card);
+    box-shadow: var(--lift), inset 0 0 0 1.5px var(--ink);
+    font-weight: 600;
+}
+
+.sfx-item-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sfx-item-dur {
+    color: var(--ink-2);
+    font-weight: 400;
+}
+
+.sfx-item input {
+    flex: 1;
+    min-width: 0;
+    height: 32px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--card);
+    box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+
+.sfx-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.sfx-delete {
+    margin-left: auto;
+}
+
+.sfx-file:focus-within {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+/* Three buttons share this foot with the status line, so the line takes only the room they leave and the buttons
+   stay on one row. Under 720 px the kit gives the line a row of its own. */
+@media (min-width: 720px) {
+    .sfx-saved .tk-sheet-foot .tk-status {
+        flex-basis: 0;
+    }
+}
+
+/* Two columns from 720 px: Shape narrows first. */
+@media (max-width: 1099px) {
+    .sfx {
+        grid-template-columns: minmax(0, 1fr) 360px;
+    }
+}
+
+/* Under 720 px: the sound on top, then the segment and the part it picks. */
+@media (max-width: 719px) {
+    .sfx {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto auto minmax(0, 1fr);
+    }
+
+    .sfx-work {
+        display: contents;
+    }
+
+    .sfx-sound {
+        grid-row: 1;
+        padding: 12px 16px;
+        overflow: visible;
+        border-bottom: 1px solid var(--line);
+    }
+
+    .sfx-wave {
+        height: 104px;
+    }
+
+    .sfx-readout {
+        margin: 10px 0;
+    }
+
+    .sfx-stat strong {
+        font-size: 24px;
+    }
+
+    /* No room beside the figures: the played time would wrap to a row of its own and push the buttons down while a
+       sound plays. The playhead on the wave carries it here. */
+    .sfx-progress {
+        display: none;
+    }
+
+    .sfx-transport .tk-btn {
+        flex: 1 1 0;
+    }
+
+    .sfx-seg {
+        display: grid;
+        grid-row: 2;
+        margin: 10px 16px 0;
+    }
+
+    .sfx [data-pane="effects"],
+    .sfx [data-pane="shape"] {
+        grid-row: 3;
+        padding: 14px 16px 24px;
+        overflow-x: hidden;
+        overflow-y: auto;
+        border: 0;
+    }
+
+    .sfx[data-view="effects"] [data-pane="shape"],
+    .sfx[data-view="shape"] [data-pane="effects"] {
+        display: none;
+    }
+
+    .sfx-mode {
+        width: 170px;
+    }
+}
+
+/* A short window under 720 px (a phone on its side): there is no room to keep the sound on top, so the whole tool
+   scrolls as one. */
+@media (max-width: 719px) and (max-height: 520px) {
+    .sfx {
+        display: block;
+        overflow-x: hidden;
+        overflow-y: auto;
+    }
+
+    .sfx [data-pane] {
+        overflow: visible;
+    }
+
+    .sfx-wave {
+        height: 88px;
+    }
+}
+
+/* A folded screen (the kit says how a tool learns of it). Nothing sits on the fold in either pose.
+   Open like a book: the sound over the effects left of the fold, Shape right of it. */
+:root[data-fold="columns"] .sfx-seg {
+    display: none;
+}
+
+:root[data-fold="columns"] .sfx {
+    display: grid;
+    grid-template-columns: var(--fold-start) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    column-gap: calc(var(--fold-end) - var(--fold-start));
+}
+
+:root[data-fold="columns"] .sfx .sfx-work {
+    display: block;
+    grid-row: 1;
+    grid-column: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+:root[data-fold="columns"] .sfx [data-pane] {
+    display: block;
+}
+
+:root[data-fold="columns"] .sfx .sfx-work > .tk-pane {
+    overflow: visible;
+}
+
+:root[data-fold="columns"] .sfx [data-pane="effects"] {
+    border-top: 1px solid var(--line);
+}
+
+:root[data-fold="columns"] .sfx [data-pane="shape"] {
+    grid-row: 1;
+    grid-column: 2;
+    border: 0;
+}
+
+/* Folded like a laptop: the sound alone on the upright half, where it is looked at, its wave filling what the half
+   leaves; on the flat half, where the hands are, the segment picks Effects or Shape, as on a phone. As Palette
+   Studio: what is looked at above, what is worked below. */
+:root[data-fold="rows"] .sfx {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: var(--fold-start) calc(var(--fold-end) - var(--fold-start)) auto minmax(0, 1fr);
+    row-gap: 0;
+}
+
+:root[data-fold="rows"] .sfx .sfx-work {
+    display: contents;
+}
+
+:root[data-fold="rows"] .sfx-sound {
+    grid-row: 1;
+    grid-column: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 12px 16px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border: 0;
+}
+
+:root[data-fold="rows"] .sfx-wave {
+    flex: 1 1 0;
+    height: auto;
+    min-height: 88px;
+}
+
+:root[data-fold="rows"] .sfx-seg {
+    display: grid;
+    grid-row: 3;
+    grid-column: 1;
+    margin: 12px 16px 0;
+}
+
+:root[data-fold="rows"] .sfx [data-pane="effects"],
+:root[data-fold="rows"] .sfx [data-pane="shape"] {
+    display: block;
+    grid-row: 4;
+    grid-column: 1;
+    min-height: 0;
+    padding: 14px 16px 24px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border: 0;
+}
+
+:root[data-fold="rows"] .sfx[data-view="effects"] [data-pane="shape"],
+:root[data-fold="rows"] .sfx[data-view="shape"] [data-pane="effects"] {
+    display: none;
+}
