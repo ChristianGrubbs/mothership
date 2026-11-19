@@ -111,6 +111,19 @@
     background: var(--ctl);
 }
 
+/* A touch screen gets 44 px targets (Apple's HIG), as the kit's buttons: the swatch and the hex that copies it. The
+   row keeps its padding, so it grows by the chip's 4 px. */
+@media (pointer: coarse) {
+    .ps-chip {
+        width: 44px;
+        height: 44px;
+    }
+
+    .ps-hex {
+        min-height: 44px;
+    }
+}
+
 .ps-row-end {
     display: flex;
     align-items: center;

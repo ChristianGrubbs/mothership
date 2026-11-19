@@ -45,4 +45,9 @@
             @endforeach
         </ul>
     </div>
+
+    {{-- Counts each tool once per visit when its tile has been on screen for a second (home.feature.exposed). --}}
+    @push('scripts')
+        <script>{!! file_get_contents(base_path('packages/Mothership/DAM/src/Resources/assets/js/tools-page.js')) !!}</script>
+    @endpush
 </x-admin::layouts>

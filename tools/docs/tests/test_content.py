@@ -125,10 +125,10 @@ class ContentTests(unittest.TestCase):
             '## Steps',
             '## Expected result',
             '## Troubleshooting',
-            'Your day',
+            'Calendar',
             'Send files to a person',
             'Recent uploads',
-            'iPhone app',
+            'Add your iPhone',
             'Studio admin',
             'Your saved links',
         ):

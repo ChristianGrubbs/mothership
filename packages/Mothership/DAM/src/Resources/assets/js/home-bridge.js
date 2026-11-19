@@ -1,7 +1,8 @@
 (() => {
     'use strict';
     // The Bridge: everything on Home that reads the ship's summary. A source that cannot answer says so in words, and
-    // a missing figure is never drawn as zero. home.js owns the tool workspace, the dialogs and the Tools shelf.
+    // a missing figure is never drawn as zero. home.js owns the dialogs, the saved links and the cards' feet, which
+    // these paints leave alone.
     const COLUMNS = [
         {key: 'time', width: 5, name: 'k1'},
         {key: 'from', width: 11, name: 'k2'},
@@ -210,8 +211,9 @@
             const list = $('[data-cargo]'), section = $('[data-cargo-section]'), now = new Date(summary.generated_at);
             const moving = summary.board.moving || [];
             const cargo = summary.board.cargo || [], fresh = cargo.filter(row => row.status !== 'seen'), seen = cargo.filter(row => row.status === 'seen');
-            section.hidden = !moving.length && !cargo.length;
-            list.hidden = section.hidden;
+            section.dataset.empty = moving.length || cargo.length ? '0' : '1';
+            list.hidden = section.dataset.empty === '1';
+            state.showCargo(root);
             list.innerHTML = [
                 ...moving.map(row => journey(row, now)),
                 ...fresh.map(row => landing(row, now)),
@@ -227,7 +229,7 @@
         }
 
         function paintDocked() {
-            const card = $('[data-docked]'), docked = summary.board.docked || [], now = new Date(summary.generated_at);
+            const card = $('[data-docked-body]'), docked = summary.board.docked || [], now = new Date(summary.generated_at);
             if (!docked.length) {
                 card.innerHTML = `<div class="hm-ch"><h2>Docked</h2></div><p class="hm-empty-title">No craft docked</p><p class="hm-empty">Connect ArtCraft, Blender or an agent, and what they make lands here.</p>${data.connect ? `<a class="hm-btn hm-wide" href="${esc(data.connect)}">Set up</a>` : ''}`;
                 return;
@@ -241,7 +243,7 @@
         }
 
         function paintAway() {
-            const card = $('[data-away]'), away = summary.away;
+            const card = $('[data-away-body]'), away = summary.away;
             const figure = source => source.available ? Number(source.count).toLocaleString() : '–';
             const quiet = away.shares.available && away.upload_requests.available && away.shares.count === 0 && away.upload_requests.count === 0;
             if (quiet) {
@@ -263,15 +265,18 @@
             if (!summary.lead?.available || !summary.board?.rows) { paintLocked(); return; }
             paintBoard(); paintDeck(); paintNeeds(); paintCargo(); paintDocked(); paintAway(); paintGlance();
         }
-        // A role without the library has no board to read.
+        // A role without the library has no board to read. Its Add your iPhone moves from Docked to Away from ship.
         function paintLocked() {
             $('[data-board]').removeAttribute('aria-busy');
             $('[data-deck]').removeAttribute('aria-busy');
             $('[data-board-object]').hidden = true;
-            $('[data-cargo-section]').hidden = true;
+            $('[data-cargo-section]').dataset.empty = '1';
             $('[data-cargo]').hidden = true;
+            state.showCargo(root);
             $('[data-docked]').hidden = true;
+            $('[data-phone-elsewhere]').hidden = false;
             paintNeeds(); paintAway(); paintGlance();
+            state.showCentre(root);
         }
         function paintFailure(error) {
             $('[data-board]').removeAttribute('aria-busy');

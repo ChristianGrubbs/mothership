@@ -36,9 +36,9 @@ const FILE_PATH='/admin/home/tools/sound-effects/exports/cover.png';
 const PNG=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=','base64');
 
 // `clock` puts the page on a clock the test moves; `held` starts with the tool's page never answering (hold() turns
-// that on and off later).
-async function framePage(browser,{toolHtml=TOOL_HTML,referer,clock=false,held=false,init}={}){
-    const page=await browser.newPage({viewport:{width:1200,height:900}});
+// that on and off later); `touch` gives it a touch screen.
+async function framePage(browser,{toolHtml=TOOL_HTML,referer,clock=false,held=false,init,touch=false}={}){
+    const page=await browser.newPage({viewport:{width:1200,height:900},hasTouch:touch});
     let toolLoads=0,dialogs=0;
     if(clock)await page.clock.install();
     if(init)await page.addInitScript(init);
@@ -442,6 +442,51 @@ browserTest('the phone form moves Export and Save to Library under the tool, and
             assert.deepEqual(bar,{sideways:0,reloadInside:true,sameRow:true},`the bar's controls at ${width}`);
         }
         await page.close();
+    } finally { await browser.close(); }
+});
+
+// Apple's HIG asks for 44 pt targets. Under touch every control in the bar and under the tool is 44 px, and the bar
+// gives up the same 4 px of its padding: it is as tall as under a mouse, so the tool keeps its height, and the set
+// menu still starts where the tabletop rule expects it.
+browserTest('on a touch screen the bar\'s controls and the foot\'s are 44 px, and the bar and its menu do not move',async()=>{
+    const browser=await launch();
+    try{
+        const sizes=[];
+        for(const touch of [false,true]){
+            const {page}=await framePage(browser,{toolHtml:BAR_TOOL_HTML,touch});
+            await barOpen(page);
+            assert.equal(await page.evaluate(()=>matchMedia('(pointer: coarse)').matches),touch);
+            const seen={};
+            for(const [width,height] of [[1200,900],[820,1180],[669,867],[594,368],[390,844]]){
+                await page.setViewportSize({width,height});
+                const shown=await page.evaluate(()=>{
+                    const targets=[...document.querySelectorAll('.bridge-toolbar > a, .bridge-toolbar > button, [data-tool-sets-btn], .bridge-toolfoot > button')]
+                        .filter(node=>node.checkVisibility()).map(node=>{
+                            const box=node.getBoundingClientRect();
+                            return {name:node.textContent.trim()||node.getAttribute('aria-label'),width:box.width,height:box.height,round:!node.textContent.trim()||getComputedStyle(node).borderRadius==='50%'};
+                        });
+                    return {bar:document.querySelector('.bridge-toolbar').getBoundingClientRect().height,targets};
+                });
+                if(width>=580){
+                    await page.locator('[data-tool-sets-btn]').click();
+                    shown.menu=await page.locator('[data-tool-sets-menu]').evaluate(menu=>menu.getBoundingClientRect().top);
+                    await page.keyboard.press('Escape');
+                }
+                seen[width]=shown;
+            }
+            sizes.push(seen);
+            await page.close();
+        }
+        const [mouse,touch]=sizes;
+        for(const width of Object.keys(touch)){
+            assert.equal(touch[width].bar,mouse[width].bar,`the bar at ${width} is as tall under touch`);
+            assert.equal(touch[width].menu,mouse[width].menu,`the set menu at ${width} starts where it did`);
+            assert.ok(touch[width].targets.length>=4,`the bar's controls are shown at ${width}`);
+            const short=touch[width].targets.filter(target=>target.height<44||(target.round&&target.width<44));
+            assert.deepEqual(short,[],`every target at ${width} is 44 px under touch`);
+            // A mouse keeps the 40 px controls.
+            assert.ok(mouse[width].targets.every(target=>target.height===40),`the mouse's bar at ${width} is unchanged`);
+        }
     } finally { await browser.close(); }
 });
 
