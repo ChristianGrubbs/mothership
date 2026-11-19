@@ -11,9 +11,11 @@ Top to bottom:
    cannot finish is left out.
 2. **Your day** beside **Apps**. Your day is drawn by `home.js` from `/admin/home/calendar/mine` and
    `/calendar/events`; the month grid opens in a dialog from **Calendar**, beside **Open in Library** in Cargo's
-   head, for an account whose catalog has the calendar. Tools are not on Home; they open from the Tools page
-   ([tools-page](tools-page.md)). **Add your iPhone**, at the foot of the Docked card, opens the Add to Home Screen
-   steps for the installable web app; there is no native iOS app.
+   head, for an account whose catalog has the calendar; Cargo keeps its head, over a one-line empty state, while it
+   has no files but offers Calendar. Tools are not on Home; they open from the Tools page
+   ([tools-page](tools-page.md)). **Add your iPhone**, at the foot of the Docked card (for a role without the
+   Library, which has no Docked card, at the foot of Away from ship), opens the Add to Home Screen steps for the
+   installable web app; there is no native iOS app.
 3. **Send files to a person**, under Apps, when Transfers is available to the account (`TransferSession::clientConfig`).
    It subscribes to `window.MothershipTransfers` and offers one Send button per connected device.
 4. **Recent uploads**: eight newest listable files, starred files beneath.

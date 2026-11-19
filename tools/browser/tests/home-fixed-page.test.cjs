@@ -212,7 +212,7 @@ browserTest('a broken picture shows its file type, and Docked says when it read 
     }finally{await browser.close();}
 });
 
-browserTest('a role without the Library gets no board and an honest count of what it cannot see',async()=>{
+browserTest('a role without the Library gets no board, an honest count of what it cannot see, and Add your iPhone at the foot of Away from ship',async()=>{
     const browser=await launchBrowser({playwrightPath});
     const locked=()=>window.__homeSummary({lead:{available:false,reason:'not-permitted'},board:{available:false,reason:'not-permitted'},away:{shares:{available:false,count:null,reason:'not-permitted'},upload_requests:{available:false,count:null,reason:'not-permitted'}}});
     try{
@@ -223,6 +223,40 @@ browserTest('a role without the Library gets no board and an honest count of wha
         assert.equal(await page.locator('[data-glance-open="docked"]').count(),0,'no craft row for a board this role cannot read');
         assert.match(await page.locator('[data-glance-open="away"]').textContent(),/Links not available/);
         assert.deepEqual(await page.locator('[data-away] .hm-figs b').allTextContents(),['–','–','–']);
+        // Add your iPhone has nothing to do with the Library: with no Docked card it sits at the foot of Away from ship.
+        const opener=page.locator('[data-away] [data-phone-elsewhere] [data-phone-open]');
+        assert.equal(await opener.isVisible(),true,'a role without the Library still sees Add your iPhone');
+        assert.equal(await page.locator('[data-phone-open]:visible').count(),1);
+        await opener.click();
+        const dialog=page.locator('[data-phone-dialog]');
+        assert.equal(await dialog.evaluate(node=>node.matches(':modal')),true);
+        await dialog.locator('[data-phone-close]').click();
+        assert.equal(await page.evaluate(()=>document.activeElement?.closest('[data-phone-elsewhere]')!==null),true,'closing returns focus to the link');
+        assert.equal(await page.locator('[data-cargo-section]').isHidden(),true,'no Calendar in the catalogue, so no Cargo');
+        assert.deepEqual(errors,[]);
+        await page.close();
+    }finally{await browser.close();}
+});
+
+browserTest('an account whose Library has no files yet still sees Calendar, in the head of an empty Cargo',async()=>{
+    const browser=await launchBrowser({playwrightPath});
+    const calendar={...tool('calendar','Calendar'),kind:'widget',url:null};
+    try{
+        // The default summary has no cargo: before, Cargo and with it Calendar stayed hidden.
+        let {page,errors}=await mount(browser,{catalog:[calendar]});
+        const opener=page.locator('#hm-cargo [data-calendar-open]');
+        await opener.waitFor();
+        await page.locator('[data-cargo-empty]').waitFor();
+        assert.equal((await page.locator('[data-cargo-empty]').textContent()).trim(),'Nothing has landed in your Library yet.');
+        assert.equal(await page.locator('[data-cargo]').isHidden(),true,'no empty list under the head');
+        // Opening the calendar from this link is home-fold-dialogs' case, which loads the calendar.
+        assert.equal(await opener.isVisible(),true);
+        assert.deepEqual(errors,[]);
+        await page.close();
+
+        // Without the calendar an empty Cargo stays hidden, as it was.
+        ({page,errors}=await mount(browser));
+        assert.equal(await page.locator('[data-cargo-section]').isHidden(),true);
         assert.deepEqual(errors,[]);
         await page.close();
     }finally{await browser.close();}
@@ -230,7 +264,7 @@ browserTest('a role without the Library gets no board and an honest count of wha
 
 browserTest('Home draws no tool to launch, puts Calendar beside Open in Library for an account that has it, and lists saved links at the foot of Away from ship',async()=>{
     const browser=await launchBrowser({playwrightPath});
-    // Calendar sits in the head of Cargo, which shows once the library has a file.
+    // Calendar sits in the head of Cargo, here with a file in it.
     const withCargo=()=>{
         const row={key:'asset:1',status:'landed',source:'craft',producer:'claude-code',title:'Harbour study',files:1,bytes:2048,failed_files:0,at:new Date().toISOString(),kinds:[{extension:'png',count:1}],previews:[]};
         return window.__homeSummary({lead:{available:true,state:'new',files:1,bytes:2048,since:null},board:{rows:[row],cargo:[row],more:0,truncated:false,docked:[]}});
@@ -255,7 +289,8 @@ browserTest('Home draws no tool to launch, puts Calendar beside Open in Library 
         await saved.waitFor();
         assert.deepEqual(await saved.locator('a').allTextContents(),['Print shop order form ↗']);
         // The group is the card's foot, under what the summary paints there.
-        assert.equal(await page.locator('[data-away]').evaluate(card=>card.lastElementChild.matches('[data-section="links"]')&&card.querySelector('[data-away-body]').textContent.includes('Nothing away from ship')),true);
+        assert.equal(await page.locator('[data-away]').evaluate(card=>card.querySelector('[data-away-body]').nextElementSibling.matches('[data-section="links"]')&&card.querySelector('[data-away-body]').textContent.includes('Nothing away from ship')),true);
+        assert.equal(await page.locator('[data-cargo-empty]').isHidden(),true,'Cargo with a file has no empty line');
         assert.deepEqual(errors,[]);
         await page.close();
     }finally{await browser.close();}
@@ -301,6 +336,7 @@ browserTest('Add your iPhone, at the foot of Docked, opens its steps and closing
         const dialog=()=>page.locator('[data-phone-dialog]');
         const open=()=>dialog().evaluate(node=>node.open),focused=()=>page.evaluate(()=>document.activeElement?.hasAttribute('data-phone-open'));
         assert.equal((await opener.textContent()).trim(),'Add your iPhone');
+        assert.equal(await page.locator('[data-phone-open]:visible').count(),1,'Away from ship keeps its copy hidden while Docked shows');
         // The summary has painted the card's body; the foot is the card's last part and outlives that paint.
         assert.equal(await page.locator('[data-docked]').evaluate(card=>card.lastElementChild.contains(card.querySelector('[data-phone-open]'))&&card.querySelector('[data-docked-body] h2')!==null),true);
         assert.equal(await open(),false);

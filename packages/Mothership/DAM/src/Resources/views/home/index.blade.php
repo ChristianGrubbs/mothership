@@ -38,14 +38,18 @@
 
                 <section class="hm-card hm-needs" data-m="panel" data-needs aria-label="Needs you" hidden></section>
 
+                {{-- Shown while it has rows or offers Calendar: an account with no files yet still gets the calendar here. --}}
                 <div data-cargo-section hidden>
                     <div class="hm-sec" id="hm-cargo">
                         <h2>Cargo</h2>
                         <span class="hm-mono">What landed, newest first</span>
                         <button type="button" class="hm-sec-link is-quiet" data-calendar-open hidden><svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4z M4 10h16 M8 3v5 M16 3v5"/></svg>Calendar</button>
-                        <a class="hm-sec-link" href="{{ route('admin.dam.assets.index') }}">Open in Library <svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v10M7 17 17 7"/></svg></a>
+                        @if (bouncer()->hasPermission('dam.assets'))
+                            <a class="hm-sec-link" href="{{ route('admin.dam.assets.index') }}">Open in Library <svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v10M7 17 17 7"/></svg></a>
+                        @endif
                     </div>
                     <ol class="hm-log" data-m="arrive" data-cargo></ol>
+                    <p class="hm-empty hm-cargo-empty" data-cargo-empty hidden>Nothing has landed in your Library yet.</p>
                 </div>
             </div>
 
@@ -62,6 +66,8 @@
                         <h3 class="hm-mono">Your saved links</h3>
                         <div class="hm-saved-links" data-saved-links></div>
                     </div>
+                    {{-- A role without the Library has no Docked card, so its Add your iPhone sits here. --}}
+                    <p class="hm-foot" data-phone-elsewhere hidden><button type="button" class="hm-foot-link" data-id="phone-app" data-phone-open><svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2.500h8A1.500 1.500 0 0 1 17.500 4v16a1.500 1.500 0 0 1-1.500 1.500H8A1.500 1.500 0 0 1 6.500 20V4A1.500 1.500 0 0 1 8 2.500z M11 18.500h2"/></svg>Add your iPhone</button></p>
                 </section>
             </aside>
         </div>

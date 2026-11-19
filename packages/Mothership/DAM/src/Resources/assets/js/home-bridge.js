@@ -211,8 +211,9 @@
             const list = $('[data-cargo]'), section = $('[data-cargo-section]'), now = new Date(summary.generated_at);
             const moving = summary.board.moving || [];
             const cargo = summary.board.cargo || [], fresh = cargo.filter(row => row.status !== 'seen'), seen = cargo.filter(row => row.status === 'seen');
-            section.hidden = !moving.length && !cargo.length;
-            list.hidden = section.hidden;
+            section.dataset.empty = moving.length || cargo.length ? '0' : '1';
+            list.hidden = section.dataset.empty === '1';
+            state.showCargo(root);
             list.innerHTML = [
                 ...moving.map(row => journey(row, now)),
                 ...fresh.map(row => landing(row, now)),
@@ -264,14 +265,16 @@
             if (!summary.lead?.available || !summary.board?.rows) { paintLocked(); return; }
             paintBoard(); paintDeck(); paintNeeds(); paintCargo(); paintDocked(); paintAway(); paintGlance();
         }
-        // A role without the library has no board to read.
+        // A role without the library has no board to read. Its Add your iPhone moves from Docked to Away from ship.
         function paintLocked() {
             $('[data-board]').removeAttribute('aria-busy');
             $('[data-deck]').removeAttribute('aria-busy');
             $('[data-board-object]').hidden = true;
-            $('[data-cargo-section]').hidden = true;
+            $('[data-cargo-section]').dataset.empty = '1';
             $('[data-cargo]').hidden = true;
+            state.showCargo(root);
             $('[data-docked]').hidden = true;
+            $('[data-phone-elsewhere]').hidden = false;
             paintNeeds(); paintAway(); paintGlance();
         }
         function paintFailure(error) {

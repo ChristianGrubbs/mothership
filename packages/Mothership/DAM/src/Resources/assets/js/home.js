@@ -18,6 +18,9 @@
         root.querySelectorAll('[data-board-rows],[data-deck],[data-glance],[data-needs],[data-cargo],[data-docked-body],[data-signal],[data-away-body],[data-saved-links]').forEach(slot=>slot.replaceChildren());
         root.querySelector('[data-section="links"]').hidden=true;
         root.querySelector('[data-calendar-open]').hidden=true;
+        const cargoSection=root.querySelector('[data-cargo-section]');cargoSection.hidden=true;delete cargoSection.dataset.empty;
+        root.querySelector('[data-cargo-empty]').hidden=true;
+        root.querySelector('[data-phone-elsewhere]').hidden=true;
         root.querySelectorAll('[data-cal-dialog],[data-access-menu]').forEach(element=>element.remove());
         root.querySelectorAll('dialog[open]').forEach(dialog=>dialog.removeAttribute('open'));
         $('[data-status]').textContent = '';
@@ -50,8 +53,8 @@
             try { const data=await request('/layout',{timeout:20000});if(signal.aborted||!root.isConnected)return;catalog=data.catalog;paintCalendar();savedLinks(data.links||[]);status(); }
             catch(error){const slow=['TimeoutError','AbortError'].includes(error?.name);status(slow?'Home is taking too long to load.':error.message,true);const retry=document.createElement('button');retry.type='button';retry.className='agh-button';retry.dataset.homeRetry='';retry.textContent='Retry';retry.onclick=()=>{status('Loading your Home…');load();};$('[data-status]').append(' ',retry);}
         }
-        // The layout's catalogue says whether this account has the calendar.
-        function paintCalendar(){$('[data-calendar-open]').hidden=!catalog.some(item=>item.id==='calendar');}
+        // The layout's catalogue says whether this account has the calendar. Offering it keeps Cargo's head up.
+        function paintCalendar(){$('[data-calendar-open]').hidden=!catalog.some(item=>item.id==='calendar');api.showCargo(root);}
         document.addEventListener('mothership:navigate:success',()=>{
             if(root.isConnected)return;
             lifecycle.abort();

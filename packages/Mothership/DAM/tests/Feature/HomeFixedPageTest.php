@@ -114,14 +114,24 @@ it('leaves Transfers and the Icon Library to their own places, with no link on H
 it('keeps Calendar, the iPhone steps and saved links on Home without a Tools shelf', function () {
     config(['dam-home.video_api' => 'https://video.example.test']);
 
-    // Calendar beside Open in Library in Cargo's head; Add your iPhone at the foot of Docked; saved links at the
-    // foot of Away from ship, each after the part the summary paints.
+    // Calendar beside Open in Library in Cargo's head, over a line for an empty Cargo; Add your iPhone at the foot
+    // of Docked; saved links at the foot of Away from ship, each after the part the summary paints; and a second Add
+    // your iPhone under them, which Home shows where a role has no Docked card.
     $this->get('/admin/home')->assertOk()
         ->assertDontSee('data-section="apps"', false)
         ->assertDontSee('id="hm-tools-title"', false)
-        ->assertSeeInOrder(['id="hm-cargo"', 'data-calendar-open', 'Open in Library'], false)
+        ->assertSeeInOrder(['id="hm-cargo"', 'data-calendar-open', 'Open in Library', 'data-cargo', 'data-cargo-empty'], false)
         ->assertSeeInOrder(['data-docked', 'data-docked-body', 'data-phone-open', 'data-signal'], false)
-        ->assertSeeInOrder(['data-away', 'data-away-body', 'data-saved-links', '</aside>'], false);
+        ->assertSeeInOrder(['data-away', 'data-away-body', 'data-saved-links', 'data-phone-elsewhere', 'data-phone-open', '</aside>'], false);
+
+    // A role without the Library is not offered it from Cargo's head, and keeps its way to the iPhone steps.
+    $role = Role::factory()->create(['permission_type' => 'custom', 'permissions' => ['settings']]);
+    $this->actingAs(Admin::factory()->create(['role_id' => $role->id]), 'admin');
+
+    $this->get('/admin/home')->assertOk()
+        ->assertDontSee('<a class="hm-sec-link"', false)
+        ->assertSeeInOrder(['data-away', 'data-phone-elsewhere', 'Add your iPhone'], false);
+    $this->actingAs($this->homeAdmin, 'admin');
 
     // The tools stay in the catalogue, for the Tools page.
     $downloader = collect($this->getJson('/admin/home/layout')->assertOk()->json('catalog'))->firstWhere('id', 'video-downloader');

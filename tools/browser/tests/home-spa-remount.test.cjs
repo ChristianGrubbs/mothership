@@ -64,7 +64,7 @@ browserTest('a root rebuilt after Home rendered gets one live board and one Dock
         assert.equal(await page.locator('[data-docked] h2').count(),1);
         assert.equal(await page.locator('[data-docked] [data-phone-open]').count(),1);
         // The rebuilt root's own controls are live.
-        await page.locator('[data-phone-open]').click();
+        await page.locator('[data-docked] [data-phone-open]').click();
         assert.equal(await page.locator('[data-phone-dialog]').evaluate(node=>node.open),true);
         await page.close();
     }finally{

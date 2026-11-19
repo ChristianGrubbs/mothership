@@ -236,5 +236,14 @@
             const pictures = Math.min(previews, withMore);
             return {pictures, more: Math.max(0, files - pictures)};
         },
+        // Cargo's section shows while it has rows or offers Calendar, so an account with no files yet keeps the
+        // calendar. The bridge marks whether there are rows (data-empty "0" or "1", absent until the summary answers)
+        // and home.js shows Calendar from the catalogue; each calls this after painting its part.
+        showCargo(root) {
+            const section = root.querySelector('[data-cargo-section]');
+            const calendar = !root.querySelector('[data-calendar-open]').hidden;
+            section.hidden = section.dataset.empty !== '0' && !calendar;
+            root.querySelector('[data-cargo-empty]').hidden = section.dataset.empty !== '1';
+        },
     };
 })();
