@@ -4,7 +4,8 @@
     On a folding phone held open, public/pwa/device.js publishes the box of the segment a dialog belongs on
     (--seg-trailing-*: the trailing one in book pose, the lower one in tabletop). The picker centres on that box, so it
     never sits across the fold, and its scrim still dims the whole screen. With no fold the variables are unset and the
-    fallbacks fill the whole screen, as before.
+    fallbacks fill the whole screen, as before. The dialog's size limits are a share of that box, not of the window, so
+    a desktop's classic scrollbar (the admin theme keeps its gutter) never eats into the 1rem margin.
 --}}
 <script type="text/x-template" id="v-dam-folder-picker-template">
     <div
@@ -23,7 +24,7 @@
             aria-modal="true"
             :aria-labelledby="'dam-folder-picker-title-' + tabId"
             class="relative bg-white dark:bg-cherry-900 rounded-xl shadow-2xl w-[360px] h-[520px] flex flex-col focus:outline-none"
-            style="max-width: calc(var(--seg-trailing-width, 100vw) - 2rem); max-height: calc(var(--seg-trailing-height, 100dvh) - 2rem);"
+            style="max-width: calc(100% - 2rem); max-height: calc(100% - 2rem);"
             @keydown.tab="trapFocus"
             @keydown.esc="onEscape"
         >
