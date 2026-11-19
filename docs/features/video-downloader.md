@@ -43,6 +43,7 @@ Only the next step is filled. `main[data-next]` names it, and `app.js` keeps it 
 - the words over the size limit;
 - the plain file link in a browser;
 - the folding phone's two screens;
+- the panes on a book and a tabletop fold;
 - which one control is filled.
 
 `packages/Mothership/DAM/tests/Feature/HomeVideoDownloaderTest.php` covers who may open the tool and use the studio.

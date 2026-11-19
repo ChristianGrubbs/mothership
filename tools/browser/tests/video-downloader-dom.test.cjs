@@ -283,14 +283,16 @@ run('Video Downloader fills one control, the next step: Find video, Download whi
     const browser = await launch();
     try {
         const { page, errors, row } = await openTool(browser, { app: true, jobs: [job('a', 'done')] });
-        // Filled is the accent's ground; every other control is a card or plain words.
+        // Filled is the accent's ground, or its hover ground under the pointer; every other control is a card or plain words.
         const filled = () => page.evaluate(() => {
-            const act = getComputedStyle(document.documentElement).getPropertyValue('--act').trim();
-            const probe = Object.assign(document.createElement('i'), { style: `color:${act}` });
-            document.body.append(probe);
-            const ground = getComputedStyle(probe).color;
-            probe.remove();
-            return [...document.querySelectorAll('button, a')].filter(node => node.checkVisibility() && getComputedStyle(node).backgroundColor === ground).map(node => node.textContent.trim());
+            const grounds = ['--act', '--act-hover'].map(name => {
+                const probe = Object.assign(document.createElement('i'), { style: `color:${getComputedStyle(document.documentElement).getPropertyValue(name).trim()}` });
+                document.body.append(probe);
+                const ground = getComputedStyle(probe).color;
+                probe.remove();
+                return ground;
+            });
+            return [...document.querySelectorAll('button, a')].filter(node => node.checkVisibility() && grounds.includes(getComputedStyle(node).backgroundColor)).map(node => node.textContent.trim());
         });
         assert.deepEqual(await filled(), ['Find video']);
 
@@ -310,6 +312,45 @@ run('Video Downloader fills one control, the next step: Find video, Download whi
         await row('a').locator('button[data-act="share"]').click();
         await page.waitForFunction(() => document.querySelector('[data-vd]').dataset.next === 'find');
         assert.deepEqual(await filled(), ['Find video']);
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); }
+});
+
+run('Video Downloader on a folded screen keeps both panes off the fold, the downloads above a tabletop fold, and each pane scrolling by itself', async () => {
+    const browser = await launch();
+    try {
+        const many = Array.from({ length: 14 }, (_, index) => job('j' + index, index % 3 ? 'done' : 'running', { can_optimize: index % 3 === 1 }));
+        const { page, errors } = await openTool(browser, { jobs: many });
+        // What the page that frames the tool says about the fold (home-frame.js), with a hinge strip of 19 px.
+        const fold = (mode, start, end) => page.evaluate(([mode, start, end]) => {
+            const root = document.documentElement;
+            root.dataset.fold = mode;
+            root.style.setProperty('--fold-start', start + 'px');
+            root.style.setProperty('--fold-end', end + 'px');
+        }, [mode, start, end]);
+        const panes = () => page.evaluate(() => Object.fromEntries(['.vd-find', '.vd-list'].map(selector => {
+            const pane = document.querySelector(selector), box = pane.getBoundingClientRect();
+            return [selector, { left: box.left, right: box.right, top: box.top, bottom: box.bottom, scrolls: pane.scrollHeight > pane.clientHeight && getComputedStyle(pane).overflowY === 'auto' }];
+        })));
+
+        await page.setViewportSize({ width: 951, height: 585 });
+        await fold('columns', 466, 485);
+        let at = await panes();
+        assert.ok(at['.vd-find'].right <= 466, 'Find ends before the fold');
+        assert.ok(at['.vd-list'].left >= 485, 'the downloads start after it');
+        assert.equal(at['.vd-list'].scrolls, true, 'the long list scrolls inside its own pane');
+        // The downloads pane is narrow on a wide page: a row with buttons puts them under its title.
+        const row = page.locator('[data-jobs] li[data-id="j1"]');
+        const [title, actions] = await Promise.all([row.locator('.job-title').boundingBox(), row.locator('.job-actions').boundingBox()]);
+        assert.ok(actions.y >= title.y + title.height, 'the buttons sit under the title');
+
+        await page.setViewportSize({ width: 669, height: 867 });
+        await fold('rows', 418, 449);
+        at = await panes();
+        assert.ok(at['.vd-list'].bottom <= 418, 'the downloads end above the fold');
+        assert.ok(at['.vd-find'].top >= 449, 'Find starts below it');
+        assert.equal(at['.vd-list'].scrolls, true);
+        assert.equal(await page.evaluate(() => document.documentElement.scrollHeight - document.documentElement.clientHeight), 0, 'the page itself does not scroll');
         assert.deepEqual(errors, []);
     } finally { await browser.close(); }
 });
