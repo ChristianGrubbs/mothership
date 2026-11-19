@@ -84,15 +84,32 @@
         notice(shown){notify('notice',shown);},
         // Whether this account may save into the Library at all.
         library:Boolean(library),
-        // The folders this account may save into, outermost first: [{id, name, depth}].
+        // The folders this account may save into, outermost first: [{id, name, depth}]. The Library's tree answers
+        // with its top folders and the first page of each one's children only; deeper folders and later pages come
+        // from its children endpoint, four requests at a time.
         async folders(){
             if(!library)return [];
-            const response=await window.fetch(library.folders,{headers:{Accept:'application/json'},credentials:'same-origin'});
-            if(!response.ok)throw Error(`The Library answered ${response.status}.`);
-            const rows=[];
-            const walk=(nodes,depth)=>(nodes||[]).forEach(node=>{rows.push({id:String(node.id),name:String(node.name),depth});walk(node.children,depth+1);});
-            walk((await response.json()).data,0);
-            return rows;
+            const read=async url=>{
+                const response=await window.fetch(url,{headers:{Accept:'application/json'},credentials:'same-origin'});
+                if(!response.ok)throw Error(`The Library answered ${response.status}.`);
+                return response.json();
+            };
+            let running=0;const waiting=[];
+            const limited=async task=>{while(running>=4)await new Promise(go=>waiting.push(go));running++;try{return await task();}finally{running--;waiting.shift()?.();}};
+            const childrenOf=async node=>{
+                let list=Array.isArray(node.children)?node.children:[];
+                let more=node.children_has_more===true||(!list.length&&node.has_children===true);
+                while(more){
+                    const page=await limited(()=>read(`${library.children.replace('__ID__',encodeURIComponent(node.id))}?offset=${list.length}`));
+                    const data=Array.isArray(page.data)?page.data:[];
+                    list=list.concat(data);
+                    more=page.has_more===true&&data.length>0;
+                }
+                return list;
+            };
+            const walk=async(nodes,depth)=>(await Promise.all(nodes.map(async node=>[{id:String(node.id),name:String(node.name),depth},...await walk(await childrenOf(node),depth+1)]))).flat();
+            const top=await read(library.folders);
+            return walk(Array.isArray(top.data)?top.data:[],0);
         },
         // Saves files ([{name, blob}]) into one folder of the Library, recorded as made with this tool. Answers
         // {count, url}, url being the first file's page, or throws with words a person can read.

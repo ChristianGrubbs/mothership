@@ -126,6 +126,41 @@ browserTest('in the frame, the bar speaks for the tool and a save goes to the ch
     } finally { await browser.close(); }
 });
 
+browserTest('a save in progress holds the Library sheet, and the Library is asked once',async()=>{
+    const browser=await launch();
+    try{
+        const {page,errors}=await open(browser,{bridge:true});
+        // The Library takes its time: each save waits until the test lets it go.
+        await page.evaluate(()=>{const bridge=window.MothershipFrame,save=bridge.save.bind(bridge);window.__asked=0;bridge.save=args=>{window.__asked++;return new Promise(done=>{window.__finish=()=>done(save(args));});};});
+        const held=()=>page.evaluate(()=>{const go=document.querySelector('[data-library-go]');return {label:go.textContent,disabled:[go,...document.querySelectorAll('[data-save-image],[data-save-tokens],[data-folder]')].map(node=>node.disabled)};});
+        await page.evaluate(()=>window.__press('library'));
+        await page.locator('[data-folder] option',{hasText:'Brand'}).waitFor({state:'attached'});
+        await page.locator('[data-library-go]').click();
+        await page.waitForFunction(()=>window.__asked===1);
+        assert.deepEqual(await held(),{label:'Saving…',disabled:[true,true,true,true]});
+
+        // Closed and opened again, the sheet shows the same save, still going.
+        await page.keyboard.press('Escape');
+        await page.evaluate(()=>window.__press('library'));
+        assert.equal(await sheetOpen(page,'library'),true);
+        assert.deepEqual(await held(),{label:'Saving…',disabled:[true,true,true,true]});
+        // A press that reaches Save anyway starts nothing.
+        await page.evaluate(()=>{const go=document.querySelector('[data-library-go]');go.disabled=false;go.click();});
+        await settled(page);
+        assert.equal(await page.evaluate(()=>window.__asked),1,'a second press while saving asks the Library nothing');
+
+        await page.evaluate(()=>window.__finish());
+        await page.waitForFunction(()=>window.__told.notices.length===1);
+        assert.deepEqual(await page.evaluate(()=>window.__told.saves),[{names:['png','json'],folder:'7'}]);
+        assert.equal(await sheetOpen(page,'library'),false);
+        // The next save starts from a free sheet.
+        await page.evaluate(()=>window.__press('library'));
+        assert.deepEqual(await held(),{label:'Save',disabled:[false,false,false,false]});
+        assert.deepEqual(errors,[]);
+        await page.close();
+    } finally { await browser.close(); }
+});
+
 browserTest('the panes follow the tool\'s width, and nothing scrolls sideways',async()=>{
     const browser=await launch();
     try{

@@ -4,6 +4,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Mothership\DAM\Listeners\DeleteAdminAccessRows;
 use Mothership\DAM\Models\Directory;
 use Mothership\User\Models\Admin;
 use Mothership\User\Models\Role;
@@ -160,6 +161,8 @@ it('offers Save to Library only to an account that may upload', function () {
     expect(substr_count($this->get('/admin/tools/palette-studio')->assertOk()->getContent(), 'data-tool-library hidden'))->toBe(2);
     $page = $this->get('/admin/home/tools/palette-studio/index.html')->assertOk()->getContent();
     expect(toolBootstrap($page)['library']['save'])->toBe(route('admin.tools.library', ['widget' => 'palette-studio']))
+        // The tree's deeper folders and later pages are read from here.
+        ->and(toolBootstrap($page)['library']['children'])->toBe(route('admin.dam.directory.children', ['id' => '__ID__']))
         // The tool is drawn in the app's own typefaces.
         ->and($page)->toContain('<style data-tool-faces>');
 
@@ -179,6 +182,21 @@ it('saves a tool\'s file through the Library upload and records the tool that ma
 
     $saves = DB::table('dam_tool_saves')->get()->map(fn ($row) => [(int) $row->asset_id, (int) $row->admin_id, $row->widget])->all();
     expect($saves)->toBe([[(int) $response->json('files.0.id'), (int) $this->toolsAdmin->id, 'palette-studio']]);
+});
+
+it('keeps which tool made a file when the person who saved it is removed', function () {
+    Storage::fake(Directory::getAssetDisk());
+    $saver = Admin::factory()->create(['timezone' => 'UTC']);
+    $this->actingAs($saver, 'admin');
+    $this->post(route('admin.tools.library', ['widget' => 'palette-studio']), [
+        'directory_id' => Directory::factory()->create()->id,
+        'files'        => [UploadedFile::fake()->createWithContent('harbour.txt', 'tokens')],
+    ], ['Accept' => 'application/json'])->assertCreated();
+
+    // The cleanup alone is what SQL Server has, where admin_id does not follow the delete.
+    app(DeleteAdminAccessRows::class)->handle($saver);
+
+    expect(DB::table('dam_tool_saves')->get(['admin_id', 'widget'])->map(fn ($row) => [$row->admin_id, $row->widget])->all())->toBe([[null, 'palette-studio']]);
 });
 
 it('records nothing when a save is refused', function () {

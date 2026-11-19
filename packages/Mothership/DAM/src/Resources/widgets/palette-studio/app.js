@@ -409,16 +409,19 @@
 
     // Save to Library: the picture, the colour tokens or both, into a folder the account may upload to.
     let folders = null;
-    function setLibrary({ busy = false, message = '', error = false } = {}) {
+    // A save holds the sheet until the Library answers: its choices stay as sent, also when the sheet is reopened.
+    let saving = false;
+    function setLibrary({ message = '', error = false } = {}) {
         const none = Array.isArray(folders) && !folders.length;
         const picked = $('[data-save-image]').checked || $('[data-save-tokens]').checked;
         $('[data-folder-field]').hidden = none;
         $('[data-folder-empty]').hidden = !none;
+        ['[data-save-image]', '[data-save-tokens]', '[data-folder]'].forEach(selector => { $(selector).disabled = saving; });
         const go = $('[data-library-go]');
-        go.disabled = busy || none || !folders || !picked;
-        go.textContent = busy ? 'Saving…' : 'Save';
+        go.disabled = saving || none || !folders || !picked;
+        go.textContent = saving ? 'Saving…' : 'Save';
         const status = $('[data-sheet="library"] .tk-status');
-        status.textContent = message || (picked || none ? '' : 'Choose at least one file to save.');
+        status.textContent = message || (saving ? 'Saving to the Library…' : picked || none ? '' : 'Choose at least one file to save.');
         status.classList.toggle('is-error', error);
     }
     async function openLibrary() {
@@ -440,8 +443,11 @@
         }
     }
     async function saveToLibrary() {
+        if (saving) return;
         const folder = $('[data-folder]').value, files = [];
-        setLibrary({ busy: true, message: 'Saving to the Library…' });
+        saving = true;
+        setLibrary();
+        let failed = null;
         try {
             if ($('[data-save-image]').checked) files.push({ name: core.fileName(work.name, 'png'), blob: (await makePng()).blob });
             if ($('[data-save-tokens]').checked) files.push({ name: core.fileName(work.name, 'json'), blob: new Blob([core.exportAs('json', work.name, hexes())], { type: 'application/json' }) });
@@ -454,8 +460,11 @@
             // Where the page draws a bar, its status line says it once, with the link. Elsewhere the tool says it.
             if (!frame.bar) say(text);
         } catch (error) {
-            setLibrary({ message: error.message || 'The files could not be saved. Try again.', error: true });
+            failed = error;
+        } finally {
+            saving = false;
         }
+        if (failed) setLibrary({ message: failed.message || 'The files could not be saved. Try again.', error: true });
     }
 
     // ---- PNG ----------------------------------------------------------------------------------------------------

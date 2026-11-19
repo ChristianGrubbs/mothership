@@ -91,9 +91,10 @@ class HomeToolController extends Controller
             // Where a tool saves into the Library, for an account that may upload. The bridge keeps the addresses;
             // a tool only hands it files and a folder.
             ...(bouncer()->hasPermission('dam.asset.upload') ? ['library' => [
-                'folders' => route('admin.dam.directory.index'),
-                'save'    => route('admin.tools.library', ['widget' => $widget]),
-                'open'    => route('admin.dam.assets.edit', ['id' => '__ID__']),
+                'folders'  => route('admin.dam.directory.index'),
+                'children' => route('admin.dam.directory.children', ['id' => '__ID__']),
+                'save'     => route('admin.tools.library', ['widget' => $widget]),
+                'open'     => route('admin.dam.assets.edit', ['id' => '__ID__']),
             ]] : []),
         ];
         $json = json_encode($settings, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR);
