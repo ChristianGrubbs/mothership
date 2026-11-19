@@ -81,7 +81,14 @@ async function openMenu(page, { folded, toggleTop, rows, foldStart = FOLD_START,
     await page.addScriptTag({ content: registration });
     await page.evaluate(() => app.mount('#app'));
     await page.click('#toggle');
-    await page.waitForTimeout(150);
+    // The panel opens with a 100 ms scale transition, and its box grows from scale-95 to its full size. A fixed
+    // 150 ms wait let a slow runner measure it part-way (CI, 2026-11-19: 335.938 where 336 was right). Vue takes the
+    // enter class `duration-100` off when that transition ends, so measure only once it is gone and nothing animates.
+    await page.waitForFunction(() => {
+        const panel = [...document.body.children].find((node) => node.style?.zIndex === '10010');
+
+        return Boolean(panel) && getComputedStyle(panel).display !== 'none' && ! panel.classList.contains('duration-100') && panel.getAnimations().length === 0;
+    });
 }
 
 const boxes = (page) => page.evaluate(() => {
