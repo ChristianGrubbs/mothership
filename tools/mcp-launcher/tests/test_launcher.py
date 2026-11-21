@@ -20,7 +20,8 @@ MANIFEST = os.path.join(os.path.dirname(HERE), "tools_manifest.json")
 FAKE_CONTAINER = os.path.join(HERE, "fake_container.py")
 LIBRARY_TOOLS = [
     "library_search", "library_list_folders", "library_create_folder", "library_get_asset",
-    "library_list_stack", "library_fetch", "library_save", "library_update",
+    "library_list_stack", "library_fetch", "library_save", "library_update", "library_vectorize",
+    "library_vectorization",
 ]
 REQUEST_ID = "00000000-0000-4000-8000-000000000001"
 
@@ -410,6 +411,36 @@ class FetchTest(LauncherCase):
         self.set_flag("fetch_refuse")
         result = self.session().call("library_fetch", {"asset_id": 7, "dest_dir": self.destination()})
         self.assertEqual("Not found.", result["content"][0]["text"])
+        self.assertEqual([], self.staging_left())
+
+
+class VectorizeTest(LauncherCase):
+    def test_a_one_off_sends_the_mac_file_in_and_clears_the_staged_copy(self):
+        path = self.mac_file("logo.png", b"PNG-logo" * 100)
+        result = self.session().call("library_vectorize", {"local_path": path, "request_id": REQUEST_ID})
+
+        self.assertEqual("queued", result["structuredContent"]["status"])
+        self.assertEqual(sha256(b"PNG-logo" * 100), json.loads(self.lines("saved.jsonl")[0])["sha256"])
+        self.assertEqual([], self.staging_left())
+
+    def test_a_filed_conversion_carries_no_file(self):
+        self.session().call("library_vectorize", {"asset_id": 7, "format": "svg", "request_id": REQUEST_ID})
+
+        self.assertEqual(["library_vectorize"], self.lines("calls"))
+        self.assertEqual([], self.lines("saved.jsonl"))
+
+    def test_a_result_copy_lands_at_a_mac_path_and_a_status_read_copies_nothing(self):
+        destination = os.path.join(self.mac, "out")
+        self.serve_fetch(b"<svg/>" * 100)
+        session = self.session()
+        status = session.call("library_vectorization", {"id": REQUEST_ID})
+        result = session.call("library_vectorization", {"id": REQUEST_ID, "format": "svg", "dest_dir": destination})
+
+        self.assertNotIn("path", status["structuredContent"])
+        expected = os.path.join(destination, "render-vectorized.svg")
+        self.assertEqual(expected, result["structuredContent"]["path"])
+        with open(expected, "rb") as handle:
+            self.assertEqual(sha256(b"<svg/>" * 100), sha256(handle.read()))
         self.assertEqual([], self.staging_left())
 
 

@@ -7,7 +7,9 @@ Asset conversion routes validate asset edit/Files access, original bytes, the ex
 
 Available allowance is non-expiring. User managers set the available count in Settings → Users → Edit.
 In-progress reservations are separate; a failed job returns one reservation, while a completed job consumes it.
-Only the verified `MOTHERSHIP_VECTORIZATION_OWNER_ADMIN_ID` is unlimited.
+The verified `MOTHERSHIP_VECTORIZATION_OWNER_ADMIN_ID` is unlimited, and so is every active admin id listed in
+`MOTHERSHIP_VECTORIZATION_UNLIMITED_ADMIN_IDS` (comma-separated, for example an agent account). Unlimited accounts are
+never charged and their allowance is never touched; every other account keeps its allowance.
 
 The server uses `MOTHERSHIP_VECTORIZER_API_ID` and `MOTHERSHIP_VECTORIZER_API_SECRET` from the runtime environment.
 The provider charges for production tracing and a second format; these are distinct from one user allocation.
@@ -24,6 +26,45 @@ Diagnostics use `storage/logs/home.jsonl`, gated by `MOTHERSHIP_HOME_LOG_ENABLED
 Disable new submissions with `MOTHERSHIP_VECTORIZATION_ENABLED=false` and rebuild cached config.
 Allow existing work to finish before stopping the worker. Keep the additive tables and stored results.
 Rollback uses a normal reviewed revert and deployment, never dropping user data or rewriting history.
+
+## Agent access (REST and MCP)
+
+Agents convert through the same intake as the Library and Home (`Mothership\DAM\Vectorization\Intake`): the 20 MiB and
+33,554,432-pixel limits, the raster check (png, jpg, jpeg, webp, bmp, gif, tif, tiff), the private input copy, the
+replay-safe reservation and the `vectorization` queue. Every job makes both formats (about 1.1 provider credits).
+The caller's admin needs the Image Vectorization Home tool (the role's widget list and its permission; custom roles leave
+paid tools out by default), for reading results as well as for submitting. A filed conversion also needs `dam.asset.edit`, `dam.asset.files` and edit access to the asset.
+
+### REST (`/api/v1/rest`, bearer API key)
+
+| Route | Key permission | Answer |
+| --- | --- | --- |
+| `POST assets/{asset}/vectorize` — JSON `{format: svg\|pdf, request_id?: uuid}` | `api.dam.vectorizations.create` | 202 `data.vectorization`; the chosen format is filed onto the asset as an output file |
+| `POST vectorizations` — multipart `file`, optional `format` (ignored), `request_id?` | `api.dam.vectorizations.create` | 202 `data.vectorization`; one-off, filed nowhere |
+| `GET vectorizations/{id}` | `api.dam.vectorizations.show` | 200 `data.vectorization` |
+| `GET vectorizations/{id}/{svg\|pdf}` | `api.dam.vectorizations.show` | 200 bytes, `image/svg+xml` or `application/pdf`, private no-store |
+
+`data.vectorization` is `{id, status: queued|processing|completed|failed, kind: asset|one_off, format, source_asset_id,
+charged, error_code, message, formats, output: {asset_id, file_id}|null, downloads: {svg, pdf}|null, created_at,
+updated_at}`. `formats` and `downloads` are filled once the conversion is completed; `output` names the filed file of a
+completed asset conversion.
+
+A missing `request_id` is generated. The same id with the same image (and, for an asset, the same asset and format)
+returns the first conversion; a different image answers 409. Both POST routes allow 10 requests a minute.
+
+Status codes: 401 without a valid bearer; 403 for a key without the permission, an admin without the paid tool or the
+asset permissions, or a limited account with no allowance left; 404 for a hidden or missing asset, anyone else's
+conversion, and a result that is not completed; 422 for a bad format, a non-raster asset or file, or the size and pixel
+limits; 503 while the provider is not connected. API error bodies are the generic API error envelope, so read the status.
+
+### MCP (`mothership` server)
+
+- `library_vectorize` — `asset_id` plus `format` files the result onto an asset; `local_path` (no `asset_id`) is a
+  one-off. `request_id` (uuid) is required and replays. The Mac launcher copies `local_path` into the container first.
+  Returns the conversion as above.
+- `library_vectorization` — `id` returns the status. With `format` (svg or pdf) a completed result is copied to
+  `dest_dir` (or the fetch folder) as `<source name>-vectorized.<format>` or `vectorized-<id8>.<format>`, sha256-checked,
+  and `path`, `name`, `sha256`, `size` and `reused` are returned.
 
 ## Release and live acceptance — 2026-09-08
 

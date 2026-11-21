@@ -627,10 +627,13 @@ class Worker:
         self.send({"jsonrpc": "2.0", "id": request_id, "result": result})
 
     def _dispatch(self, request_id, name, arguments: dict) -> dict:
-        if name == "library_save" and isinstance(arguments.get("local_path"), str):
-            return self._save(request_id=request_id, arguments=arguments)
+        # Tools that read a Mac file (local_path) or write one (dest_dir): the file crosses the container boundary here.
+        if name in ("library_save", "library_vectorize") and isinstance(arguments.get("local_path"), str):
+            return self._save(request_id=request_id, name=name, arguments=arguments)
         if name == "library_fetch" and isinstance(arguments.get("dest_dir", ""), str):
-            return self._fetch(request_id=request_id, arguments=arguments)
+            return self._fetch(request_id=request_id, name=name, arguments=arguments)
+        if name == "library_vectorization" and "format" in arguments and isinstance(arguments.get("dest_dir", ""), str):
+            return self._fetch(request_id=request_id, name=name, arguments=arguments)
         return self._call(request_id=request_id, name=name, arguments=arguments)
 
     def _call(self, request_id, name, arguments: dict) -> dict:
@@ -639,7 +642,7 @@ class Worker:
             method="tools/call", params={"name": name, "arguments": arguments}, timeout=self.settings.call_seconds
         )
 
-    def _save(self, request_id, arguments: dict) -> dict:
+    def _save(self, request_id, name: str, arguments: dict) -> dict:
         real_path, size = self.files.source(path=arguments["local_path"])
         upstream = self._ready_upstream(request_id=request_id)
         staging = self.files.new_staging()
@@ -647,13 +650,13 @@ class Worker:
             staged = self.files.send_in(real_path=real_path, size=size, staging=staging)
             return upstream.request(
                 method="tools/call",
-                params={"name": "library_save", "arguments": dict(arguments, local_path=staged)},
+                params={"name": name, "arguments": dict(arguments, local_path=staged)},
                 timeout=self.settings.call_seconds,
             )
         finally:
             self.files.discard(staging=staging)
 
-    def _fetch(self, request_id, arguments: dict) -> dict:
+    def _fetch(self, request_id, name: str, arguments: dict) -> dict:
         directory = self.files.destination(requested=arguments.get("dest_dir"))
         upstream = self._ready_upstream(request_id=request_id)
         self.files.refuse_storage(directory=directory)
@@ -662,7 +665,7 @@ class Worker:
         try:
             result = upstream.request(
                 method="tools/call",
-                params={"name": "library_fetch", "arguments": dict(arguments, dest_dir=inside)},
+                params={"name": name, "arguments": dict(arguments, dest_dir=inside)},
                 timeout=self.settings.call_seconds,
             )
             if result.get("isError"):
@@ -671,10 +674,9 @@ class Worker:
             container_path = details.get("path")
             if not isinstance(container_path, str) or not container_path.startswith(inside + "/"):
                 raise LauncherFailure("The library server answered without a file. Try again.")
-            name = os.path.basename(container_path)
             path, reused = self.files.bring_out(
                 container_path=container_path,
-                name=name,
+                name=os.path.basename(container_path),
                 size=int(details.get("size", -1)),
                 sha256=str(details.get("sha256", "")),
                 directory=directory,

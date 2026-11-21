@@ -140,6 +140,8 @@ return [
     // Bundled widget files: an asset's Library path answers like a path nothing holds.
     'admin.home.tool'                        => [$s3HomeBytes],
     'admin.home.vectorization.file'          => [$s3HomeBytes, $s3rDerived],
+    // Agent REST results: only the starting account, and only while it keeps the paid tool.
+    'admin.api.dam.vectorizations.file'      => [['Feature/Api/VectorizationApiTest.php', 'refuses without a bearer, without the scope, and for another account\'s conversion']],
 
     // listing
     // P3b-2: suggestions never name or count a member the viewer cannot list, on a fresh or a cached read.

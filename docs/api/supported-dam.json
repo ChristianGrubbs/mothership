@@ -19591,6 +19591,445 @@
     }
   },
   {
+    "id": "GET * /api/v1/rest/vectorizations/{vectorization}",
+    "kind": "api",
+    "reason": "Supported DAM integration operation.",
+    "reviewed": true,
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/API/Asset/VectorizationController.php"
+    ],
+    "operation": {
+      "operationId": "admin.api.dam.vectorizations.show",
+      "summary": "Vectorization: show",
+      "description": "Read a conversion the key's admin started; the admin still needs the Image Vectorization tool (403 otherwise), but not a connected provider (anyone else's, a missing id and one whose source asset can no longer be opened answer 404): status (queued, processing, completed or failed), kind (asset or one_off), error_code and message when it failed, formats and downloads once completed, and for a filed conversion the output asset_id and file_id. See the DAM API details article for errors and lifecycle behavior.",
+      "security": [
+        {
+          "integrationBearer": []
+        }
+      ],
+      "x-surface": "integration",
+      "x-permissions": [
+        "api.dam.vectorizations.show"
+      ],
+      "x-feature-flags": [],
+      "x-evidence": [
+        "packages/Mothership/DAM/src/Http/Controllers/API/Asset/VectorizationController.php"
+      ],
+      "parameters": [
+        {
+          "name": "vectorization",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Read a conversion the key's admin started; the admin still needs the Image Vectorization tool (403 otherwise), but not a connected provider (anyone else's, a missing id and one whose source asset can no longer be opened answer 404): status (queued, processing, completed or failed), kind (asset or one_off), error_code and message when it failed, formats and downloads once completed, and for a filed conversion the output asset_id and file_id.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "vectorization": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "format": {
+                            "type": "string"
+                          },
+                          "source_asset_id": {
+                            "type": "integer"
+                          },
+                          "charged": {
+                            "type": "boolean"
+                          },
+                          "error_code": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "message": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "formats": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "output": {
+                            "type": "object",
+                            "properties": {
+                              "asset_id": {
+                                "type": "integer"
+                              },
+                              "file_id": {
+                                "type": "integer"
+                              }
+                            }
+                          },
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "updated_at": {
+                            "type": "string"
+                          },
+                          "downloads": {
+                            "type": "object",
+                            "properties": {
+                              "svg": {
+                                "type": "string"
+                              },
+                              "pdf": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "success": true,
+                "data": {
+                  "vectorization": {
+                    "id": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+                    "status": "completed",
+                    "kind": "asset",
+                    "format": "svg",
+                    "source_asset_id": 1,
+                    "charged": false,
+                    "error_code": null,
+                    "message": null,
+                    "formats": [
+                      "svg",
+                      "pdf"
+                    ],
+                    "output": {
+                      "asset_id": 1,
+                      "file_id": 9
+                    },
+                    "created_at": "2026-11-21T12:00:00+00:00",
+                    "updated_at": "2026-11-21T12:00:00+00:00",
+                    "downloads": {
+                      "svg": "/api/v1/rest/vectorizations/6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f/svg",
+                      "pdf": "/api/v1/rest/vectorizations/6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f/pdf"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "401": {
+          "description": "Missing or invalid bearer authentication (integration routes).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "403": {
+          "description": "API permission, target access, or signature check failed.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "Requested record or stored file does not exist.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "503": {
+          "description": "Image Vectorization is not connected.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "GET * /api/v1/rest/vectorizations/{vectorization}/{format}",
+    "kind": "api",
+    "reason": "Supported DAM integration operation.",
+    "reviewed": true,
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/API/Asset/VectorizationController.php"
+    ],
+    "operation": {
+      "operationId": "admin.api.dam.vectorizations.file",
+      "summary": "Vectorization: file",
+      "description": "Download one completed result (svg or pdf) of a conversion the key's admin started, private and no-store, with a sandbox Content-Security-Policy. The admin still needs the Image Vectorization tool (403 otherwise). A conversion that is not completed answers 404, as does anyone else's. See the DAM API details article for errors and lifecycle behavior.",
+      "security": [
+        {
+          "integrationBearer": []
+        }
+      ],
+      "x-surface": "integration",
+      "x-permissions": [
+        "api.dam.vectorizations.show"
+      ],
+      "x-feature-flags": [],
+      "x-evidence": [
+        "packages/Mothership/DAM/src/Http/Controllers/API/Asset/VectorizationController.php"
+      ],
+      "parameters": [
+        {
+          "name": "vectorization",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "format",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "svg",
+              "pdf"
+            ]
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Result bytes as an attachment; image/svg+xml or application/pdf.",
+          "content": {
+            "image/svg+xml": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              },
+              "example": "file bytes"
+            },
+            "application/pdf": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              },
+              "example": "file bytes"
+            }
+          }
+        },
+        "401": {
+          "description": "Missing or invalid bearer authentication (integration routes).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "403": {
+          "description": "API permission, target access, or signature check failed.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "Requested record or stored file does not exist.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
     "id": "PATCH * /api/v1/rest/assets/{asset}/attachments/{attachment}",
     "kind": "api",
     "reason": "Supported DAM integration operation.",
@@ -25281,6 +25720,378 @@
             "example": {
               "target_id": 1,
               "role": "other"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "POST * /api/v1/rest/assets/{asset}/vectorize",
+    "kind": "api",
+    "reason": "Supported DAM integration operation.",
+    "reviewed": true,
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/API/Asset/VectorizationController.php"
+    ],
+    "operation": {
+      "operationId": "admin.api.dam.assets.vectorize",
+      "summary": "Vectorization: storeForAsset",
+      "description": "Convert an accessible raster asset (png, jpg, jpeg, webp, bmp, gif, tif or tiff original, at most 20 MiB and 33,554,432 pixels) to SVG and PDF through Image Vectorization, and file the chosen format back onto the asset as an output file with a vectorize rendition. Needs the key's admin to have the Image Vectorization tool and edit and files permission on the asset. request_id (a UUID; one is made when omitted) replays: the same id with the same image returns the same conversion, a different image answers 409. Accounts on the unlimited list are never charged; other accounts spend one allowance credit and answer 403 when none is left. Answers 202 with the queued conversion; poll the show route. 503 while the provider is not connected. See the DAM API details article for errors and lifecycle behavior.",
+      "security": [
+        {
+          "integrationBearer": []
+        }
+      ],
+      "x-surface": "integration",
+      "x-permissions": [
+        "api.dam.vectorizations.create"
+      ],
+      "x-feature-flags": [],
+      "x-evidence": [
+        "packages/Mothership/DAM/src/Http/Controllers/API/Asset/VectorizationController.php"
+      ],
+      "parameters": [
+        {
+          "name": "asset",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "responses": {
+        "202": {
+          "description": "Convert an accessible raster asset (png, jpg, jpeg, webp, bmp, gif, tif or tiff original, at most 20 MiB and 33,554,432 pixels) to SVG and PDF through Image Vectorization, and file the chosen format back onto the asset as an output file with a vectorize rendition. Needs the key's admin to have the Image Vectorization tool and edit and files permission on the asset. request_id (a UUID; one is made when omitted) replays: the same id with the same image returns the same conversion, a different image answers 409. Accounts on the unlimited list are never charged; other accounts spend one allowance credit and answer 403 when none is left. Answers 202 with the queued conversion; poll the show route. 503 while the provider is not connected.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "vectorization": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "format": {
+                            "type": "string"
+                          },
+                          "source_asset_id": {
+                            "type": "integer"
+                          },
+                          "charged": {
+                            "type": "boolean"
+                          },
+                          "error_code": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "message": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "formats": {
+                            "type": "array",
+                            "items": {}
+                          },
+                          "output": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "updated_at": {
+                            "type": "string"
+                          },
+                          "downloads": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "success": true,
+                "data": {
+                  "vectorization": {
+                    "id": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+                    "status": "queued",
+                    "kind": "asset",
+                    "format": "svg",
+                    "source_asset_id": 1,
+                    "charged": false,
+                    "error_code": null,
+                    "message": null,
+                    "formats": [],
+                    "output": null,
+                    "created_at": "2026-11-21T12:00:00+00:00",
+                    "updated_at": "2026-11-21T12:00:00+00:00",
+                    "downloads": null
+                  }
+                }
+              }
+            }
+          }
+        },
+        "401": {
+          "description": "Missing or invalid bearer authentication (integration routes).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "403": {
+          "description": "API permission, target access, or signature check failed.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "Requested record or stored file does not exist.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "422": {
+          "description": "Validation failed; upload/deletion may instead return the operation-specific errors/analysis described above.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "503": {
+          "description": "Image Vectorization is not connected.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "409": {
+          "description": "The request_id was already used with a different image.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "429": {
+          "description": "More than 10 conversion requests in a minute.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "description": "Convert an accessible raster asset (png, jpg, jpeg, webp, bmp, gif, tif or tiff original, at most 20 MiB and 33,554,432 pixels) to SVG and PDF through Image Vectorization, and file the chosen format back onto the asset as an output file with a vectorize rendition. Needs the key's admin to have the Image Vectorization tool and edit and files permission on the asset. request_id (a UUID; one is made when omitted) replays: the same id with the same image returns the same conversion, a different image answers 409. Accounts on the unlimited list are never charged; other accounts spend one allowance credit and answer 403 when none is left. Answers 202 with the queued conversion; poll the show route. 503 while the provider is not connected.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "format": {
+                  "type": "string"
+                },
+                "request_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "format"
+              ]
+            },
+            "example": {
+              "format": "svg",
+              "request_id": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f"
             }
           }
         }
@@ -37581,6 +38392,380 @@
               "asset_ids": [
                 7
               ]
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "POST * /api/v1/rest/vectorizations",
+    "kind": "api",
+    "reason": "Supported DAM integration operation.",
+    "reviewed": true,
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/API/Asset/VectorizationController.php"
+    ],
+    "operation": {
+      "operationId": "admin.api.dam.vectorizations.store",
+      "summary": "Vectorization: store",
+      "description": "Convert a one-off multipart file (png, jpg, jpeg, webp, bmp, gif, tif or tiff, at most 20 MiB and 33,554,432 pixels) to SVG and PDF. Nothing is filed: both results belong to the key's admin and are read from the file route. format is optional and ignored, since both formats are made. request_id replay, the allowance and the 503 behave as for an asset conversion. Answers 202 with the queued conversion. See the DAM API details article for errors and lifecycle behavior.",
+      "security": [
+        {
+          "integrationBearer": []
+        }
+      ],
+      "x-surface": "integration",
+      "x-permissions": [
+        "api.dam.vectorizations.create"
+      ],
+      "x-feature-flags": [],
+      "x-evidence": [
+        "packages/Mothership/DAM/src/Http/Controllers/API/Asset/VectorizationController.php"
+      ],
+      "parameters": [],
+      "responses": {
+        "202": {
+          "description": "Convert a one-off multipart file (png, jpg, jpeg, webp, bmp, gif, tif or tiff, at most 20 MiB and 33,554,432 pixels) to SVG and PDF. Nothing is filed: both results belong to the key's admin and are read from the file route. format is optional and ignored, since both formats are made. request_id replay, the allowance and the 503 behave as for an asset conversion. Answers 202 with the queued conversion.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "vectorization": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "format": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "source_asset_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "charged": {
+                            "type": "boolean"
+                          },
+                          "error_code": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "message": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "formats": {
+                            "type": "array",
+                            "items": {}
+                          },
+                          "output": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "updated_at": {
+                            "type": "string"
+                          },
+                          "downloads": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "success": true,
+                "data": {
+                  "vectorization": {
+                    "id": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+                    "status": "queued",
+                    "kind": "one_off",
+                    "format": null,
+                    "source_asset_id": null,
+                    "charged": false,
+                    "error_code": null,
+                    "message": null,
+                    "formats": [],
+                    "output": null,
+                    "created_at": "2026-11-21T12:00:00+00:00",
+                    "updated_at": "2026-11-21T12:00:00+00:00",
+                    "downloads": null
+                  }
+                }
+              }
+            }
+          }
+        },
+        "401": {
+          "description": "Missing or invalid bearer authentication (integration routes).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "403": {
+          "description": "API permission, target access, or signature check failed.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "Requested record or stored file does not exist.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "422": {
+          "description": "Validation failed; upload/deletion may instead return the operation-specific errors/analysis described above.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "503": {
+          "description": "Image Vectorization is not connected.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "409": {
+          "description": "The request_id was already used with a different image.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "429": {
+          "description": "More than 10 conversion requests in a minute.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "description": "Convert a one-off multipart file (png, jpg, jpeg, webp, bmp, gif, tif or tiff, at most 20 MiB and 33,554,432 pixels) to SVG and PDF. Nothing is filed: both results belong to the key's admin and are read from the file route. format is optional and ignored, since both formats are made. request_id replay, the allowance and the 503 behave as for an asset conversion. Answers 202 with the queued conversion.",
+        "content": {
+          "multipart/form-data": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "file": {
+                  "type": "string",
+                  "format": "binary"
+                },
+                "format": {
+                  "type": "string"
+                },
+                "request_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file"
+              ]
+            },
+            "example": {
+              "file": "binary file",
+              "format": "svg",
+              "request_id": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f"
             }
           }
         }

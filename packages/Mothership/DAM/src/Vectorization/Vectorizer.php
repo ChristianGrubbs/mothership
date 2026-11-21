@@ -31,7 +31,7 @@ class Vectorizer
     public function ready(): bool
     {
         return (bool) config('vectorization.enabled')
-            && (int) config('vectorization.owner_admin_id') > 0
+            && Allowance::unlimitedIds() !== []
             && filled(config('vectorization.api_id'))
             && filled(config('vectorization.api_secret'));
     }

@@ -91,6 +91,8 @@ A hidden asset or folder answers `Not found.` exactly like a missing one.
 | `library_fetch` | Copies the main file, one stack file (`file_id`) or a video's 1080p web proxy (`proxy: true`) into `dest_dir`. Returns `path`, `sha256`, `size` and pixel size. | `dam.asset.download`; download access |
 | `library_save` | Saves a local file (`local_path`) as a new asset in `folder_id`, or as a new member of `stack_asset_id`'s stack (cover unchanged). Records `producer`, `provenance`, `notes` and `evidence`; sets `title` (new asset only) and `tags` (on the new asset, or on the stack asset). | new asset: `dam.asset.upload` and access to the folder; stack: `dam.asset.files.store`, `dam.asset.edit` and edit access; tags: `dam.asset.tag` |
 | `library_update` | Changes `title`, adds `tags_add`, removes `tags_remove` (recorded as a removal, so automatic tagging does not restore it). | title: `dam.asset.update`; tags: `dam.asset.tag`; edit access |
+| `library_vectorize` | Converts a raster image to SVG and PDF through Image Vectorization: `asset_id` plus `format` files the chosen format onto that asset as an output file; `local_path` alone is a one-off filed nowhere. `request_id` (UUID, required) replays. Returns the queued conversion (`id`, `status`, `kind`, `charged`). Limits and allowance as in `docs/ops/image-vectorization.md`. | the Image Vectorization Home tool; filed: `dam.asset.edit`, `dam.asset.files` and edit access |
+| `library_vectorization` | Reads a conversion the account started (`id`): status, `formats`, `output`. With `format` (svg or pdf) copies a completed result into `dest_dir` like `library_fetch`. | the Image Vectorization Home tool; the account's own conversion |
 
 No tool deletes or overwrites anything in the library.
 

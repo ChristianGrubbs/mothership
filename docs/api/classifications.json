@@ -8285,6 +8285,24 @@
     "reviewed": true
   },
   {
+    "id": "HEAD * /api/v1/rest/vectorizations/{vectorization}",
+    "kind": "head-alias",
+    "reason": "Laravel HEAD alias; see corresponding GET identity.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/API/Asset/VectorizationController.php"
+    ],
+    "reviewed": true
+  },
+  {
+    "id": "HEAD * /api/v1/rest/vectorizations/{vectorization}/{format}",
+    "kind": "head-alias",
+    "reason": "Laravel HEAD alias; see corresponding GET identity.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/API/Asset/VectorizationController.php"
+    ],
+    "reviewed": true
+  },
+  {
     "id": "HEAD * /app-url-guard/check",
     "kind": "head-alias",
     "reason": "Laravel HEAD alias; see corresponding GET identity.",

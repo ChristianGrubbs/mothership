@@ -408,7 +408,7 @@ jobs:
       # fixed by AdminApi migration 2026_09_16_100000), so they never applied to this leg.
       - name: Check DAM API feature tests
         if: ${{ !cancelled() && steps.guard.outputs.run == 'true' }}
-        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/Api/AssetApiTest.php packages/Mothership/DAM/tests/Feature/Api/AssetRelationshipApiTest.php packages/Mothership/DAM/tests/Feature/Api/CommentApiTest.php packages/Mothership/DAM/tests/Feature/Api/DirectoryApiTest.php packages/Mothership/DAM/tests/Feature/Api/LinkedResourcesApiTest.php packages/Mothership/DAM/tests/Feature/Api/PropertyApiTest.php packages/Mothership/DAM/tests/Feature/Api/ReorganizeApiTest.php packages/Mothership/DAM/tests/Feature/Api/ShareApiMutationAuthorizationTest.php packages/Mothership/DAM/tests/Feature/Api/TagApiTest.php
+        run: vendor/bin/pest --log-junit "$RUNNER_TEMP/junit/${GITHUB_ACTION}-${RANDOM}.xml" --colors=always packages/Mothership/DAM/tests/Feature/Api/AssetApiTest.php packages/Mothership/DAM/tests/Feature/Api/AssetRelationshipApiTest.php packages/Mothership/DAM/tests/Feature/Api/CommentApiTest.php packages/Mothership/DAM/tests/Feature/Api/DirectoryApiTest.php packages/Mothership/DAM/tests/Feature/Api/LinkedResourcesApiTest.php packages/Mothership/DAM/tests/Feature/Api/PropertyApiTest.php packages/Mothership/DAM/tests/Feature/Api/ReorganizeApiTest.php packages/Mothership/DAM/tests/Feature/Api/ShareApiMutationAuthorizationTest.php packages/Mothership/DAM/tests/Feature/Api/TagApiTest.php packages/Mothership/DAM/tests/Feature/Api/VectorizationApiTest.php
 
       # 2026-09-16: second area worked off .github/dam-tests-not-in-ci.txt: every remaining
       # directory file (tree, permissions, counts, search, delete). The 17 files pass in one
@@ -891,7 +891,7 @@ jobs:
       # this step is that migration's regression check.
       - name: Check DAM API feature tests
         if: ${{ !cancelled() }}
-        run: vendor/bin/pest --colors=always packages/Mothership/DAM/tests/Feature/Api/AssetApiTest.php packages/Mothership/DAM/tests/Feature/Api/AssetRelationshipApiTest.php packages/Mothership/DAM/tests/Feature/Api/CommentApiTest.php packages/Mothership/DAM/tests/Feature/Api/DirectoryApiTest.php packages/Mothership/DAM/tests/Feature/Api/LinkedResourcesApiTest.php packages/Mothership/DAM/tests/Feature/Api/PropertyApiTest.php packages/Mothership/DAM/tests/Feature/Api/ReorganizeApiTest.php packages/Mothership/DAM/tests/Feature/Api/ShareApiMutationAuthorizationTest.php packages/Mothership/DAM/tests/Feature/Api/TagApiTest.php
+        run: vendor/bin/pest --colors=always packages/Mothership/DAM/tests/Feature/Api/AssetApiTest.php packages/Mothership/DAM/tests/Feature/Api/AssetRelationshipApiTest.php packages/Mothership/DAM/tests/Feature/Api/CommentApiTest.php packages/Mothership/DAM/tests/Feature/Api/DirectoryApiTest.php packages/Mothership/DAM/tests/Feature/Api/LinkedResourcesApiTest.php packages/Mothership/DAM/tests/Feature/Api/PropertyApiTest.php packages/Mothership/DAM/tests/Feature/Api/ReorganizeApiTest.php packages/Mothership/DAM/tests/Feature/Api/ShareApiMutationAuthorizationTest.php packages/Mothership/DAM/tests/Feature/Api/TagApiTest.php packages/Mothership/DAM/tests/Feature/Api/VectorizationApiTest.php
 
       - name: Check DAM directory tests
         if: ${{ !cancelled() }}

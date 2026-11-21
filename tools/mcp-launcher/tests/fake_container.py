@@ -44,7 +44,7 @@ def save(arguments):
     return structured({"asset_id": 7, "sha256": sha256})
 
 
-def fetch(arguments):
+def fetch(arguments, name="render.png"):
     if flag("fetch_refuse"):
         return refusal("Not found.")
     directory = arguments["dest_dir"]
@@ -53,11 +53,11 @@ def fetch(arguments):
     with open(os.path.join(STATE, "fetch_bytes"), "rb") as handle:
         data = handle.read()
     os.makedirs(directory, exist_ok=True)
-    path = os.path.join(directory, "render.png")
+    path = os.path.join(directory, name)
     with open(path, "wb") as handle:
         handle.write(data)
     return structured({
-        "path": path, "name": "render.png", "sha256": hashlib.sha256(data).hexdigest(), "size": len(data),
+        "path": path, "name": name, "sha256": hashlib.sha256(data).hexdigest(), "size": len(data),
         "asset_id": 7, "reused": False,
     })
 
@@ -68,6 +68,11 @@ def call_tool(name, arguments):
         return save(arguments)
     if name == "library_fetch":
         return fetch(arguments)
+    if name == "library_vectorize" and "local_path" in arguments:
+        saved = save(arguments)
+        return saved if saved.get("isError") else structured({"id": "00000000-0000-4000-8000-0000000000aa", "status": "queued"})
+    if name == "library_vectorization" and "format" in arguments:
+        return fetch(arguments, name="render-vectorized." + arguments["format"])
     if name == "library_update" and flag("crash_on_update"):
         os._exit(9)
     if name == "library_search" and str(arguments.get("query", "")).startswith("sleep:"):

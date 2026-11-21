@@ -27,6 +27,7 @@ use Mothership\DAM\Http\Controllers\API\Asset\SimilarImageController;
 use Mothership\DAM\Http\Controllers\API\Asset\TagController;
 use Mothership\DAM\Http\Controllers\API\Asset\TemplateController;
 use Mothership\DAM\Http\Controllers\API\Asset\UploadRequestController;
+use Mothership\DAM\Http\Controllers\API\Asset\VectorizationController;
 use Mothership\DAM\Http\Controllers\API\Asset\VideoProxyController;
 
 Route::group([
@@ -179,6 +180,16 @@ Route::group([
         Route::get('/{batch}', 'show')->whereNumber('batch')->name('admin.api.dam.batches.show');
         Route::post('/{batch}/items/{item}/retry', 'retry')->whereNumber(['batch', 'item'])->name('admin.api.dam.batches.items.retry');
         Route::post('/{batch}/cancel', 'cancel')->whereNumber('batch')->name('admin.api.dam.batches.cancel');
+    });
+
+    // Image Vectorization for agents (docs/ops/image-vectorization.md): filed onto an asset, or a one-off upload.
+    Route::controller(VectorizationController::class)->group(function () {
+        Route::post('assets/{asset}/vectorize', 'storeForAsset')->whereNumber('asset')->middleware('throttle:10,1')
+            ->name('admin.api.dam.assets.vectorize');
+        Route::post('vectorizations', 'store')->middleware('throttle:10,1')->name('admin.api.dam.vectorizations.store');
+        Route::get('vectorizations/{vectorization}', 'show')->whereUuid('vectorization')->name('admin.api.dam.vectorizations.show');
+        Route::get('vectorizations/{vectorization}/{format}', 'file')->whereUuid('vectorization')->whereIn('format', ['svg', 'pdf'])
+            ->name('admin.api.dam.vectorizations.file');
     });
 
     // P6 D26: tokenized embeds of a video or audio asset, and Retry for its preview proxy.
