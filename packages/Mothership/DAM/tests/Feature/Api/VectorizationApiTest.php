@@ -17,6 +17,7 @@ use Mothership\DAM\Models\AssetFile;
 use Mothership\DAM\Models\Directory;
 use Mothership\DAM\Vectorization\Vectorizer;
 use Mothership\User\Models\Admin;
+use Mothership\User\Models\Role;
 
 /*
  * Image Vectorization over REST (docs/ops/image-vectorization.md): filed onto an asset, or a one-off upload, through
@@ -144,6 +145,13 @@ it('refuses without a bearer, without the scope, and for another account\'s conv
     $this->getJson('/api/v1/rest/vectorizations/'.$id, $stranger)->assertNotFound();
     $this->get('/api/v1/rest/vectorizations/'.$id.'/pdf', $stranger)->assertNotFound();
     Queue::assertPushed(VectorizeImage::class, 1);
+
+    // Taken off the paid tool (a custom role leaves it out): its own results are no longer readable either.
+    $this->agent->forceFill(['role_id' => Role::factory()->create(['permission_type' => 'custom', 'permissions' => []])->id])->save();
+    $revoked = vectorizationHeadersFor(admin: $this->agent->fresh(), permissionType: 'custom', permissions: ['api.dam.vectorizations.show']);
+    $this->getJson('/api/v1/rest/vectorizations/'.$id, $revoked)->assertForbidden();
+    $this->get('/api/v1/rest/vectorizations/'.$id.'/svg', $revoked)->assertForbidden();
+    $this->get('/api/v1/rest/vectorizations/'.$id.'/pdf', $revoked)->assertForbidden();
 });
 
 it('validates the format and the image, and answers 503 while the provider is not connected', function () {

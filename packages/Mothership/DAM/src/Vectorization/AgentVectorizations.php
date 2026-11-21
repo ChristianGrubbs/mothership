@@ -47,9 +47,14 @@ class AgentVectorizations
         return $this->intake->fromFile(adminId: (int) $actor->id, path: $path, requestId: $requestId ?? (string) Str::uuid());
     }
 
-    /** The caller's own conversion; another account's, or one made from an asset it can no longer open, is 404. */
+    /**
+     * The caller's own conversion; another account's, or one made from an asset it can no longer open, is 404.
+     * Reading needs the paid tool as submitting does (an account taken off it loses its results too), but not the
+     * provider: stored results stay readable while the provider is down.
+     */
     public function find(Admin $actor, string $via, string $id): stdClass
     {
+        $this->entitled(actor: $actor);
         abort_unless(Str::isUuid($id), 404);
         $row = DB::table('dam_vectorizations')->where('admin_id', $actor->id)->where('id', $id)->first();
         abort_unless($row && $this->access->sourceOpen(context: AccessContext::forAdmin(admin: $actor, via: $via), sourceAssetId: $row->source_asset_id === null ? null : (int) $row->source_asset_id), 404);
@@ -100,6 +105,11 @@ class AgentVectorizations
     private function open(Admin $actor): void
     {
         abort_unless($this->provider->ready(), 503, 'Image Vectorization is not connected.');
+        $this->entitled(actor: $actor);
+    }
+
+    private function entitled(Admin $actor): void
+    {
         abort_unless($this->widgets->permitsAdmin(admin: $actor, id: 'vectorization'), 403, 'This account cannot use Image Vectorization.');
     }
 

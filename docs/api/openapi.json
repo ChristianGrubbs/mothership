@@ -75057,7 +75057,7 @@
     },
     "/api/v1/rest/vectorizations/{vectorization}": {
       "get": {
-        "description": "Read a conversion the key's admin started (anyone else's, a missing id and one whose source asset can no longer be opened answer 404): status (queued, processing, completed or failed), kind (asset or one_off), error_code and message when it failed, formats and downloads once completed, and for a filed conversion the output asset_id and file_id. See the DAM API details article for errors and lifecycle behavior.",
+        "description": "Read a conversion the key's admin started; the admin still needs the Image Vectorization tool (403 otherwise), but not a connected provider (anyone else's, a missing id and one whose source asset can no longer be opened answer 404): status (queued, processing, completed or failed), kind (asset or one_off), error_code and message when it failed, formats and downloads once completed, and for a filed conversion the output asset_id and file_id. See the DAM API details article for errors and lifecycle behavior.",
         "operationId": "admin.api.dam.vectorizations.show",
         "parameters": [
           {
@@ -75187,7 +75187,7 @@
                 }
               }
             },
-            "description": "Read a conversion the key's admin started (anyone else's, a missing id and one whose source asset can no longer be opened answer 404): status (queued, processing, completed or failed), kind (asset or one_off), error_code and message when it failed, formats and downloads once completed, and for a filed conversion the output asset_id and file_id."
+            "description": "Read a conversion the key's admin started; the admin still needs the Image Vectorization tool (403 otherwise), but not a connected provider (anyone else's, a missing id and one whose source asset can no longer be opened answer 404): status (queued, processing, completed or failed), kind (asset or one_off), error_code and message when it failed, formats and downloads once completed, and for a filed conversion the output asset_id and file_id."
           },
           "401": {
             "content": {
@@ -75328,7 +75328,7 @@
     },
     "/api/v1/rest/vectorizations/{vectorization}/{format}": {
       "get": {
-        "description": "Download one completed result (svg or pdf) of a conversion the key's admin started, private and no-store, with a sandbox Content-Security-Policy. A conversion that is not completed answers 404, as does anyone else's. See the DAM API details article for errors and lifecycle behavior.",
+        "description": "Download one completed result (svg or pdf) of a conversion the key's admin started, private and no-store, with a sandbox Content-Security-Policy. The admin still needs the Image Vectorization tool (403 otherwise). A conversion that is not completed answers 404, as does anyone else's. See the DAM API details article for errors and lifecycle behavior.",
         "operationId": "admin.api.dam.vectorizations.file",
         "parameters": [
           {

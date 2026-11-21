@@ -19,6 +19,7 @@ use Mothership\DAM\Models\Directory;
 use Mothership\DAM\Services\DirectoryPermissionService;
 use Mothership\DAM\Vectorization\Vectorizer;
 use Mothership\User\Models\Admin;
+use Mothership\User\Models\Role;
 
 /*
  * The `mothership` stdio library server (docs/api/mothership-mcp.md), called through laravel/mcp's own test
@@ -276,4 +277,9 @@ it('files a vectorization onto an asset and refuses an account without the paid 
     expect($queued['kind'])->toBe('asset')->and($queued['format'])->toBe('pdf')->and($queued['source_asset_id'])->toBe((int) $asset->id);
     [, $both] = ($this->call)('vectorize', ['asset_id' => (int) $asset->id, 'local_path' => ($this->png)('x.png'), 'format' => 'pdf', 'request_id' => (string) Str::uuid()]);
     expect($both)->not->toBeNull();
+
+    // An account taken off the paid tool can no longer read its own conversion.
+    $full->forceFill(['role_id' => Role::factory()->create(['permission_type' => 'custom', 'permissions' => []])->id])->save();
+    [, $revoked] = ($this->call)('vectorization', ['id' => $queued['id']]);
+    expect($revoked)->toContain('cannot do this');
 });

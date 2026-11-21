@@ -33,7 +33,7 @@ Agents convert through the same intake as the Library and Home (`Mothership\DAM\
 33,554,432-pixel limits, the raster check (png, jpg, jpeg, webp, bmp, gif, tif, tiff), the private input copy, the
 replay-safe reservation and the `vectorization` queue. Every job makes both formats (about 1.1 provider credits).
 The caller's admin needs the Image Vectorization Home tool (the role's widget list and its permission; custom roles leave
-paid tools out by default). A filed conversion also needs `dam.asset.edit`, `dam.asset.files` and edit access to the asset.
+paid tools out by default), for reading results as well as for submitting. A filed conversion also needs `dam.asset.edit`, `dam.asset.files` and edit access to the asset.
 
 ### REST (`/api/v1/rest`, bearer API key)
 
