@@ -9,7 +9,21 @@ class Allowance
 {
     public function unlimited(int $adminId): bool
     {
-        return $adminId > 0 && $adminId === (int) config('vectorization.owner_admin_id', 0);
+        return $adminId > 0 && in_array($adminId, self::unlimitedIds(), true);
+    }
+
+    /**
+     * The owner (MOTHERSHIP_VECTORIZATION_OWNER_ADMIN_ID) and every id in MOTHERSHIP_VECTORIZATION_UNLIMITED_ADMIN_IDS.
+     *
+     * @return list<int>
+     */
+    public static function unlimitedIds(): array
+    {
+        $listed = config('vectorization.unlimited_admin_ids', []);
+        $ids = array_map('intval', is_array($listed) ? $listed : explode(',', (string) $listed));
+        $ids[] = (int) config('vectorization.owner_admin_id', 0);
+
+        return array_values(array_unique(array_filter($ids, fn (int $id): bool => $id > 0)));
     }
 
     public function ensure(int $adminId): void

@@ -2,7 +2,9 @@
 
 namespace Mothership\DAM\Services;
 
+use Illuminate\Auth\SessionGuard;
 use Illuminate\Support\Facades\DB;
+use Mothership\User\Models\Admin;
 
 class HomeWidgetRegistry
 {
@@ -54,6 +56,27 @@ class HomeWidgetRegistry
         }
 
         return self::grants($id, $widget, $this->roleWidgetIds());
+    }
+
+    /**
+     * permits() for an account that is not the session's: a REST key's admin or the `mothership` MCP server's
+     * account. The role gate and bouncer read the admin guard, so it is that account only for this one decision.
+     */
+    public function permitsAdmin(Admin $admin, string $id): bool
+    {
+        $guard = auth('admin');
+        $previous = $guard->user();
+        $guard->setUser($admin);
+
+        try {
+            return $this->permits($id);
+        } finally {
+            if ($previous) {
+                $guard->setUser($previous);
+            } elseif ($guard instanceof SessionGuard) {
+                $guard->forgetUser();
+            }
+        }
     }
 
     /**

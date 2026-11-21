@@ -263,6 +263,32 @@ return [
         'route' => 'admin.api.dam.batches.cancel',
         'sort'  => 5,
     ], [
+        // Image Vectorization for agents: filed onto an asset or a one-off upload (docs/ops/image-vectorization.md).
+        'key'   => 'api.dam.vectorizations',
+        'name'  => 'dam::app.admin.acl.vectorizations',
+        'route' => 'admin.api.dam.vectorizations.show',
+        'sort'  => 12,
+    ], [
+        'key'   => 'api.dam.vectorizations.create',
+        'name'  => 'dam::app.admin.acl.create',
+        'route' => 'admin.api.dam.vectorizations.store',
+        'sort'  => 1,
+    ], [
+        'key'   => 'api.dam.vectorizations.create',
+        'name'  => 'dam::app.admin.acl.create',
+        'route' => 'admin.api.dam.assets.vectorize',
+        'sort'  => 1,
+    ], [
+        'key'   => 'api.dam.vectorizations.show',
+        'name'  => 'dam::app.admin.acl.view',
+        'route' => 'admin.api.dam.vectorizations.show',
+        'sort'  => 2,
+    ], [
+        'key'   => 'api.dam.vectorizations.show',
+        'name'  => 'dam::app.admin.acl.view',
+        'route' => 'admin.api.dam.vectorizations.file',
+        'sort'  => 2,
+    ], [
         // P6 D26: tokenized embeds of a video or audio asset.
         'key'   => 'api.dam.assets.embeds',
         'name'  => 'dam::app.admin.acl.embed',

@@ -11,11 +11,14 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Laravel\Mcp\Enums\ProtocolVersion;
 use Laravel\Mcp\Server\Registrar;
+use Mothership\DAM\Jobs\VectorizeImage;
 use Mothership\DAM\Mcp\LibraryTool;
 use Mothership\DAM\Mcp\MothershipServer;
 use Mothership\DAM\Models\Asset;
 use Mothership\DAM\Models\Directory;
 use Mothership\DAM\Services\DirectoryPermissionService;
+use Mothership\DAM\Vectorization\Vectorizer;
+use Mothership\User\Models\Admin;
 
 /*
  * The `mothership` stdio library server (docs/api/mothership-mcp.md), called through laravel/mcp's own test
@@ -68,7 +71,7 @@ it('registers only the local stdio server and no hosted MCP or upload routes', f
     expect(app(Registrar::class)->getLocalServer('mothership'))->not->toBeNull()
         ->and(Route::has('craft.mcp'))->toBeFalse()
         ->and(Route::has('craft.drop.show'))->toBeFalse()
-        ->and(LibraryTool::actions())->toBe(['search', 'list_folders', 'create_folder', 'get_asset', 'list_stack', 'fetch', 'save', 'update']);
+        ->and(LibraryTool::actions())->toBe(['search', 'list_folders', 'create_folder', 'get_asset', 'list_stack', 'fetch', 'save', 'update', 'vectorize', 'vectorization']);
 });
 
 it('refuses every tool until an active owner account is configured', function () {
@@ -233,4 +236,44 @@ it('matches the tool list the Mac launcher answers with', function () {
         ->and($manifest['instructions'])->toBe($server['instructions'])
         ->and($manifest['protocolVersions'])->toBe(ProtocolVersion::supported())
         ->and($manifest['tools'])->toEqual(json_decode((string) json_encode($tools), true));
+});
+
+it('vectorizes a one-off local file and copies the result out, without a provider call per read', function () {
+    $full = Admin::factory()->create();
+    config(['mothership-mcp.user_id' => (int) $full->id, 'vectorization.enabled' => true, 'vectorization.owner_admin_id' => (int) $full->id,
+        'vectorization.api_id'       => 'x', 'vectorization.api_secret' => 'y']);
+    Storage::fake('private');
+    $requestId = (string) Str::uuid();
+    $queued = ($this->ok)('vectorize', ['local_path' => ($this->png)('logo.png', 24), 'request_id' => $requestId]);
+    expect($queued['status'])->toBe('queued')->and($queued['kind'])->toBe('one_off')->and($queued['charged'])->toBeFalse()
+        ->and(($this->ok)('vectorize', ['local_path' => ($this->png)('logo.png', 24), 'request_id' => $requestId])['id'])->toBe($queued['id']);
+    [, $early] = ($this->call)('vectorization', ['id' => $queued['id'], 'format' => 'svg']);
+    expect($early)->toContain('queued');
+
+    $client = Mockery::mock(Vectorizer::class);
+    $client->shouldReceive('ready')->andReturn(true);
+    $client->shouldReceive('convert')->once()->andReturn(['svg' => '<svg xmlns="http://www.w3.org/2000/svg"/>', 'pdf' => "%PDF-1.7\n%%EOF"]);
+    app()->instance(Vectorizer::class, $client);
+    (new VectorizeImage(id: $queued['id']))->handle();
+
+    $copy = ($this->ok)('vectorization', ['id' => $queued['id'], 'format' => 'svg', 'dest_dir' => $this->scratch.'/out']);
+    expect($copy['status'])->toBe('completed')->and($copy['output'])->toBeNull()
+        ->and(file_get_contents($copy['path']))->toContain('<svg')
+        ->and($copy['sha256'])->toBe(hash_file('sha256', $copy['path']))
+        ->and(($this->ok)('vectorization', ['id' => $queued['id'], 'format' => 'svg', 'dest_dir' => $this->scratch.'/out'])['reused'])->toBeTrue();
+});
+
+it('files a vectorization onto an asset and refuses an account without the paid tool', function () {
+    $full = Admin::factory()->create();
+    config(['vectorization.enabled' => true, 'vectorization.owner_admin_id' => (int) $full->id, 'vectorization.api_id' => 'x', 'vectorization.api_secret' => 'y']);
+    $asset = hubAsset($this->folder);
+    // The library owner's custom role has the default Home tools, which leave the paid Image Vectorization out.
+    [, $refused] = ($this->call)('vectorize', ['asset_id' => (int) $asset->id, 'format' => 'pdf', 'request_id' => (string) Str::uuid()]);
+    expect($refused)->toContain('cannot do this');
+
+    config(['mothership-mcp.user_id' => (int) $full->id]);
+    $queued = ($this->ok)('vectorize', ['asset_id' => (int) $asset->id, 'format' => 'pdf', 'request_id' => (string) Str::uuid()]);
+    expect($queued['kind'])->toBe('asset')->and($queued['format'])->toBe('pdf')->and($queued['source_asset_id'])->toBe((int) $asset->id);
+    [, $both] = ($this->call)('vectorize', ['asset_id' => (int) $asset->id, 'local_path' => ($this->png)('x.png'), 'format' => 'pdf', 'request_id' => (string) Str::uuid()]);
+    expect($both)->not->toBeNull();
 });

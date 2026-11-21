@@ -9712,6 +9712,47 @@
         "source": "packages/Mothership/DAM/src/Http/Controllers/API/Asset/UploadRequestController.php"
     },
     {
+        "id": "GET * /api/v1/rest/vectorizations/{vectorization}",
+        "method": "GET",
+        "domain": "*",
+        "uri": "/api/v1/rest/vectorizations/{vectorization}",
+        "name": "admin.api.dam.vectorizations.show",
+        "action": "Mothership\\DAM\\Http\\Controllers\\API\\Asset\\VectorizationController@show",
+        "middleware": [
+            "api",
+            "auth:api",
+            "api.scope",
+            "accept.json",
+            "request.locale"
+        ],
+        "wheres": {
+            "id": "[0-9]+",
+            "vectorization": "[\\da-fA-F]{8}-[\\da-fA-F]{4}-[\\da-fA-F]{4}-[\\da-fA-F]{4}-[\\da-fA-F]{12}"
+        },
+        "source": "packages/Mothership/DAM/src/Http/Controllers/API/Asset/VectorizationController.php"
+    },
+    {
+        "id": "GET * /api/v1/rest/vectorizations/{vectorization}/{format}",
+        "method": "GET",
+        "domain": "*",
+        "uri": "/api/v1/rest/vectorizations/{vectorization}/{format}",
+        "name": "admin.api.dam.vectorizations.file",
+        "action": "Mothership\\DAM\\Http\\Controllers\\API\\Asset\\VectorizationController@file",
+        "middleware": [
+            "api",
+            "auth:api",
+            "api.scope",
+            "accept.json",
+            "request.locale"
+        ],
+        "wheres": {
+            "id": "[0-9]+",
+            "vectorization": "[\\da-fA-F]{8}-[\\da-fA-F]{4}-[\\da-fA-F]{4}-[\\da-fA-F]{4}-[\\da-fA-F]{12}",
+            "format": "svg|pdf"
+        },
+        "source": "packages/Mothership/DAM/src/Http/Controllers/API/Asset/VectorizationController.php"
+    },
+    {
         "id": "GET * /app-url-guard/check",
         "method": "GET",
         "domain": "*",
@@ -18163,6 +18204,47 @@
         "source": "packages/Mothership/DAM/src/Http/Controllers/API/Asset/UploadRequestController.php"
     },
     {
+        "id": "HEAD * /api/v1/rest/vectorizations/{vectorization}",
+        "method": "HEAD",
+        "domain": "*",
+        "uri": "/api/v1/rest/vectorizations/{vectorization}",
+        "name": "admin.api.dam.vectorizations.show",
+        "action": "Mothership\\DAM\\Http\\Controllers\\API\\Asset\\VectorizationController@show",
+        "middleware": [
+            "api",
+            "auth:api",
+            "api.scope",
+            "accept.json",
+            "request.locale"
+        ],
+        "wheres": {
+            "id": "[0-9]+",
+            "vectorization": "[\\da-fA-F]{8}-[\\da-fA-F]{4}-[\\da-fA-F]{4}-[\\da-fA-F]{4}-[\\da-fA-F]{12}"
+        },
+        "source": "packages/Mothership/DAM/src/Http/Controllers/API/Asset/VectorizationController.php"
+    },
+    {
+        "id": "HEAD * /api/v1/rest/vectorizations/{vectorization}/{format}",
+        "method": "HEAD",
+        "domain": "*",
+        "uri": "/api/v1/rest/vectorizations/{vectorization}/{format}",
+        "name": "admin.api.dam.vectorizations.file",
+        "action": "Mothership\\DAM\\Http\\Controllers\\API\\Asset\\VectorizationController@file",
+        "middleware": [
+            "api",
+            "auth:api",
+            "api.scope",
+            "accept.json",
+            "request.locale"
+        ],
+        "wheres": {
+            "id": "[0-9]+",
+            "vectorization": "[\\da-fA-F]{8}-[\\da-fA-F]{4}-[\\da-fA-F]{4}-[\\da-fA-F]{4}-[\\da-fA-F]{12}",
+            "format": "svg|pdf"
+        },
+        "source": "packages/Mothership/DAM/src/Http/Controllers/API/Asset/VectorizationController.php"
+    },
+    {
         "id": "HEAD * /app-url-guard/check",
         "method": "HEAD",
         "domain": "*",
@@ -23869,6 +23951,27 @@
         "source": "packages/Mothership/DAM/src/Http/Controllers/API/Asset/DuplicateController.php"
     },
     {
+        "id": "POST * /api/v1/rest/assets/{asset}/vectorize",
+        "method": "POST",
+        "domain": "*",
+        "uri": "/api/v1/rest/assets/{asset}/vectorize",
+        "name": "admin.api.dam.assets.vectorize",
+        "action": "Mothership\\DAM\\Http\\Controllers\\API\\Asset\\VectorizationController@storeForAsset",
+        "middleware": [
+            "api",
+            "auth:api",
+            "api.scope",
+            "accept.json",
+            "request.locale",
+            "throttle:10,1"
+        ],
+        "wheres": {
+            "id": "[0-9]+",
+            "asset": "[0-9]+"
+        },
+        "source": "packages/Mothership/DAM/src/Http/Controllers/API/Asset/VectorizationController.php"
+    },
+    {
         "id": "POST * /api/v1/rest/assets/{asset}/video-proxy/retry",
         "method": "POST",
         "domain": "*",
@@ -25184,6 +25287,26 @@
             "id": "[0-9]+"
         },
         "source": "packages/Mothership/DAM/src/Http/Controllers/API/Asset/UploadRequestController.php"
+    },
+    {
+        "id": "POST * /api/v1/rest/vectorizations",
+        "method": "POST",
+        "domain": "*",
+        "uri": "/api/v1/rest/vectorizations",
+        "name": "admin.api.dam.vectorizations.store",
+        "action": "Mothership\\DAM\\Http\\Controllers\\API\\Asset\\VectorizationController@store",
+        "middleware": [
+            "api",
+            "auth:api",
+            "api.scope",
+            "accept.json",
+            "request.locale",
+            "throttle:10,1"
+        ],
+        "wheres": {
+            "id": "[0-9]+"
+        },
+        "source": "packages/Mothership/DAM/src/Http/Controllers/API/Asset/VectorizationController.php"
     },
     {
         "id": "POST * /broadcasting/auth",

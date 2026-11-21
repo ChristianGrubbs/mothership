@@ -28,6 +28,7 @@ use Mothership\DAM\Services\Stack\StackMembers;
 use Mothership\DAM\Services\Tags\AssetTagWriter;
 use Mothership\DAM\Support\ReservedDirectoryNames;
 use Mothership\DAM\Support\StackFileName;
+use Mothership\DAM\Vectorization\AgentVectorizations;
 use Mothership\User\Models\Admin;
 
 /**
@@ -73,6 +74,8 @@ class LibraryOperations
             'fetch'         => $this->fetch(actor: $actor, arguments: $arguments),
             'save'          => $this->save(actor: $actor, arguments: $arguments),
             'update'        => $this->update(actor: $actor, arguments: $arguments),
+            'vectorize'     => $this->vectorize(actor: $actor, arguments: $arguments),
+            'vectorization' => $this->vectorization(actor: $actor, arguments: $arguments),
             default         => throw new LibraryFailure('Unknown library operation.'),
         };
     }
@@ -347,7 +350,7 @@ class LibraryOperations
             $object = $this->content->current(asset: $asset);
         }
         $directory = $this->fetchDirectory(requested: $arguments['dest_dir'] ?? null);
-        [$path, $reused] = $this->copyOut(object: $object, directory: $directory, name: CreativeHubSaver::cleanName(name: $name));
+        [$path, $reused] = $this->copyOut(open: fn () => $this->content->open(object: $object), sha256: (string) $object->sha256, size: (int) $object->size, directory: $directory, name: CreativeHubSaver::cleanName(name: $name));
         [$width, $height] = self::pixels(object: $object);
         MothershipLog::decision(event: 'fetch', loc: 'LibraryOperations::fetch', ctx: ['outcome' => 'copied', 'size' => (int) $object->size, 'reused' => $reused]);
 
@@ -388,11 +391,12 @@ class LibraryOperations
         return $real;
     }
 
-    /** @return array{0: string, 1: bool} the copy's path, and whether an identical file already there was reused */
-    private function copyOut(FileObject $object, string $directory, string $name): array
+    /**
+     * @param  callable(): resource  $open  the bytes to copy, which must hash to $sha256
+     * @return array{0: string, 1: bool} the copy's path, and whether an identical file already there was reused
+     */
+    private function copyOut(callable $open, string $sha256, int $size, string $directory, string $name): array
     {
-        $sha256 = (string) $object->sha256;
-        $size = (int) $object->size;
         $dot = strrpos($name, '.');
         [$base, $extension] = $dot === false || $dot === 0 ? [$name, ''] : [substr($name, 0, $dot), substr($name, $dot)];
         // An identical copy already at one of the names this fetch would use is reused without streaming again.
@@ -406,7 +410,7 @@ class LibraryOperations
             }
         }
         $part = $directory.'/.'.bin2hex(random_bytes(8)).'.mothership-part';
-        $in = $this->content->open(object: $object);
+        $in = $open();
         $out = @fopen($part, 'xb');
         if ($out === false) {
             fclose($in);
@@ -472,6 +476,57 @@ class LibraryOperations
             }
             $target = $directory.'/'.$base.'-'.$try.$extension;
         }
+    }
+
+    /**
+     * Queues a conversion to SVG and PDF through the vectorizer.ai integration: filed onto asset_id in the chosen
+     * format, or a one-off of local_path kept as this account's own. The same jobs, limits and replay as the Library.
+     */
+    private function vectorize(Admin $actor, array $arguments): array
+    {
+        $agent = app(AgentVectorizations::class);
+        if (isset($arguments['asset_id'])) {
+            $row = $agent->fromAsset(actor: $actor, via: AccessContext::VIA_LIBRARY, assetId: (int) $arguments['asset_id'], format: (string) $arguments['format'], requestId: (string) $arguments['request_id']);
+        } else {
+            [$source] = $this->localSource(path: (string) $arguments['local_path']);
+            $row = $agent->fromFile(actor: $actor, path: $source, requestId: (string) $arguments['request_id']);
+        }
+        MothershipLog::decision(event: 'vectorize', loc: 'LibraryOperations::vectorize', ctx: ['outcome' => (string) $row->status, 'kind' => isset($arguments['asset_id']) ? 'asset' : 'one_off']);
+
+        return $agent->present(row: $row) + ['note' => 'Poll library_vectorization with this id until status is completed or failed.'];
+    }
+
+    /** A conversion's status and, given format, a verified local copy of its completed result. */
+    private function vectorization(Admin $actor, array $arguments): array
+    {
+        $agent = app(AgentVectorizations::class);
+        $row = $agent->find(actor: $actor, via: AccessContext::VIA_LIBRARY, id: (string) $arguments['id']);
+        $result = $agent->present(row: $row);
+        if (! isset($arguments['format'])) {
+            return $result;
+        }
+        if ($row->status !== 'completed') {
+            throw new LibraryFailure('This conversion is '.$row->status.', so there is no result to copy'.($row->status === 'failed' ? '.' : ' yet. Poll again shortly.'));
+        }
+        $format = (string) $arguments['format'];
+        $source = $agent->resultPath(row: $row, format: $format);
+        $base = 'vectorized-'.substr((string) $row->id, 0, 8);
+        if ($row->source_asset_id !== null) {
+            $base = pathinfo((string) Asset::withTrashed()->whereKey($row->source_asset_id)->value('file_name'), PATHINFO_FILENAME).'-vectorized';
+        }
+        $sha256 = (string) hash_file('sha256', $source);
+        $size = (int) filesize($source);
+        $directory = $this->fetchDirectory(requested: $arguments['dest_dir'] ?? null);
+        [$path, $reused] = $this->copyOut(open: function () use ($source) {
+            $stream = @fopen($source, 'rb');
+            if ($stream === false) {
+                throw new LibraryFailure('The conversion result cannot be read right now. Try again later.');
+            }
+
+            return $stream;
+        }, sha256: $sha256, size: $size, directory: $directory, name: CreativeHubSaver::cleanName(name: $base.'.'.$format));
+
+        return $result + ['path' => $path, 'name' => basename($path), 'sha256' => $sha256, 'size' => $size, 'reused' => $reused];
     }
 
     private static function identical(string $path, int $size, string $sha256): bool

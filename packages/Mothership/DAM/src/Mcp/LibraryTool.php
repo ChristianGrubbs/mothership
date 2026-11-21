@@ -29,6 +29,8 @@ class LibraryTool extends Tool
         'fetch'         => ['Copy one asset file to a local folder to work on: the main file, one stack file (file_id), or the 1080p web proxy of a video (proxy: true; use it for 4K or very large footage). The copy is checked against its sha256 and returned as path; changing it never changes the library. An identical file already at that name is reused; any other is never overwritten (the copy is named name-2 and so on). dest_dir defaults to the server\'s fetch folder.', false, true],
         'save'          => ['Save a local file into the library. With folder_id it becomes a NEW asset; with stack_asset_id it joins that asset\'s stack (cover unchanged), so an editable source file and its exports stay one asset: save the main display export (for example the PNG render) as a new asset first, then add the source (.blend, .psd ...) and other exports with stack_asset_id. Pass exactly one of folder_id or stack_asset_id. producer names the tool that made the file. provenance records how it was made (prompt, model, backend, generation_id, reference_asset_ids, vault_note, source_url) and notes anything else; both are returned by library_get_asset. Use a fresh request_id (UUID) per save and reuse it only to retry the same save. When the folder or stack already has that name, the result says renamed_from; nothing is ever replaced.', false, true],
         'update'        => ['Change one asset\'s title, or add or remove tags. Removing a tag records the removal, so automatic tagging does not put it back.', false, true],
+        'vectorize'     => ['Convert a raster image (PNG, JPEG, WebP, BMP, GIF or TIFF, up to 20 MiB and 33,554,432 pixels) to vector SVG and PDF with the vectorizer.ai integration. Use it instead of tracing by hand. With asset_id and format (svg or pdf) the result is filed onto that library asset as an output file (needs edit rights on it); with local_path it is a one-off whose SVG and PDF are kept for you and filed nowhere. Pass exactly one of asset_id or local_path. It is queued: poll library_vectorization with the returned id until status is completed or failed (usually under a minute). Use a fresh request_id (UUID) per conversion and reuse it only to retry the same one, so a retry never pays twice.', false, true],
+        'vectorization' => ['Read one conversion started with library_vectorize: status (queued, processing, completed or failed), kind (asset or one_off) and, for a completed filed one, output.asset_id and output.file_id (copy it out with library_fetch and that file_id). Pass format (svg or pdf) once it is completed to copy that result to a local folder: it is returned as path with its sha256. dest_dir defaults to the server\'s fetch folder; an identical file already there is reused and any other is never overwritten.', false, true],
     ];
 
     public function __construct(private string $action)
@@ -100,7 +102,7 @@ class LibraryTool extends Tool
                 409     => $e->getMessage() !== '' ? $e->getMessage() : 'The request conflicts with an earlier save, or the asset was merged into another asset.',
                 413     => 'The file exceeds the library limit.',
                 422     => $e->getMessage() !== '' ? $e->getMessage() : 'The file or destination is invalid.',
-                503     => 'The Mothership is busy finishing an earlier save. Try again shortly with the same request_id.',
+                503     => str_starts_with($this->action, 'vectoriz') && $e->getMessage() !== '' ? $e->getMessage() : 'The Mothership is busy finishing an earlier save. Try again shortly with the same request_id.',
                 default => 'The operation could not be completed.',
             });
         } catch (ModelNotFoundException) {
@@ -211,6 +213,17 @@ class LibraryTool extends Tool
                 ]],
                 'evidence'       => [['type' => 'object', 'description' => 'Optional checks or measurements that back the result, stored with the save as given.'], false, ['sometimes', 'array']],
                 'request_id'     => [['type' => 'string', 'format' => 'uuid', 'description' => 'A fresh UUID for each new save; reuse it only to retry that same save.'], true, ['required', 'uuid']],
+            ],
+            'vectorize' => [
+                'asset_id'   => [['type' => 'integer', 'minimum' => 1, 'description' => 'File the result onto this library asset (its original must be a supported raster image). Omit when local_path is given.'], false, ['required_without:local_path', 'prohibits:local_path', 'integer', 'min:1']],
+                'local_path' => [['type' => 'string', 'maxLength' => 1024, 'description' => 'Absolute path of a local raster image for a one-off conversion. Omit when asset_id is given.'], false, ['required_without:asset_id', 'string', 'max:1024']],
+                'format'     => [['type' => 'string', 'enum' => ['svg', 'pdf'], 'description' => 'The format filed onto the asset; required with asset_id. A one-off always makes both.'], false, ['required_with:asset_id', 'string', 'in:svg,pdf']],
+                'request_id' => [['type' => 'string', 'format' => 'uuid', 'description' => 'A fresh UUID for each new conversion; reuse it only to retry that same conversion.'], true, ['required', 'uuid']],
+            ],
+            'vectorization' => [
+                'id'       => [['type' => 'string', 'format' => 'uuid', 'description' => 'The id library_vectorize returned.'], true, ['required', 'uuid']],
+                'format'   => [['type' => 'string', 'enum' => ['svg', 'pdf'], 'description' => 'Copy this completed result to dest_dir. Omit to read the status only.'], false, ['sometimes', 'string', 'in:svg,pdf']],
+                'dest_dir' => [['type' => 'string', 'maxLength' => 1024, 'description' => 'Absolute path of the local folder to copy into; created when missing. Never a folder inside The Mothership\'s own storage.'], false, ['sometimes', 'string', 'max:1024']],
             ],
             'update' => [
                 ...$assetId,

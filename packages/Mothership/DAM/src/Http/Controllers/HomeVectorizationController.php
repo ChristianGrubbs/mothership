@@ -5,13 +5,13 @@ namespace Mothership\DAM\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Mothership\Admin\Http\Controllers\Controller;
 use Mothership\DAM\Models\Asset;
 use Mothership\DAM\Services\Access\AccessContext;
 use Mothership\DAM\Services\Access\AssetAccessDecision;
 use Mothership\DAM\Services\HomeWidgetRegistry;
 use Mothership\DAM\Vectorization\Allowance;
+use Mothership\DAM\Vectorization\Intake;
 use Mothership\DAM\Vectorization\Requests;
 use Mothership\DAM\Vectorization\Vectorizer;
 
@@ -59,7 +59,7 @@ class HomeVectorizationController extends Controller
         ])->header('Cache-Control', 'private, no-store');
     }
 
-    public function store(Request $request, Requests $requests, Vectorizer $provider)
+    public function store(Request $request, Requests $requests, Intake $intake, Vectorizer $provider)
     {
         $adminId = $this->access();
         abort_unless($provider->ready(), 503, 'Image Vectorization is not connected.');
@@ -67,38 +67,10 @@ class HomeVectorizationController extends Controller
             'request_id' => ['required', 'uuid'],
             'image'      => ['required', 'file', 'mimes:png,jpg,jpeg,webp,bmp,gif,tif,tiff', 'max:20480'],
         ]);
-        $file = $request->file('image');
-        $dimensions = @getimagesize($file->getRealPath());
-        abort_unless(
-            $dimensions
-                && $dimensions[0] > 0
-                && $dimensions[1] > 0
-                && $dimensions[0] * $dimensions[1] <= 33554432,
-            422,
-            'Choose an image up to 33,554,432 pixels.',
-        );
-        $path = 'vectorizations/input/'.Str::uuid();
-        $disk = Storage::disk('private');
-        $bytes = file_get_contents($file->getRealPath());
-        abort_unless(is_string($bytes) && $disk->put($path, $bytes), 503, 'Image could not be stored.');
-        $keep = false;
+        $row = $intake->fromFile(adminId: $adminId, path: (string) $request->file('image')->getRealPath(), requestId: $data['request_id']);
 
-        try {
-            $row = $requests->submit(
-                adminId: $adminId,
-                requestId: $data['request_id'],
-                inputPath: $path,
-                sha: hash('sha256', $bytes),
-            );
-            $keep = $row->input_path === $path;
-
-            return response()->json(['result' => $requests->publicResult(row: $row)], 202)
-                ->header('Cache-Control', 'private, no-store');
-        } finally {
-            if (! $keep) {
-                $disk->delete($path);
-            }
-        }
+        return response()->json(['result' => $requests->publicResult(row: $row)], 202)
+            ->header('Cache-Control', 'private, no-store');
     }
 
     public function show(string $id, Requests $requests)

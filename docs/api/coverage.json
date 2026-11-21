@@ -1,9 +1,9 @@
 {
-  "accounted": 1599,
+  "accounted": 1605,
   "counts": {
-    "api": 288,
+    "api": 292,
     "authentication": 10,
-    "head-alias": 495,
+    "head-alias": 497,
     "health": 1,
     "internal": 761,
     "page": 2,
@@ -12,7 +12,7 @@
     "unsupported": 0
   },
   "missing": [],
-  "registered": 1599,
+  "registered": 1605,
   "routes": [
     {
       "id": "DELETE * /admin/ai-agent/agents/{id}",
@@ -2845,6 +2845,16 @@
       "reason": "Supported DAM integration operation."
     },
     {
+      "id": "GET * /api/v1/rest/vectorizations/{vectorization}",
+      "kind": "api",
+      "reason": "Supported DAM integration operation."
+    },
+    {
+      "id": "GET * /api/v1/rest/vectorizations/{vectorization}/{format}",
+      "kind": "api",
+      "reason": "Supported DAM integration operation."
+    },
+    {
       "id": "GET * /app-url-guard/check",
       "kind": "internal",
       "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory."
@@ -5335,6 +5345,16 @@
       "reason": "Laravel HEAD alias; see corresponding GET identity."
     },
     {
+      "id": "HEAD * /api/v1/rest/vectorizations/{vectorization}",
+      "kind": "head-alias",
+      "reason": "Laravel HEAD alias; see corresponding GET identity."
+    },
+    {
+      "id": "HEAD * /api/v1/rest/vectorizations/{vectorization}/{format}",
+      "kind": "head-alias",
+      "reason": "Laravel HEAD alias; see corresponding GET identity."
+    },
+    {
       "id": "HEAD * /app-url-guard/check",
       "kind": "head-alias",
       "reason": "Laravel HEAD alias; see corresponding GET identity."
@@ -7040,6 +7060,11 @@
       "reason": "Supported DAM integration operation."
     },
     {
+      "id": "POST * /api/v1/rest/assets/{asset}/vectorize",
+      "kind": "api",
+      "reason": "Supported DAM integration operation."
+    },
+    {
       "id": "POST * /api/v1/rest/assets/{asset}/video-proxy/retry",
       "kind": "api",
       "reason": "Supported DAM integration operation."
@@ -7376,6 +7401,11 @@
     },
     {
       "id": "POST * /api/v1/rest/upload-requests/{id}/reject",
+      "kind": "api",
+      "reason": "Supported DAM integration operation."
+    },
+    {
+      "id": "POST * /api/v1/rest/vectorizations",
       "kind": "api",
       "reason": "Supported DAM integration operation."
     },
