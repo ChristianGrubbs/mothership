@@ -95,6 +95,12 @@ it('files the chosen format onto the asset for an unlimited agent without touchi
     expect($svg->headers->get('Content-Type'))->toBe('image/svg+xml')
         ->and($svg->headers->get('Cache-Control'))->toContain('private')
         ->and(file_get_contents($svg->baseResponse->getFile()->getPathname()))->toContain('<svg');
+
+    // Stored results stay readable while the provider is not connected; only new submissions need it.
+    config(['vectorization.enabled' => false]);
+    $this->getJson('/api/v1/rest/vectorizations/'.$id, $this->headers)->assertOk()->assertJsonPath('data.vectorization.status', 'completed');
+    $this->get('/api/v1/rest/vectorizations/'.$id.'/pdf', $this->headers)->assertOk();
+    $this->postJson('/api/v1/rest/assets/'.$this->source->id.'/vectorize', ['format' => 'svg'], $this->headers)->assertStatus(503);
 });
 
 it('runs a one-off upload with replay and both formats, filing nothing', function () {
