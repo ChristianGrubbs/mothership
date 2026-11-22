@@ -124,6 +124,22 @@ No tool deletes or overwrites anything in the library.
 `library_search` filters on `producer`. A stack save also records a Creative Hub rendition naming the producer
 (`creative-hub:<tool>[:<app>]`), which `library_list_stack` reports.
 
+### Links to references
+
+Each id in `provenance.reference_asset_ids` also becomes a `derived-from` relationship (ADR 0002) from the saved asset to
+that reference; in stack mode the link starts from the stack's asset, as its tags do. The answer lists them as
+`derived_from`, and the Relationships tab and `GET assets/{id}/relationships` show them on both ends.
+
+- **Checked first.** Every id must be an asset the account's Library lists, and never the stack the file joins. A
+  missing, hidden, trashed or merged id fails the whole save with the same error naming the id, before any bytes are
+  stored. Naming references needs `dam.asset.relationships.store`, the permission the Relationships tab asks for.
+- **Same transaction.** A new file's links are written in the transaction that records its library record, title and
+  tags; a stack file's links in the transaction that attaches the member. A failure leaves none of them.
+- **Never twice.** An existing `derived-from` link for the same pair is kept, not duplicated; a retry with the same
+  `request_id` answers the links already there.
+- Links are only ever added here. Removing one is a Relationships tab action. Saves made before this change carry their
+  ids in the library record only; nothing back-fills links for them.
+
 ## Code
 
 - `packages/Mothership/DAM/src/Mcp/MothershipServer.php`: the server and its instructions.
