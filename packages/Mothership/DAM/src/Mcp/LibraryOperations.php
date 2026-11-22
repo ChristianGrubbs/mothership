@@ -9,6 +9,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Mothership\DAM\Models\Asset;
 use Mothership\DAM\Models\AssetFile;
+use Mothership\DAM\Models\AssetRelationship;
 use Mothership\DAM\Models\Directory;
 use Mothership\DAM\Models\FileObject;
 use Mothership\DAM\Models\Rendition;
@@ -555,6 +556,7 @@ class LibraryOperations
         if (($arguments['tags'] ?? []) !== []) {
             abort_unless($this->can(actor: $actor, permission: 'dam.asset.tag'), 403);
         }
+        $references = $this->references(actor: $actor, ids: $arguments['provenance']['reference_asset_ids'] ?? [], stackAssetId: isset($arguments['stack_asset_id']) ? (int) $arguments['stack_asset_id'] : null);
         if (isset($arguments['stack_asset_id'])) {
             // The Library's add-files rule, asked again by CreativeHubSaver::addToStack on the locked row.
             abort_unless($this->can(actor: $actor, permission: 'dam.asset.files.store') && $this->can(actor: $actor, permission: 'dam.asset.edit'), 403);
@@ -562,13 +564,77 @@ class LibraryOperations
             abort_if($stack->isMerged(), 409);
             abort_if(($arguments['title'] ?? '') !== '', 422, 'title names a new asset. To rename the stack asset, use library_update.');
 
-            return $this->withStagedFile(source: $source, size: $size, name: $arguments['name'] ?? null, use: fn (UploadedFile $file, string $name, string $sha256) => $this->saveStackFile(actor: $actor, stack: $stack, arguments: $arguments, file: $file, name: $name, sha256: $sha256, size: $size, app: $app, record: $record));
+            return $this->withStagedFile(source: $source, size: $size, name: $arguments['name'] ?? null, use: fn (UploadedFile $file, string $name, string $sha256) => $this->saveStackFile(actor: $actor, stack: $stack, arguments: $arguments, file: $file, name: $name, sha256: $sha256, size: $size, app: $app, record: $record, references: $references));
         }
         abort_unless($this->can(actor: $actor, permission: 'dam.asset.upload'), 403);
         $folder = Directory::query()->findOrFail((int) $arguments['folder_id']);
         abort_unless($this->directories->forAdmin(admin: $actor)->canAccess(directoryId: (int) $folder->id), 404);
 
-        return $this->withStagedFile(source: $source, size: $size, name: $arguments['name'] ?? null, use: fn (UploadedFile $file, string $name, string $sha256) => $this->saveNewFile(actor: $actor, arguments: $arguments, file: $file, name: $name, sha256: $sha256, size: $size, app: $app, record: $record));
+        return $this->withStagedFile(source: $source, size: $size, name: $arguments['name'] ?? null, use: fn (UploadedFile $file, string $name, string $sha256) => $this->saveNewFile(actor: $actor, arguments: $arguments, file: $file, name: $name, sha256: $sha256, size: $size, app: $app, record: $record, references: $references));
+    }
+
+    /**
+     * The assets a save names in provenance.reference_asset_ids, checked before anything is saved: each must be one
+     * the account's Library lists (a missing, hidden, trashed or merged asset fails alike, so an id probe learns
+     * nothing), never the stack the file joins, and the account must be allowed to add relationships.
+     *
+     * @param  array<mixed>  $ids
+     * @return list<int>
+     */
+    private function references(Admin $actor, array $ids, ?int $stackAssetId): array
+    {
+        $ids = array_values(array_unique(array_map(intval(...), $ids)));
+        if ($ids === []) {
+            return [];
+        }
+        abort_unless($this->can(actor: $actor, permission: 'dam.asset.relationships.store'), 403);
+        $context = AccessContext::forAdmin(admin: $actor, purpose: AccessContext::PURPOSE_LIST);
+        foreach ($ids as $id) {
+            if ($id === $stackAssetId) {
+                throw new LibraryFailure('reference_asset_ids names asset '.$id.', the asset this file joins; an asset cannot be derived from itself. Nothing was saved.');
+            }
+            if (! $this->access->for(context: $context, asset: $id)->allowed) {
+                throw new LibraryFailure('Reference asset '.$id.' is not in the library or is not open to this account. Nothing was saved; check reference_asset_ids.');
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * Writes a derived-from relationship (ADR 0002) from $assetId to each reference that lacks one, so the made work
+     * links back to what it was made from. Runs inside the caller's transaction: the links land with the save's record
+     * or not at all, and a save of the same file again finds them and adds none.
+     *
+     * @param  list<int>  $references
+     * @return list<int> the references $assetId is now derived from
+     */
+    private function linkReferences(Admin $actor, int $assetId, array $references, string $producer): array
+    {
+        if ($references === []) {
+            return [];
+        }
+        // The Relationships tab's own lock, so a concurrent link of the same pair waits and then finds this one.
+        Asset::query()->whereKey($assetId)->lockedForGraph()->value('id');
+        $existing = fn (): array => AssetRelationship::query()->where('from_asset_id', $assetId)->where('type', AssetRelationship::TYPE_DERIVED_FROM)
+            ->whereIn('to_asset_id', $references)->pluck('to_asset_id')->map(fn (mixed $id): int => (int) $id)->all();
+        $linked = $existing();
+        foreach (array_diff($references, $linked) as $reference) {
+            try {
+                // A savepoint: a concurrent insert's unique violation must not poison the save's transaction.
+                DB::transaction(fn () => AssetRelationship::query()->create([
+                    'from_asset_id' => $assetId, 'to_asset_id' => $reference, 'type' => AssetRelationship::TYPE_DERIVED_FROM,
+                    'metadata'      => ['source' => 'library_save', 'producer' => $producer], 'created_by' => (int) $actor->id,
+                ]));
+            } catch (UniqueConstraintViolationException) {
+                // Already there: the link is what the save asked for.
+            }
+        }
+        $linked = $existing();
+        MothershipLog::decision(event: 'save_links', loc: 'LibraryOperations::linkReferences', ctx: ['asset_id' => $assetId, 'requested' => count($references), 'linked' => count($linked)]);
+        sort($linked);
+
+        return $linked;
     }
 
     /** @return array{0: string, 1: int} the file's real path and size */
@@ -640,7 +706,8 @@ class LibraryOperations
         }
     }
 
-    private function saveNewFile(Admin $actor, array $arguments, UploadedFile $file, string $name, string $sha256, int $size, array $app, array $record): array
+    /** @param  list<int>  $references */
+    private function saveNewFile(Admin $actor, array $arguments, UploadedFile $file, string $name, string $sha256, int $size, array $app, array $record, array $references): array
     {
         $requestId = strtolower((string) $arguments['request_id']);
         $replayed = DB::table('dam_creative_hub_saves')->where('admin_id', (int) $actor->id)->where('request_id', $requestId)->exists();
@@ -656,16 +723,20 @@ class LibraryOperations
             $asset = $this->access->for(context: AccessContext::forAdmin(admin: $actor, purpose: AccessContext::PURPOSE_LIST), asset: (int) $asset->id)->allowedOrFail();
         }
         // The library record (producer, provenance, notes) rides on the request's own claim row. It is written in one
-        // transaction with the title and tags: a failure leaves all three for the retry, a concurrent retry waits on
-        // the row and then finds it done, and a finished save is never redone, so later edits stay.
-        $tags = DB::transaction(function () use ($actor, $arguments, $asset, $requestId, $record): array {
+        // transaction with the title, tags and derived-from links: a failure leaves them all for the retry, a
+        // concurrent retry waits on the row and then finds it done, and a finished save is never redone, so later
+        // edits stay.
+        [$tags, $derivedFrom] = DB::transaction(function () use ($actor, $arguments, $asset, $requestId, $record, $references): array {
             $finalizing = DB::table('dam_creative_hub_saves')->where('admin_id', (int) $actor->id)->where('request_id', $requestId)->whereNull('evidence')
                 ->update(['evidence' => json_encode($record, JSON_THROW_ON_ERROR), 'updated_at' => now()]) === 1;
             if ($finalizing && ($arguments['title'] ?? '') !== '' && $asset->title !== $arguments['title']) {
                 $asset->forceFill(['title' => $arguments['title']])->save();
             }
 
-            return $this->addTags(asset: $asset, names: $finalizing ? ($arguments['tags'] ?? []) : [], actor: $actor);
+            return [
+                $this->addTags(asset: $asset, names: $finalizing ? ($arguments['tags'] ?? []) : [], actor: $actor),
+                $finalizing ? $this->linkReferences(actor: $actor, assetId: (int) $asset->id, references: $references, producer: (string) $record['producer']) : $this->derivedFrom(assetId: (int) $asset->id),
+            ];
         });
         // Publication may normalize SVG bytes: sha256 is what is stored, source_sha256 what was read.
         $object = $this->content->current(asset: $asset);
@@ -683,6 +754,7 @@ class LibraryOperations
             'source_sha256' => $sha256,
             'source_size'   => $size,
             'tags'          => $tags,
+            'derived_from'  => $derivedFrom,
             'replayed'      => $replayed,
             'url'           => route('admin.dam.assets.edit', $asset->id),
             'next'          => 'To keep the editable source file and other exports with this asset, save each with library_save and stack_asset_id='.(int) $asset->id.'.',
@@ -695,7 +767,8 @@ class LibraryOperations
      * request_id; changed bytes or destination under the same id answer 409. The claim records the member and the
      * receipt inside the attach's own transaction, so a retry answers that receipt without attaching again.
      */
-    private function saveStackFile(Admin $actor, Asset $stack, array $arguments, UploadedFile $file, string $name, string $sha256, int $size, array $app, array $record): array
+    /** @param  list<int>  $references */
+    private function saveStackFile(Admin $actor, Asset $stack, array $arguments, UploadedFile $file, string $name, string $sha256, int $size, array $app, array $record, array $references): array
     {
         $requestId = strtolower((string) $arguments['request_id']);
         $requestSha256 = hash('sha256', json_encode(['library-stack', $app['id'], (int) $stack->id, $name, $sha256], JSON_THROW_ON_ERROR));
@@ -727,7 +800,7 @@ class LibraryOperations
         // Bytes the library already held were brought in (footage, a logo), not made by the producer.
         $imported = FileObject::query()->where('sha256', $sha256)->exists();
         $receipt = null;
-        $this->saver->addToStack(file: $file, stack: $stack, name: $label, app: $app, sourceFile: null, actorId: (int) $actor->id, onAttached: function (AssetFile $added) use ($actor, $arguments, $stack, $app, $requestId, $sha256, $size, $label, $name, $imported, $record, &$receipt): void {
+        $this->saver->addToStack(file: $file, stack: $stack, name: $label, app: $app, sourceFile: null, actorId: (int) $actor->id, onAttached: function (AssetFile $added) use ($actor, $arguments, $stack, $app, $requestId, $sha256, $size, $label, $name, $imported, $record, $references, &$receipt): void {
             $level = DB::transactionLevel();
             try {
                 // Names the producer for library_list_stack; best effort, in its own savepoint so an ordinary failure
@@ -745,11 +818,13 @@ class LibraryOperations
             }
             // Tags describe the stack asset; applied inside the attach, so they land with the member or not at all.
             $tags = $this->addTags(asset: $stack, names: $arguments['tags'] ?? [], actor: $actor);
+            // Links, like tags, describe the stack asset, and land with the member or not at all.
+            $derivedFrom = $this->linkReferences(actor: $actor, assetId: (int) $stack->id, references: $references, producer: (string) $record['producer']);
             $object = $added->fileObject;
             $receipt = [
                 'asset_id'      => (int) $stack->id, 'file_id' => (int) $added->id, 'name' => StackFileName::fileName(file: $added, asset: $stack),
                 'sha256'        => (string) $object->sha256, 'size' => (int) $object->size, 'source_sha256' => $sha256, 'source_size' => $size,
-                'stack'         => true, 'cover_changed' => false, 'tags' => $tags, 'url' => route('admin.dam.assets.edit', $stack->id),
+                'stack'         => true, 'cover_changed' => false, 'tags' => $tags, 'derived_from' => $derivedFrom, 'url' => route('admin.dam.assets.edit', $stack->id),
                 ...($label !== $name ? ['renamed_from' => $name] : []),
                 'note'          => 'Added to the stack; cover unchanged. Changing the cover is a Library action in The Mothership.'.($label !== $name ? ' The stack already had a different file named '.$name.', so this one is '.$label.'.' : ''),
             ];
@@ -865,6 +940,13 @@ class LibraryOperations
             });
 
         return $producers;
+    }
+
+    /** @return list<int> the assets $assetId has a derived-from link to, for a replayed save's answer */
+    private function derivedFrom(int $assetId): array
+    {
+        return AssetRelationship::query()->where('from_asset_id', $assetId)->where('type', AssetRelationship::TYPE_DERIVED_FROM)
+            ->orderBy('to_asset_id')->pluck('to_asset_id')->map(fn (mixed $id): int => (int) $id)->values()->all();
     }
 
     /** The library record (producer, provenance, notes) of the save that created this asset, or [] for any other asset. */
