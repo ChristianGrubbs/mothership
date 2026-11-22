@@ -252,6 +252,21 @@ it('probes the bridge health briefly and caches the answer', function () {
     expect(app(AiBridgeClient::class)->health())->toBeFalse();
 });
 
+it('reads a bridge whose Ollama lists no models as down, and a bridge that sends no model fields as up', function (array $body, bool $up) {
+    config(['ai-index.health_check' => true]);
+    Cache::flush();
+    Http::fake(['bridge.test/health' => Http::response($body)]);
+
+    expect(app(AiBridgeClient::class)->health())->toBe($up);
+})->with([
+    'both models listed'                         => [['ok' => true, 'ollama' => true, 'models' => ['caption' => true, 'embed' => true]], true],
+    'Ollama lists no models (2026-11-22 outage)' => [['ok' => true, 'ollama' => true, 'models' => ['caption' => false, 'embed' => false]], false],
+    'caption model missing'                      => [['ok' => true, 'ollama' => true, 'models' => ['caption' => false, 'embed' => true]], false],
+    'embed model missing'                        => [['ok' => true, 'ollama' => true, 'models' => ['caption' => true, 'embed' => false]], false],
+    'Ollama not answering, no model fields'      => [['ok' => true, 'ollama' => false], false],
+    'older bridge without model fields'          => [['ok' => true], true],
+]);
+
 it('refuses to describe or rename a file the AI cannot see, and answers the bulk question per file', function () {
     $this->loginAsAdmin();
     fakeBridge();

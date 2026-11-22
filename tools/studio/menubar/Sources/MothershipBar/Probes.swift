@@ -65,7 +65,10 @@ struct Probes: Sendable {
             for (index, endpoint) in parseBridgeEndpoints(text).enumerated() {
                 group.addTask {
                     let answer = await get(endpoint.url)
-                    return (index, BridgeReading(name: endpoint.name, ok: bridgeAnswered(status: answer?.status, body: answer?.data)))
+                    return (index, BridgeReading(
+                        name: endpoint.name, ok: bridgeAnswered(status: answer?.status, body: answer?.data),
+                        missingModels: bridgeMissingModels(body: answer?.data)
+                    ))
                 }
             }
             var readings: [(Int, BridgeReading)] = []

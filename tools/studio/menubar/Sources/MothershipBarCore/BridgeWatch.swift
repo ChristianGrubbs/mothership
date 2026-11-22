@@ -37,6 +37,15 @@ public func bridgeAnswered(status: Int?, body: Data?) -> Bool {
     return fields["ollama"] as? Bool == false
 }
 
+/// The models a bridge's `/health` reports as missing (`"models": {"caption": false}`), sorted. A bridge whose
+/// Ollama lists no models still answers, so it still counts as answering: restarting it cannot help, and this
+/// never feeds the watcher. Empty when the answer carries no model fields.
+public func bridgeMissingModels(body: Data?) -> [String] {
+    guard let body, let fields = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+          let models = fields["models"] as? [String: Any] else { return [] }
+    return models.compactMap { name, present in (present as? Bool) == false ? name : nil }.sorted()
+}
+
 public enum BridgeRestartOutcome: String, Sendable, Equatable {
     case succeeded
     /// Something else is changing the stack, so nothing was restarted. This never counts as a failed restart.
