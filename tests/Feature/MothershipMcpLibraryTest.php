@@ -161,13 +161,63 @@ it('links a saved file derived-from each reference it names, in the same save an
     expect($replay['replayed'])->toBeTrue()->and($replay['derived_from'])->toBe([$first, $second])
         ->and($links($saved['asset_id']))->toHaveCount(2);
 
-    // A stack save links the stack's asset; a link it already has is not written again.
-    $member = ($this->ok)('save', [
+    // A replay answers only the references it names, never a link someone added since to an asset it cannot see.
+    $private = (int) hubAsset(hubFolder('Private'))->id;
+    app(DirectoryPermissionService::class)->flush();
+    AssetRelationship::query()->create(['from_asset_id' => $saved['asset_id'], 'to_asset_id' => $private, 'type' => 'derived-from']);
+    expect(($this->ok)('save', $arguments)['derived_from'])->toBe([$first, $second]);
+
+    // A stack save links the stack's asset: a new reference gets its link, one it already has is not written again.
+    $third = (int) hubAsset($this->folder)->id;
+    $stackArguments = [
         'local_path' => ($this->png)('study-alt.png', 24), 'stack_asset_id' => $saved['asset_id'], 'producer' => ['tool' => 'artcraft'],
-        'provenance' => ['reference_asset_ids' => [$first]], 'request_id' => (string) Str::uuid(),
-    ]);
-    expect($member['stack'])->toBeTrue()->and($member['derived_from'])->toBe([$first])
-        ->and($links($saved['asset_id']))->toHaveCount(2);
+        'provenance' => ['reference_asset_ids' => [$first, $third]], 'request_id' => (string) Str::uuid(),
+    ];
+    $member = ($this->ok)('save', $stackArguments);
+    expect($member['stack'])->toBeTrue()->and($member['derived_from'])->toBe([$first, $third])
+        ->and($links($saved['asset_id']))->toHaveCount(4)
+        ->and(AssetRelationship::query()->where('from_asset_id', $saved['asset_id'])->where('to_asset_id', $third)->value('type'))->toBe('derived-from');
+    $memberReplay = ($this->ok)('save', $stackArguments);
+    expect($memberReplay['replayed'])->toBeTrue()->and($memberReplay['file_id'])->toBe($member['file_id'])->and($links($saved['asset_id']))->toHaveCount(4);
+});
+
+it('leaves no link, record or stack member behind when writing a link fails, and a retry completes the save', function () {
+    $reference = (int) hubAsset($this->folder)->id;
+    $failing = true;
+    AssetRelationship::creating(function () use (&$failing): void {
+        if ($failing) {
+            throw new RuntimeException('link write failed');
+        }
+    });
+    $arguments = [
+        'local_path' => ($this->png)('made.png'), 'folder_id' => (int) $this->folder->id, 'title' => 'Made', 'tags' => ['made'], 'producer' => ['tool' => 'artcraft'],
+        'provenance' => ['reference_asset_ids' => [$reference]], 'request_id' => (string) Str::uuid(),
+    ];
+
+    // New file: the bytes are published first, but the record, title, tags and links land together or not at all.
+    [, $error] = ($this->call)('save', $arguments);
+    expect($error)->not->toBeNull()
+        ->and(DB::table('dam_creative_hub_saves')->where('request_id', $arguments['request_id'])->value('evidence'))->toBeNull()
+        ->and(AssetRelationship::query()->count())->toBe(0);
+    $failing = false;
+    $saved = ($this->ok)('save', $arguments);
+    expect($saved['derived_from'])->toBe([$reference])->and($saved['title'])->toBe('Made')->and($saved['tags'])->toBe(['made']);
+
+    // Stack file: the member, its receipt and the links share the attach transaction.
+    $other = (int) hubAsset($this->folder)->id;
+    $members = DB::table('dam_asset_files')->count();
+    $failing = true;
+    $stackArguments = [
+        'local_path' => ($this->png)('made-alt.png', 24), 'stack_asset_id' => $saved['asset_id'], 'producer' => ['tool' => 'artcraft'],
+        'provenance' => ['reference_asset_ids' => [$other]], 'request_id' => (string) Str::uuid(),
+    ];
+    [, $error] = ($this->call)('save', $stackArguments);
+    expect($error)->not->toBeNull()
+        ->and(DB::table('dam_asset_files')->count())->toBe($members)
+        ->and(DB::table('dam_creative_hub_saves')->where('request_id', $stackArguments['request_id'])->value('receipt'))->toBeNull()
+        ->and(AssetRelationship::query()->where('to_asset_id', $other)->count())->toBe(0);
+    $failing = false;
+    expect(($this->ok)('save', $stackArguments)['derived_from'])->toBe([$other]);
 });
 
 it('saves nothing when a reference is unknown, hidden, the stack itself, or the account may not link', function () {

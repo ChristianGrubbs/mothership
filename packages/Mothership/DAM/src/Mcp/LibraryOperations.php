@@ -735,7 +735,7 @@ class LibraryOperations
 
             return [
                 $this->addTags(asset: $asset, names: $finalizing ? ($arguments['tags'] ?? []) : [], actor: $actor),
-                $finalizing ? $this->linkReferences(actor: $actor, assetId: (int) $asset->id, references: $references, producer: (string) $record['producer']) : $this->derivedFrom(assetId: (int) $asset->id),
+                $finalizing ? $this->linkReferences(actor: $actor, assetId: (int) $asset->id, references: $references, producer: (string) $record['producer']) : $this->derivedFrom(assetId: (int) $asset->id, references: $references),
             ];
         });
         // Publication may normalize SVG bytes: sha256 is what is stored, source_sha256 what was read.
@@ -942,11 +942,21 @@ class LibraryOperations
         return $producers;
     }
 
-    /** @return list<int> the assets $assetId has a derived-from link to, for a replayed save's answer */
-    private function derivedFrom(int $assetId): array
+    /**
+     * For a replayed save's answer: which of the references this save names (already checked by references()) the
+     * asset has a derived-from link to. Never the asset's other links, whose other end this account may not see.
+     *
+     * @param  list<int>  $references
+     * @return list<int>
+     */
+    private function derivedFrom(int $assetId, array $references): array
     {
+        if ($references === []) {
+            return [];
+        }
+
         return AssetRelationship::query()->where('from_asset_id', $assetId)->where('type', AssetRelationship::TYPE_DERIVED_FROM)
-            ->orderBy('to_asset_id')->pluck('to_asset_id')->map(fn (mixed $id): int => (int) $id)->values()->all();
+            ->whereIn('to_asset_id', $references)->orderBy('to_asset_id')->pluck('to_asset_id')->map(fn (mixed $id): int => (int) $id)->values()->all();
     }
 
     /** The library record (producer, provenance, notes) of the save that created this asset, or [] for any other asset. */
