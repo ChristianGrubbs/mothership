@@ -22,7 +22,8 @@ class AiBridgeClient
      * Whether the service answers: true, false, or null when that is not known yet. Never makes a page wait on a down
      * bridge: the answer is cached for `health_ttl` seconds, and when it has expired a single request (the one that wins
      * a short lock) probes `/health` (2 s at most). Every other caller meanwhile gets the last known answer, or null when
-     * the service has never been probed: a caller must not read null as up or as down. Not configured is false. Off
+     * the service has never been probed: a caller must not read null as up or as down. A bridge whose `/health` says
+     * Ollama is down or a model is missing is down. Not configured is false. Off
      * (configured means reachable) with MOTHERSHIP_AI_HEALTH_CHECK=false.
      */
     public function health(): ?bool
@@ -60,7 +61,15 @@ class AiBridgeClient
 
             try {
                 $response = Http::connectTimeout(2)->timeout(2)->acceptJson()->get(rtrim((string) config('ai-index.api'), '/').'/health');
-                $up = $response->successful() && $response->json('ok') !== false;
+                // Up means the bridge can do the work, not only that it answers: Ollama must answer and list both the
+                // caption and the embedding model. A bridge that answers 200 while Ollama lists no models would otherwise
+                // read as up, and every caller (the hourly --transient reconcile first) would spend attempts on jobs that
+                // fail in a tenth of a second. A field the bridge does not send is not read as down.
+                $models = $response->json('models');
+                $up = $response->successful()
+                    && $response->json('ok') !== false
+                    && $response->json('ollama') !== false
+                    && ! (is_array($models) && in_array(false, $models, true));
             } catch (Throwable) {
                 $up = false;
             }

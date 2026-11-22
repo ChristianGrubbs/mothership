@@ -125,6 +125,38 @@ private func restartAfterTwoReads(_ watch: inout BridgeWatch) -> String? {
     #expect(!bridgeAnswered(status: nil, body: nil))
 }
 
+@Test func anAnsweringBridgeWhoseOllamaListsNoModelsNeedsAttentionButNoRestart() {
+    func body(_ text: String) -> Data { Data(text.utf8) }
+    let outage = body(#"{"ok":true,"ollama":true,"models":{"caption":false,"embed":false}}"#)
+    #expect(bridgeAnswered(status: 200, body: outage), "the bridge itself is fine, so the watcher leaves it alone")
+    #expect(bridgeMissingModels(body: outage) == ["caption", "embed"])
+    #expect(bridgeMissingModels(body: body(#"{"ok":true,"ollama":true,"models":{"caption":true,"embed":false}}"#)) == ["embed"])
+    #expect(bridgeMissingModels(body: body(#"{"ok":true,"ollama":true,"models":{"caption":true,"embed":true}}"#)).isEmpty)
+    #expect(bridgeMissingModels(body: body(#"{"ok":true}"#)).isEmpty, "a bridge without model fields reads as before")
+    #expect(bridgeMissingModels(body: nil).isEmpty)
+
+    let outageReadings = [
+        BridgeReading(name: "Optimizer", ok: true),
+        BridgeReading(name: "AI", ok: true, missingModels: ["caption", "embed"]),
+    ]
+    let snapshot = HealthSnapshot(
+        site: SiteReading(publicStatus: 200, publicMs: 300, originStatus: 200),
+        containers: ContainerReading(running: 13, total: 13, notRunning: []),
+        tunnel: TunnelReading(jobRunning: true, readyConnections: 4),
+        bridges: outageReadings,
+        ollama: OllamaReading(version: "0.40.16", loadedModels: 0)
+    )
+    let result = verdict(for: snapshot, action: nil, externalBusy: false)
+    #expect(result.overall == .degraded)
+    #expect(result.overall.headline == "Needs attention")
+    #expect(result.reason == "The AI bridge can't find its caption and embed models in Ollama")
+    #expect(!restartWouldHelp(snapshot), "Ollama runs outside the stack, so a stack restart can't fix it")
+    var watch = BridgeWatch()
+    for _ in 0..<3 { #expect(watch.observe(outageReadings, clear: true, now: start) == nil, "the watcher restarts nothing") }
+    let one = HealthSnapshot(bridges: [BridgeReading(name: "AI", ok: true, missingModels: ["embed"])])
+    #expect(problems(in: one) == ["The AI bridge can't find its embed model in Ollama"])
+}
+
 @Test func bridgeTargetsComeFromTheNamedKeys() {
     let text = """
     MOTHERSHIP_OPTIMIZER_API=http://192.168.64.1:18766

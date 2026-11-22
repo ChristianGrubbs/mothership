@@ -96,9 +96,12 @@ public struct TunnelReading: Sendable, Equatable {
 public struct BridgeReading: Sendable, Equatable {
     public var name: String
     public var ok: Bool
-    public init(name: String, ok: Bool) {
+    /// Models the bridge says Ollama doesn't list. The bridge still answers, so `ok` stays true.
+    public var missingModels: [String]
+    public init(name: String, ok: Bool, missingModels: [String] = []) {
         self.name = name
         self.ok = ok
+        self.missingModels = missingModels
     }
 }
 
@@ -221,6 +224,12 @@ public func problems(in snapshot: HealthSnapshot) -> [String] {
     }
     for bridge in snapshot.bridges ?? [] where !bridge.ok {
         found.append(snapshot.bridgeWatch[bridge.name]?.problem(bridge: bridge.name) ?? "The \(bridge.name) bridge isn't answering")
+    }
+    // An answering bridge can still do no work: on 2026-11-21 Ollama lost its model list and every AI job failed
+    // for 29 hours while each bridge read green. Not a restart fault: Ollama runs outside the stack.
+    for bridge in snapshot.bridges ?? [] where bridge.ok && !bridge.missingModels.isEmpty {
+        let models = bridge.missingModels.joined(separator: " and ")
+        found.append("The \(bridge.name) bridge can't find its \(models) model\(bridge.missingModels.count > 1 ? "s" : "") in Ollama")
     }
     if let ollama = snapshot.ollama, ollama.version == nil {
         found.append("Ollama isn't answering")
