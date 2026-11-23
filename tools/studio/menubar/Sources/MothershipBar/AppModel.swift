@@ -52,6 +52,9 @@ final class AppModel {
     @ObservationIgnored private var bridgeWatch = BridgeWatch()
     @ObservationIgnored private var bridgeRestart: (id: String, name: String, started: Date)?
     @ObservationIgnored private var queueRead: Task<Void, Never>?
+    @ObservationIgnored private var driveWatch: DriveWatch?
+    @ObservationIgnored private var driveRecovery = DriveRecovery()
+    @ObservationIgnored private var driveWatchUnavailableLogged = false
 
     private var probes: Probes? { config.map { Probes(config: $0) } }
     private var runner: ActionRunner? { config.map { ActionRunner(config: $0) } }
@@ -62,6 +65,9 @@ final class AppModel {
         storeState = config?.umbrelStore?.sshArguments == nil ? .notSetUp : .checking
         snapshot.store = storeState
         craftStatus = (try? String(contentsOf: BarPaths.craftStatus, encoding: .utf8)).flatMap(parseCraftStatus)
+        let storedDrop = (try? String(contentsOf: BarPaths.driveDrop, encoding: .utf8))
+            .flatMap { ISO8601DateFormatter().date(from: $0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        driveRecovery = DriveRecovery(droppedAt: storedDrop)
     }
 
     var verdict: Verdict {
@@ -128,6 +134,7 @@ final class AppModel {
         BarLog.write("info", "app.started", loc: "AppModel.start", ctx: ["login": "\(launchedAtLogin)"])
         reattach()
         runner?.pruneOldFiles()
+        startDriveWatch()
         if launchedAtLogin { startForLoginIfNeeded() }
         launchRequestedTestAction()
         pollTask = Task { [weak self] in
@@ -154,8 +161,10 @@ final class AppModel {
     private func request(_ kind: ActionKind) {
         failure = nil
         siteResult = nil
+        // The operator has taken over, so a drop the app was waiting to recover from is theirs now.
+        if driveRecovery.droppedAt != nil, !kind.isCraft { forgetDriveDrop(reason: "operator_action") }
         switch kind {
-        case .start, .login, .craftApps:
+        case .start, .login, .recover, .craftApps:
             launch(kind)
         case .craftMCP where craftStatus?.mcp.isInUse != true:
             launch(.craftMCP)
@@ -257,8 +266,8 @@ final class AppModel {
         BarLog.write("info", "action.reattached", loc: "AppModel.reattach", ctx: ["id": current.id])
     }
 
-    /// The only automatic start. The app never restarts the stack because it looks down:
-    /// a planned deploy keeps it down on purpose.
+    /// One of two automatic starts; the other is the recovery after a drive drop. The app never restarts the
+    /// stack because it looks down: a planned deploy keeps it down on purpose.
     private func startForLoginIfNeeded() {
         guard startAtLogin, config != nil else { return }
         let previous = try? String(contentsOf: BarPaths.loginMarker, encoding: .utf8)
@@ -371,8 +380,71 @@ final class AppModel {
         snapshot.store = storeState
     }
 
-    /// Restarts a stopped bridge, one at a time. This is the only thing the app restarts by itself, and it
-    /// never runs the stack's own `up` or `down`. The runner repeats every safety check before it acts.
+    // MARK: Drive drops
+
+    /// Runs at startup and again on every poll until it succeeds, because the app may open while the drive is away.
+    private func startDriveWatch() {
+        guard let path = config?.diskPath, driveWatch == nil else { return }
+        driveWatch = DriveWatch(path: path) { [weak self] in self?.driveDropped() }
+        if driveWatch == nil, !driveWatchUnavailableLogged {
+            driveWatchUnavailableLogged = true
+            BarLog.write("warn", "drive.watch_unavailable", loc: "AppModel.startDriveWatch", ctx: ["path": path])
+        }
+    }
+
+    private func driveDropped() {
+        // While an action or another session owns the stack, a drop is theirs to deal with. Recording it would
+        // let the recovery restart a stack that a Stop or a deploy is taking down on purpose.
+        guard activeAction == nil, !externalBusy else {
+            BarLog.write("info", "drive.drop_ignored", loc: "AppModel.driveDropped", ctx: ["reason": "stack_being_changed"])
+            return
+        }
+        let stackWasRunning = (snapshot.containers?.running ?? 0) > 0
+        if driveRecovery.driveDropped(stackWasRunning: stackWasRunning, at: Date()), let droppedAt = driveRecovery.droppedAt {
+            try? FileManager.default.createDirectory(at: BarPaths.root, withIntermediateDirectories: true)
+            try? ISO8601DateFormatter().string(from: droppedAt).write(to: BarPaths.driveDrop, atomically: true, encoding: .utf8)
+        }
+        BarLog.write(
+            "warn", "drive.drop_recorded", loc: "AppModel.driveDropped",
+            ctx: ["stack_was_running": "\(stackWasRunning)", "pending": "\(driveRecovery.droppedAt != nil)"]
+        )
+        wake()
+    }
+
+    private func forgetDriveDrop(reason: String) {
+        driveRecovery.reset()
+        try? FileManager.default.removeItem(at: BarPaths.driveDrop)
+        BarLog.write("info", "drive.drop_forgotten", loc: "AppModel.forgetDriveDrop", ctx: ["reason": reason])
+    }
+
+    /// Restarts the stack once after its drive dropped off and came back. The runner repeats every safety check,
+    /// so a deploy that started in the meantime still wins.
+    private func recoverFromDriveDropIfDue() {
+        startDriveWatch()
+        guard driveRecovery.droppedAt != nil else { return }
+        // Another session running the stack's `up` or `down` has taken it over, so the drop is no longer ours.
+        if externalBusy {
+            forgetDriveDrop(reason: "external_change")
+            return
+        }
+        guard let driveWatch else { return }
+        let now = Date()
+        driveRecovery.observe(driveReadable: driveWatch.isMounted() && !snapshot.driveBlocked, at: now)
+        let clear = activeAction == nil && !externalBusy
+        switch driveRecovery.next(clear: clear, stackHealthy: verdict.overall == .online, now: now) {
+        case .wait:
+            return
+        case .discard:
+            forgetDriveDrop(reason: "stack_healthy")
+        case .recover:
+            forgetDriveDrop(reason: "recovering")
+            BarLog.write("warn", "drive.recovery_started", loc: "AppModel.recoverFromDriveDropIfDue")
+            launch(.recover)
+        }
+    }
+
+    /// Restarts a stopped bridge, one at a time. Apart from the drive-drop recovery, this is the only thing the
+    /// app restarts by itself, and it never runs the stack's own `up` or `down`. The runner repeats every safety check before it acts.
     private func watchBridges(
         readings: [BridgeReading]?, targets: [BridgeTarget], containers: ContainerReading?, driveBlocked: Bool
     ) {
@@ -487,6 +559,7 @@ final class AppModel {
         lastChecked = Date()
         now = Date()
         trackAction()
+        recoverFromDriveDropIfDue()
     }
 }
 

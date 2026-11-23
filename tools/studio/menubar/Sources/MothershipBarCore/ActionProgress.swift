@@ -8,12 +8,13 @@ struct ProgressLine: Decodable {
 }
 
 public enum ActionStep: String, Sendable, Equatable {
-    case waiting, down, up, finishing
+    case waiting, down, up, finishing, clear
     case desktop, prepare, preflight, stopped, build, builder, site, activate, mcp
 
     public var title: String {
         switch self {
         case .waiting: "Waiting for the container runtime"
+        case .clear: "Clearing containers the drive left stuck"
         case .down: "Stopping containers"
         case .up: "Starting containers"
         case .finishing: "Finishing"
@@ -96,6 +97,9 @@ public func failureMessage(progress: ActionProgress, lastLogLine: String?) -> St
     if progress.exitCode == actionBuilderRunningExitCode {
         return "The site is down and the image builder is still running. Stop the builder before starting the site."
     }
+    if progress.exitCode == actionStackAlreadyStoppedExitCode {
+        return "The drive dropped off and came back, but every container was already stopped, so the site was left down. Start it if it should be running."
+    }
     if progress.exitCode == actionSiteNotBackExitCode {
         return "The site didn't come back, so the app stopped here and won't try again. Check the log."
     }
@@ -105,6 +109,7 @@ public func failureMessage(progress: ActionProgress, lastLogLine: String?) -> St
     let lead: String
     switch progress.failedStep {
     case "waiting": lead = "The container runtime didn't become ready."
+    case "clear": lead = "The containers the drive left stuck couldn't all be cleared."
     case "down": lead = "The containers didn't stop cleanly."
     case "up": lead = "The containers didn't start cleanly."
     case "desktop": lead = "Some ArtCraft apps didn't update."
