@@ -32,6 +32,7 @@ class FakeMothership:
         self.corrupt_copy = False
         # Tool name -> how many of its next answers are cut short after the headers (the call itself is applied).
         self.cut_answers = {}
+        # (tool, request_id) -> the first result of a save or vectorize, which a repeat replays.
         self.saves_by_request = {}
         self.elsewhere_hits = 0
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
@@ -139,19 +140,11 @@ class _Handler(BaseHTTPRequestHandler):
             with fake.lock:
                 fake.saved.append({"tool": tool, "name": file_name, "sha256": hashlib.sha256(data).hexdigest(), "size": len(data), "arguments": arguments})
             if tool == "vectorize":
-                return self._json(status=200, payload={"result": {"id": VECTORIZATION_ID, "status": "queued", "kind": "one_off"}})
-            with fake.lock:
-                first = fake.saves_by_request.get(arguments.get("request_id"))
-                if first is None:
-                    first = {"asset_id": 7 + len(fake.saves_by_request), "name": arguments.get("name", file_name), "sha256": hashlib.sha256(data).hexdigest()}
-                    fake.saves_by_request[arguments.get("request_id")] = first
-                    result = dict(first, replayed=False)
-                else:
-                    result = dict(first, replayed=True)
-                cut = fake.cut_answers.get(tool, 0) > 0
-                if cut:
-                    fake.cut_answers[tool] -= 1
-            return self._json(status=200, payload={"result": result}, cut=cut)
+                return self._replay(fake=fake, tool=tool, arguments=arguments, first={"id": VECTORIZATION_ID, "status": "queued", "kind": "one_off"})
+            first = {"asset_id": 7 + len(fake.saves_by_request), "name": arguments.get("name", file_name), "sha256": hashlib.sha256(data).hexdigest()}
+            return self._replay(fake=fake, tool=tool, arguments=arguments, first=first)
+        if tool == "vectorize":
+            return self._replay(fake=fake, tool=tool, arguments=arguments, first={"id": VECTORIZATION_ID, "status": "queued", "kind": "asset"})
         if tool == "save":
             return self._json(status=422, payload={"error": "Send the file at local_path with the call, as the multipart field file."})
         if tool == "fetch":
@@ -163,6 +156,21 @@ class _Handler(BaseHTTPRequestHandler):
         if tool == "search" and str(arguments.get("query", "")).startswith("sleep:"):
             time.sleep(float(arguments["query"].split(":")[1]))
         return self._json(status=200, payload={"result": {"folders": [{"id": 1, "name": "Renders"}], "next_after_id": None}})
+
+    def _replay(self, fake, tool, arguments, first):
+        """A save or vectorize: the first call with a request_id is applied once, a repeat answers that first result
+        with replayed true. The answer is cut short while cut_answers asks for it."""
+        with fake.lock:
+            key = (tool, arguments.get("request_id"))
+            if key in fake.saves_by_request:
+                result = dict(fake.saves_by_request[key], replayed=True)
+            else:
+                fake.saves_by_request[key] = first
+                result = dict(first, replayed=False)
+            cut = fake.cut_answers.get(tool, 0) > 0
+            if cut:
+                fake.cut_answers[tool] -= 1
+        return self._json(status=200, payload={"result": result}, cut=cut)
 
     def _copy(self, fake, name):
         data = fake.fetch_bytes

@@ -29,6 +29,7 @@ LIBRARY_TOOLS = [
     "library_vectorization",
 ]
 REQUEST_ID = "00000000-0000-4000-8000-000000000001"
+OTHER_REQUEST_ID = "00000000-0000-4000-8000-000000000002"
 ACCOUNT = "launcher-test"
 
 
@@ -490,6 +491,17 @@ class VectorizeTest(LauncherCase):
 
         self.assertEqual(["vectorize"], self.site.tool_calls())
         self.assertEqual([], self.site.saved)
+
+    def test_a_conversion_whose_answer_is_cut_short_is_sent_again_and_replays(self):
+        path = self.local_file("logo.png")
+        for arguments in ({"local_path": path, "request_id": REQUEST_ID}, {"asset_id": 7, "format": "svg", "request_id": OTHER_REQUEST_ID}):
+            self.site.cut_answers["vectorize"] = 1
+            result = self.session().call("library_vectorize", arguments)
+
+            self.assertNotIn("isError", result)
+            self.assertIs(True, result["structuredContent"]["replayed"])
+        self.assertEqual(4, len(self.site.tool_calls("vectorize")))
+        self.assertEqual({("vectorize", REQUEST_ID), ("vectorize", OTHER_REQUEST_ID)}, set(self.site.saves_by_request))
 
     def test_a_result_copy_lands_at_a_local_path_and_a_status_read_copies_nothing(self):
         destination = os.path.join(self.local, "out")
