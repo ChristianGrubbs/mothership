@@ -121,3 +121,74 @@ is `127.0.0.1:20241/ready`.
 Point the public hostname's proxied CNAME at the new tunnel (Cloudflare's
 tunnel address for its id). To roll back, point it at the previous tunnel. The site moves as soon as the DNS change
 propagates.
+
+## Backups
+
+`backup.sh` (also `stack.sh backup …`) writes a backup set to
+`$MOTHERSHIP_HOME/backups/<UTC stamp>/`. A set has four files:
+
+- `postgres.dump`: `pg_dump` custom format.
+- `redis.rdb`: a fresh `BGSAVE`, covering every Redis database.
+- `state.tar.gz`: `app.env`, `stack.env`, `storage/`, `looper/`, `video/`,
+  `higgsfield-session/` and `tunnel/`.
+- `manifest.json`: the bytes and sha256 of each file, the exact row count of
+  every table and the Redis keyspace.
+
+Elasticsearch is not backed up, because its indices are rebuilt from Postgres.
+Asset bytes stay in the S3 bucket. The host keeps the newest four sets
+(`MOTHERSHIP_BACKUP_KEEP`). Every run appends JSONL events to
+`backups/backup.jsonl`.
+
+```bash
+source/deploy/linux-host/backup.sh create          # one set, path printed
+source/deploy/linux-host/backup.sh restore-test    # newest set into a scratch database
+```
+
+`restore-test` runs these checks and exits 0 only if all of them pass:
+
+1. Checks every file against the manifest.
+2. Restores the dump into a scratch database (`mothership_restore_check`),
+   compares every table's row count with the manifest, then drops the scratch
+   database.
+3. Runs `redis-check-rdb` on the RDB.
+4. Lists the state archive.
+
+The manifest counts are taken just before `pg_dump`, outside its snapshot. A
+write between the two shows up as exit 3 with the differing tables listed.
+
+### Off-host copies (Windows host)
+
+On a Hyper-V host the copies live on a disk that holds neither the VM nor
+Windows.
+
+1. On Windows, run `windows/install-backup-pull.ps1` once, elevated. It does
+   four things:
+   - Creates `G:\Mothership\backups`, readable only by the owner, SYSTEM and
+     Administrators.
+   - Copies `pull-backup.ps1` to `D:\Mothership\scripts`.
+   - Creates the key `C:\Users\<user>\.ssh\mothership_backup_ed25519`.
+   - Registers the scheduled task `\Mothership\Mothership Backup Pull`. It runs
+     every 6 hours from 00:30, uses S4U and needs nobody logged in.
+2. In the VM, authorize that key for one command only, by adding this line to
+   `~mothership/.ssh/authorized_keys`:
+
+   ```text
+   restrict,command="/srv/mothership/source/deploy/linux-host/backup.sh stream" ssh-ed25519 AAAA… mothership-backup-pull
+   ```
+
+Each run has the VM create a set and stream it as a tar. The puller then:
+
+- checks every file's sha256 against the manifest;
+- keeps the set as `G:\Mothership\backups\<stamp>\`;
+- keeps every set from the last 14 days, and never fewer than the newest 8;
+- logs JSONL to `G:\Mothership\backups\pull-backup.jsonl`.
+
+Run it by hand with `schtasks /run /tn "\Mothership\Mothership Backup Pull"`.
+
+### Restoring the live stack from a set
+
+1. Run `stack.sh stop`.
+2. Unpack `state.tar.gz` into `state/`.
+3. Restore Postgres and Redis as in "First install and data migration", steps
+   4 and 5, using the set's `postgres.dump` and `redis.rdb`.
+4. Run `stack.sh up`, then `stack.sh verify`.
