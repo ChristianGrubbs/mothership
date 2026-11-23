@@ -30,6 +30,9 @@ class FakeMothership:
         self.refuse_grant = False
         self.fetch_bytes = b"PNG-out"
         self.corrupt_copy = False
+        # Tool name -> how many of its next answers are cut short after the headers (the call itself is applied).
+        self.cut_answers = {}
+        self.saves_by_request = {}
         self.elsewhere_hits = 0
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
         self.server.daemon_threads = True
@@ -107,12 +110,13 @@ class _Handler(BaseHTTPRequestHandler):
         return self._json(status=200, payload={"token_type": "Bearer", "expires_in": 3600, "access_token": fake.issue()})
 
     def _arguments(self, body):
-        """The JSON body, or the multipart fields arguments and file, parsed as PHP's form parser reads them."""
+        """The JSON body, or the multipart fields arguments, upload and file, parsed as PHP's form parser reads them.
+        The upload is (name, bytes): the name from the JSON field upload, else what PHP keeps of the file name."""
         kind = self.headers.get("Content-Type", "")
         if kind.startswith("application/json"):
             return json.loads(body.decode("utf-8") or "{}"), None
         boundary = kind.split("boundary=", 1)[1].strip('"').encode("ascii")
-        arguments, upload = {}, None
+        arguments, meta, file_name, data_in = {}, {}, None, None
         for chunk in body.split(b"--" + boundary)[1:-1]:
             head, _, data = chunk[2:].partition(b"\r\n\r\n")
             data = data[:-2]
@@ -120,9 +124,14 @@ class _Handler(BaseHTTPRequestHandler):
             name = _parameter(header=disposition, key="name")
             if name == "arguments":
                 arguments = json.loads(data.decode("utf-8"))
+            elif name == "upload":
+                meta = json.loads(data.decode("utf-8"))
             elif name == "file":
-                upload = (_parameter(header=disposition, key="filename"), data)
-        return arguments, upload
+                # PHP keeps only what follows the last / or \ of an upload's file name.
+                file_name, data_in = re.split(r"[/\\]", _parameter(header=disposition, key="filename"))[-1], data
+        if data_in is None:
+            return arguments, None
+        return arguments, (meta.get("name") or file_name, data_in)
 
     def _tool(self, fake, tool, arguments, upload):
         if tool in ("save", "vectorize") and upload is not None:
@@ -131,8 +140,18 @@ class _Handler(BaseHTTPRequestHandler):
                 fake.saved.append({"tool": tool, "name": file_name, "sha256": hashlib.sha256(data).hexdigest(), "size": len(data), "arguments": arguments})
             if tool == "vectorize":
                 return self._json(status=200, payload={"result": {"id": VECTORIZATION_ID, "status": "queued", "kind": "one_off"}})
-            name = arguments.get("name", file_name)
-            return self._json(status=200, payload={"result": {"asset_id": 7, "name": name, "sha256": hashlib.sha256(data).hexdigest(), "replayed": False}})
+            with fake.lock:
+                first = fake.saves_by_request.get(arguments.get("request_id"))
+                if first is None:
+                    first = {"asset_id": 7 + len(fake.saves_by_request), "name": arguments.get("name", file_name), "sha256": hashlib.sha256(data).hexdigest()}
+                    fake.saves_by_request[arguments.get("request_id")] = first
+                    result = dict(first, replayed=False)
+                else:
+                    result = dict(first, replayed=True)
+                cut = fake.cut_answers.get(tool, 0) > 0
+                if cut:
+                    fake.cut_answers[tool] -= 1
+            return self._json(status=200, payload={"result": result}, cut=cut)
         if tool == "save":
             return self._json(status=422, payload={"error": "Send the file at local_path with the call, as the multipart field file."})
         if tool == "fetch":
@@ -163,7 +182,7 @@ class _Handler(BaseHTTPRequestHandler):
         except OSError:
             pass  # The launcher reused an identical file and closed without reading.
 
-    def _json(self, status, payload, headers=None):
+    def _json(self, status, payload, headers=None, cut=False):
         data = payload if isinstance(payload, bytes) else json.dumps(payload).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "text/html" if isinstance(payload, bytes) else "application/json")
@@ -171,6 +190,11 @@ class _Handler(BaseHTTPRequestHandler):
         for key, value in (headers or {}).items():
             self.send_header(key, value)
         self.end_headers()
+        if cut:
+            # Half the promised body, then the connection drops.
+            self.wfile.write(data[: len(data) // 2])
+            self.close_connection = True
+            return
         self.wfile.write(data)
 
 

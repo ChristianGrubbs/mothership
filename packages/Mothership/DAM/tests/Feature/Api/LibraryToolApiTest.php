@@ -72,7 +72,11 @@ beforeEach(function () {
             return $request->postJson(route($route), $arguments);
         }
 
-        return $request->post(route($route), ['arguments' => json_encode($arguments), 'file' => new UploadedFile($upload, basename($upload), null, null, true)]);
+        return $request->post(route($route), [
+            'arguments' => json_encode($arguments),
+            'upload'    => json_encode(['name' => basename($upload)]),
+            'file'      => new UploadedFile($upload, basename($upload), null, null, true),
+        ]);
     };
     $this->saveArguments = fn (string $path, array $extra = []): array => [
         'local_path' => $path, 'folder_id' => (int) $this->folder->id, 'producer' => ['tool' => 'blender'], 'request_id' => (string) Str::uuid(), ...$extra,
@@ -134,6 +138,15 @@ it('returns the first asset for a repeated request_id instead of saving a second
 
     $asset = ($this->send)('admin.api.dam.library_tools.get_asset', ['asset_id' => $first['asset_id']])->assertOk()->json('result');
     expect($asset['producer'])->toBe('blender')->and($asset['producer_version'])->toBe('4.4')->and($asset['sha256'])->toBe($first['sha256']);
+});
+
+it('names a saved file as the stdio server does, backslash and all', function () {
+    // A backslash is a legal file name character here; PHP keeps only what follows it in an upload's own file name.
+    $path = ($this->png)('draft\\hero.png');
+
+    ($this->send)('admin.api.dam.library_tools.save', ($this->saveArguments)($path), $path)
+        ->assertOk()
+        ->assertJsonPath('result.name', 'draft hero.png');
 });
 
 it('never reads or writes a path the caller names', function () {

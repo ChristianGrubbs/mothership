@@ -51207,7 +51207,7 @@
     },
     "/api/v1/rest/library/tools/save": {
       "post": {
-        "description": "Save a file as a new asset (folder_id) or a stack member (stack_asset_id), with producer, provenance, notes and request_id replay. The file is the multipart field file and stands in for local_path, which is checked as an argument and never opened; without name the upload's own file name is used. Runs the library_save tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
+        "description": "Save a file as a new asset (folder_id) or a stack member (stack_asset_id), with producer, provenance, notes and request_id replay. The file is the multipart field file and stands in for local_path, which is checked as an argument and never opened; without name the local file's own name is used, sent as the JSON field upload because PHP keeps only the part of an upload's file name after its last backslash. Runs the library_save tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
         "operationId": "admin.api.dam.library_tools.save",
         "parameters": [],
         "requestBody": {
@@ -51215,7 +51215,8 @@
             "multipart/form-data": {
               "example": {
                 "arguments": "{\"local_path\": \"/Users/agent/renders/hero.png\", \"folder_id\": 12, \"title\": \"Hero render\", \"tags\": [\"lobby\"], \"producer\": {\"tool\": \"blender\", \"version\": \"4.4\"}, \"provenance\": {\"backend\": \"cycles\", \"reference_asset_ids\": [7]}, \"notes\": \"Final lighting pass.\", \"request_id\": \"6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f\"}",
-                "file": "binary file"
+                "file": "binary file",
+                "upload": "{\"name\": \"hero.png\"}"
               },
               "schema": {
                 "properties": {
@@ -51225,6 +51226,10 @@
                   },
                   "file": {
                     "format": "binary",
+                    "type": "string"
+                  },
+                  "upload": {
+                    "description": "The local file's own name as one JSON object, {\"name\": ...}. Without it the upload's file name is used.",
                     "type": "string"
                   }
                 },
@@ -51236,7 +51241,7 @@
               }
             }
           },
-          "description": "Save a file as a new asset (folder_id) or a stack member (stack_asset_id), with producer, provenance, notes and request_id replay. The file is the multipart field file and stands in for local_path, which is checked as an argument and never opened; without name the upload's own file name is used. Runs the library_save tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
+          "description": "Save a file as a new asset (folder_id) or a stack member (stack_asset_id), with producer, provenance, notes and request_id replay. The file is the multipart field file and stands in for local_path, which is checked as an argument and never opened; without name the local file's own name is used, sent as the JSON field upload because PHP keeps only the part of an upload's file name after its last backslash. Runs the library_save tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
           "required": true
         },
         "responses": {

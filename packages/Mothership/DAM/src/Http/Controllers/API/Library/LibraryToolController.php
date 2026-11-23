@@ -24,8 +24,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * api.scope has already checked the scope of the tool's REST twin (Config/api-acl.php).
  *
  * The launcher reads and writes the agent's files itself, so this server never opens a path the caller names. A file
- * to save or vectorize arrives as the multipart field `file`, with the arguments as the JSON field `arguments`, and its
- * bytes stand in for local_path. A file copied out (fetch, or vectorization with format) is answered with its bytes,
+ * to save or vectorize arrives as the multipart field `file`, with the arguments as the JSON field `arguments` and the
+ * local file's name as the JSON field `upload`, and its bytes stand in for local_path. A file copied out (fetch, or vectorization with format) is answered with its bytes,
  * the result riding in X-Library-Result; dest_dir is checked against the tool's rules and otherwise ignored. Anything
  * else answers {"result": ...}, and a refusal {"error": ...} with the same text the stdio server gives.
  */
@@ -51,7 +51,7 @@ class LibraryToolController extends Controller
                     $arguments['local_path'] = (string) $upload->getRealPath();
                     if ($tool === 'save') {
                         // The stdio server's default name is the local file's own; the launcher sends that name.
-                        $arguments['name'] ??= $upload->getClientOriginalName();
+                        $arguments['name'] ??= $this->localName(request: $request, upload: $upload);
                     }
                 }
 
@@ -111,6 +111,20 @@ class LibraryToolController extends Controller
         }
 
         return $file;
+    }
+
+    /**
+     * The local file's own name, from the JSON field upload ({"name": ...}). PHP keeps only the part of an upload's
+     * file name after its last backslash, a legal character in a file name here, and a plain form field would be
+     * trimmed; the upload's file name is the fallback.
+     */
+    private function localName(Request $request, UploadedFile $upload): string
+    {
+        $raw = $request->request->all()['upload'] ?? null;
+        $meta = is_string($raw) ? json_decode($raw, true) : null;
+        $name = is_array($meta) ? ($meta['name'] ?? null) : null;
+
+        return is_string($name) && $name !== '' ? $name : $upload->getClientOriginalName();
     }
 
     private function stream(LibraryTransfer $transfer): StreamedResponse

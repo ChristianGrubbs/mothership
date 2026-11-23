@@ -389,6 +389,20 @@ class SaveTest(LauncherCase):
         self.assertEqual([sha256(data)], [saved["sha256"] for saved in self.site.saved])
         self.assertEqual(2, len(self.site.tool_calls("save")))
 
+    def test_a_save_whose_answer_is_cut_short_is_sent_again_and_replays(self):
+        self.site.cut_answers["save"] = 1
+        result = self.session().call("library_save", self.save_arguments(path=self.local_file("render.png")))
+
+        self.assertNotIn("isError", result)
+        self.assertEqual((7, True), (result["structuredContent"]["asset_id"], result["structuredContent"]["replayed"]))
+        self.assertEqual(2, len(self.site.tool_calls("save")))
+        self.assertEqual(1, len(self.site.saves_by_request))
+
+    def test_a_name_with_a_backslash_reaches_the_server_whole(self):
+        # PHP keeps only what follows the last backslash of an upload's file name, so the name also travels as JSON.
+        self.session().call("library_save", self.save_arguments(path=self.local_file("draft\\hero.png")))
+        self.assertEqual("draft\\hero.png", self.site.saved[0]["name"])
+
 
 class FetchTest(LauncherCase):
     def destination(self):

@@ -49,7 +49,10 @@ runs one copy per open agent session, and at about 100 MB of PHP per copy that i
 - **Files in.** For `library_save` and `library_vectorize` with `local_path`, the launcher applies the server's rules for
   `local_path` on this machine, copies the file to a private snapshot, checks the original did not change while it was
   read, and sends the snapshot as the multipart field `file` with the arguments as the JSON field `arguments`. The file's
-  own name travels as the upload's file name, so the saved name is the one the stdio server would use.
+  own name also goes as the JSON field `upload` (`{"name": ...}`), because PHP keeps only the part of an upload's file
+  name after its last `\`; so the saved name is the one the stdio server would use.
+- **Answers cut short.** A 200 whose body breaks off is treated like a dropped connection and sent again, so a save that
+  was applied answers with its replay instead of an error.
 - **Files out.** For `library_fetch` and `library_vectorization` with `format`, the server checks access and the
   arguments, then answers with the file's bytes and the result in the `X-Library-Result` header (base64 JSON). The
   launcher then checks `dest_dir` on this machine, streams into a hidden partial file there, verifies size and sha256,
@@ -113,8 +116,6 @@ the same answer either way. The differences:
 - `dest_dir` is on the agent's machine, so the server's rule that it lies outside The Mothership's `storage/` does not
   arise. It is checked after the server answers, as the stdio server checks access before the folder.
 - An unknown tool name is answered by the launcher with the stdio server's words, without a network call.
-- PHP keeps only the part of an uploaded file name after its last `\`. A local file whose name contains `\` is therefore
-  saved under that last part unless the call passes `name`.
 
 ### Server settings
 

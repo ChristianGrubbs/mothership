@@ -566,7 +566,12 @@ class Library:
         folder, snapshot = self.files.snapshot(real_path=real_path, size=size)
         started = time.monotonic()
         try:
-            fields = [("arguments", json.dumps(arguments, ensure_ascii=False))]
+            # The file's own name also goes as JSON: PHP keeps only the part of an upload's file name after its last
+            # backslash.
+            fields = [
+                ("arguments", json.dumps(arguments, ensure_ascii=False)),
+                ("upload", json.dumps({"name": os.path.basename(real_path)}, ensure_ascii=False)),
+            ]
             bodies = []
 
             def build(token: str) -> urllib.request.Request:
@@ -622,9 +627,9 @@ class Library:
         )
 
     def _exchange(self, tool: str, build) -> tuple:
-        """Sends one tool call. A dropped connection or a busy gateway is tried again twice; a refused bearer once, after
-        a refresh. Returns (status, headers, response, payload): response is the unread body of a 200 that is not JSON,
-        payload the JSON object of any other answer.
+        """Sends one tool call. A dropped connection, an answer cut short or a busy gateway is tried again twice; a refused
+        bearer once, after a refresh. Returns (status, headers, response, payload): response is the unread body of a 200
+        that is not JSON, payload the JSON object of any other answer.
         """
         refreshed = False
         attempt = 0
@@ -654,7 +659,15 @@ class Library:
                     payload = None
                 finally:
                     response.close()
-                return status, headers, None, payload if isinstance(payload, dict) else None
+                if isinstance(payload, dict):
+                    return status, headers, None, payload
+                # The answer was cut short after its headers: the call may have been applied, so it is sent again like
+                # any dropped connection, and a save or vectorize replays its request_id.
+                self.log.event("warn", "http.answer_cut", "Library._exchange", {"tool": tool, "attempt": attempt})
+                if attempt < ATTEMPTS:
+                    time.sleep(_backoff(retry_after=None, attempt=attempt))
+                    continue
+                raise Unreachable(NOT_ANSWERING % "its answer was cut short")
             payload = _read_json_object(response=response)
             if status == 401 and not refreshed:
                 refreshed = True
