@@ -41,8 +41,9 @@ class LibraryToolController extends Controller
         $admin = $this->admin();
         try {
             $input = $this->input(request: $request);
-            $upload = $this->upload(request: $request, tool: $tool, input: $input);
-            $outcome = (new LibraryTool(action: $tool))->perform(input: $input, via: 'rest', run: function (array $arguments) use ($tool, $upload, $admin): array|LibraryTransfer {
+            $outcome = (new LibraryTool(action: $tool))->perform(input: $input, via: 'rest', run: function (array $arguments) use ($request, $tool, $admin): array|LibraryTransfer {
+                // Checked after the field rules, so a call with bad arguments reads the same refusal as on stdio.
+                $upload = $this->upload(request: $request, tool: $tool, arguments: $arguments);
                 if ($tool === 'fetch' || ($tool === 'vectorization' && isset($arguments['format']))) {
                     return $this->operations->transfer(operation: $tool, arguments: $arguments, actor: $admin);
                 }
@@ -88,12 +89,12 @@ class LibraryToolController extends Controller
      * The uploaded file that stands in for local_path, or null when the call names none. local_path without a file,
      * or a file without local_path, is refused: the bytes always come with the call, never from a path.
      *
-     * @param  array<array-key, mixed>  $input
+     * @param  array<string, mixed>  $arguments  the validated arguments
      */
-    private function upload(Request $request, string $tool, array $input): ?UploadedFile
+    private function upload(Request $request, string $tool, array $arguments): ?UploadedFile
     {
         $file = $request->file('file');
-        if (! in_array($tool, self::UPLOADS, true) || ! array_key_exists('local_path', $input)) {
+        if (! in_array($tool, self::UPLOADS, true) || ! array_key_exists('local_path', $arguments)) {
             if ($file !== null) {
                 throw new LibraryRefusal(message: 'Send a file only with local_path, to library_save or library_vectorize.', status: 422);
             }
