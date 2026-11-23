@@ -54,7 +54,10 @@ class Settings:
 
     def __init__(self, environ) -> None:
         # The site's address comes only from the environment: this repository names no site.
-        self.base_url = (environ.get("MOTHERSHIP_URL") or "").strip().rstrip("/")
+        address = (environ.get("MOTHERSHIP_URL") or "").strip().rstrip("/")
+        scheme, separator, rest = address.partition("://")
+        # A URL scheme is case-insensitive; the launcher compares and sends the lower-case form.
+        self.base_url = scheme.lower() + separator + rest if rest else address
         home = os.path.expanduser("~")
         self.state_dir = environ.get("MOTHERSHIP_MCP_STATE_DIR") or os.path.join(home, "Library/Caches/mothership-mcp")
         temporary = environ.get("TMPDIR", "/tmp").rstrip("/") or "/tmp"

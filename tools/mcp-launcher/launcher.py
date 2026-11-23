@@ -56,7 +56,12 @@ _scan = _make_scanner(_ScanRules())
 def loads(data):
     """One JSON document from bytes. Raises ValueError or StopIteration when it is not valid."""
     text = data.decode("utf-8").strip(" \t\r\n")
-    value, end = _scan(text, 0)
+    try:
+        value, end = _scan(text, 0)
+    except SystemError:
+        # Python 3.10 and 3.11 build the error from json.decoder only when something has already imported it, and this
+        # file does not, so the C scanner fails without an exception and the interpreter raises SystemError instead.
+        raise ValueError("Not a JSON document") from None
     if end != len(text):
         raise ValueError("Extra data after the JSON document")
     return value

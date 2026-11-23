@@ -40,10 +40,12 @@ def sha256(data):
 class Session:
     """One agent session talking to one launcher."""
 
-    def __init__(self, env):
-        self.process = subprocess.Popen(
-            [sys.executable, "-I", LAUNCHER], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env
-        )
+    def __init__(self, env, stderr_path):
+        self.stderr_path = stderr_path
+        with open(stderr_path, "wb") as stderr:
+            self.process = subprocess.Popen(
+                [sys.executable, "-I", LAUNCHER], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr, env=env
+            )
         self.replies = queue.Queue()
         self.next_id = 0
         threading.Thread(target=self._read, daemon=True).start()
@@ -59,10 +61,18 @@ class Session:
         self.process.stdin.flush()
         return self.next_id
 
+    def next_reply(self, timeout):
+        try:
+            return self.replies.get(timeout=max(0.01, timeout))
+        except queue.Empty:
+            with open(self.stderr_path, "r", encoding="utf-8", errors="replace") as handle:
+                stderr = handle.read()[-4000:]
+            raise AssertionError("The launcher sent no answer in time. Its stderr:\n" + stderr) from None
+
     def wait(self, request_id, timeout=20):
         deadline = time.monotonic() + timeout
         while True:
-            reply = self.replies.get(timeout=max(0.01, deadline - time.monotonic()))
+            reply = self.next_reply(timeout=deadline - time.monotonic())
             if reply.get("id") == request_id:
                 return reply
 
@@ -116,7 +126,9 @@ class LauncherCase(unittest.TestCase):
         return path
 
     def session(self, **settings):
-        session = Session(env=dict(self.env, **settings))
+        self.sessions_started = getattr(self, "sessions_started", 0) + 1
+        stderr_path = os.path.join(self.root, "launcher-stderr-%d.txt" % self.sessions_started)
+        session = Session(env=dict(self.env, **settings), stderr_path=stderr_path)
         self.addCleanup(session.close)
         return session
 
@@ -186,7 +198,7 @@ class ProtocolTest(LauncherCase):
         session.process.stdin.write(b"{not json\n")
         session.process.stdin.flush()
 
-        self.assertEqual(-32700, session.replies.get(timeout=10)["error"]["code"])
+        self.assertEqual(-32700, session.next_reply(timeout=10)["error"]["code"])
         self.assertEqual({}, session.request("ping")["result"])
 
     def test_offers_the_newest_version_when_the_client_asks_for_an_unknown_one(self):
@@ -264,6 +276,13 @@ class CallTest(LauncherCase):
 
         self.assert_refused(result, "MOTHERSHIP_URL is not set")
         self.assertEqual(([], 0), (self.site.tool_calls(), self.site.grants))
+
+    def test_a_site_address_with_an_upper_case_scheme_works(self):
+        session = self.session(MOTHERSHIP_URL=self.site.url.replace("http://", "HTTP://") + "/")
+        result = session.call("library_list_folders")
+
+        self.assertFalse(result.get("isError"), result)
+        self.assertEqual(["list_folders"], self.site.tool_calls())
 
     def test_never_follows_a_redirect_with_the_bearer(self):
         self.site.script("search", (302, b"", {"Location": self.site.url + "/elsewhere"}))
