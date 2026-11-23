@@ -12,7 +12,9 @@ COPY tools/widgets/looper/backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir --requirement requirements.txt
 
 COPY tools/widgets/looper/backend/main.py ./main.py
-RUN useradd --no-create-home --uid "${HOST_UID}" --gid "${HOST_GID}" --shell /usr/sbin/nologin looper \
+# The host group may not exist in the base image (macOS gid 20 does, a Linux user's private group may not).
+RUN (getent group "${HOST_GID}" >/dev/null || groupadd --gid "${HOST_GID}" looper) \
+    && useradd --no-create-home --uid "${HOST_UID}" --gid "${HOST_GID}" --shell /usr/sbin/nologin looper \
     && mkdir -p /app/uploads \
     && chown -R "${HOST_UID}:${HOST_GID}" /app
 

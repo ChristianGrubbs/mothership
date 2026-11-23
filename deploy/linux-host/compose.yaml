@@ -1,0 +1,345 @@
+# The Mothership on a Linux host with Docker Engine + Compose (docs/ops/linux-host.md).
+# Mirrors the macOS launcher's plan in tools/studio/runtime.py: same images, commands, limits,
+# container names, private subnet and bridge endpoints. Run it through stack.sh, which supplies
+# the variables below from <state>/stack.env and renders <state>/generated first.
+name: mothership
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-app-env-file: &app-env-file
+  - path: ${MOTHERSHIP_STATE:?}/app.env
+    # Values reach the containers byte-for-byte, as `container --env-file` passed them on macOS.
+    format: raw
+
+# runtime.py application_env, with service names where the launcher injected container IPs.
+# APP_URL and TRUSTED_PROXIES come from app.env.
+x-app-environment: &app-environment
+  APP_ENV: production
+  APP_DEBUG: "false"
+  APP_ADMIN_URL: admin
+  MOTHERSHIP_PIM_ENABLED: "false"
+  MOTHERSHIP_MEDIA_ACCEL_PREFIX: /__dam_media
+  MOTHERSHIP_REMOTE_ACCEL_PREFIX: /__dam_remote
+  MOTHERSHIP_HOME_LOOPER_API: http://looper:3457
+  DB_CONNECTION: pgsql
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  CACHE_STORE: redis
+  SESSION_DRIVER: redis
+  QUEUE_CONNECTION: redis
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  ELASTICSEARCH_ENABLED: "true"
+  ELASTICSEARCH_HOST: http://elasticsearch:9200
+  MAIL_MAILER: smtp
+  MAIL_HOST: mailpit
+  MAIL_PORT: "1025"
+  MAIL_ENCRYPTION: "null"
+
+x-worker: &worker
+  image: ${QUEUE_IMAGE:?}
+  restart: unless-stopped
+  logging: *logging
+  env_file: *app-env-file
+  user: ${MOTHERSHIP_UID:?}:${MOTHERSHIP_GID:?}
+  working_dir: /var/www/html
+  entrypoint: /bin/bash
+  stop_grace_period: 90s
+  networks: [mothership-private]
+  volumes:
+    - ${MOTHERSHIP_STATE}/storage:/var/www/html/storage
+    - ${MOTHERSHIP_STATE}/generated/workers:/studio-runtime:ro
+  depends_on:
+    fpm:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: docker.io/library/postgres:16-alpine
+    container_name: mothership-private-postgres
+    restart: unless-stopped
+    logging: *logging
+    cpus: 1
+    mem_limit: 1g
+    env_file:
+      - path: ${MOTHERSHIP_STATE}/generated/postgres.env
+        format: raw
+    environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks: [mothership-private]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: docker.io/library/redis:7.2-alpine
+    container_name: mothership-private-redis
+    restart: unless-stopped
+    logging: *logging
+    cpus: 1
+    mem_limit: 256m
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "200mb", "--maxmemory-policy", "volatile-lru"]
+    volumes:
+      - redis-data:/data
+    networks: [mothership-private]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  elasticsearch:
+    image: docker.io/library/elasticsearch:8.17.0
+    container_name: mothership-private-elasticsearch
+    restart: unless-stopped
+    logging: *logging
+    cpus: 1
+    mem_limit: 1g
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      node.name: mothership-private
+      cluster.name: mothership-private
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    networks: [mothership-private]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS 'http://127.0.0.1:9200/_cluster/health?wait_for_status=yellow&timeout=5s' >/dev/null"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+
+  mailpit:
+    image: docker.io/axllent/mailpit:v1.21
+    container_name: mothership-private-mailpit
+    restart: unless-stopped
+    logging: *logging
+    cpus: 1
+    mem_limit: 256m
+    networks: [mothership-private]
+
+  looper:
+    image: ${LOOPER_IMAGE:?}
+    container_name: mothership-private-looper
+    restart: unless-stopped
+    logging: *logging
+    cpus: 2
+    mem_limit: 4g
+    volumes:
+      - ${MOTHERSHIP_STATE}/looper:/app/uploads
+    networks: [mothership-private]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3457/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  fpm:
+    image: ${FPM_IMAGE:?}
+    container_name: mothership-private-fpm
+    restart: unless-stopped
+    logging: *logging
+    cpus: 2
+    mem_limit: 4g
+    env_file: *app-env-file
+    environment:
+      <<: *app-environment
+      MOTHERSHIP_SKIP_MIGRATIONS: "false"
+    entrypoint: /bin/bash
+    command: ["/studio-runtime/entrypoint.sh"]
+    volumes:
+      - ${MOTHERSHIP_STATE}/storage:/var/www/html/storage
+      - ${MOTHERSHIP_STATE}/higgsfield-session:/var/lib/mothership/.config/higgsfield
+      - ${MOTHERSHIP_STATE}/generated/fpm:/studio-runtime:ro
+    networks:
+      mothership-private:
+        # host.py renders nginx's FastCGI upstream with this address.
+        ipv4_address: 192.168.164.10
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+      looper:
+        condition: service_started
+
+  queue:
+    <<: *worker
+    container_name: mothership-private-queue
+    cpus: 2
+    mem_limit: 2g
+    environment:
+      <<: *app-environment
+      QUEUE_NAMES: webhooks,system,completeness,default,broadcastable
+      # One worker per CPU: a single worker capped uploads at about 20 files a minute.
+      STUDIO_WORKER_COUNT: "2"
+    command: ["/studio-runtime/worker-supervisor.sh", "php", "artisan", "queue:work",
+              "--queue=webhooks,system,completeness,default,broadcastable",
+              "--timeout=90", "--tries=3", "--max-jobs=1000", "--max-time=3600", "--sleep=0.5"]
+
+  panorama-queue:
+    <<: *worker
+    container_name: mothership-private-panorama-queue
+    cpus: 4
+    mem_limit: 6g
+    environment:
+      <<: *app-environment
+      QUEUE_WORKER_CONNECTION: panorama
+    command: ["/studio-runtime/worker-supervisor.sh", "php", "artisan", "queue:work", "panorama",
+              "--queue=panorama,video-preview", "--tries=1"]
+
+  stylepress-queue:
+    <<: *worker
+    image: ${FPM_IMAGE:?}
+    container_name: mothership-private-stylepress-queue
+    cpus: 1
+    mem_limit: 1g
+    environment:
+      <<: *app-environment
+    command: ["/studio-runtime/worker-supervisor.sh", "php", "artisan", "queue:work", "database",
+              "--queue=stylepress", "--timeout=80", "--tries=0", "--sleep=3", "--max-time=3600"]
+    volumes:
+      - ${MOTHERSHIP_STATE}/storage:/var/www/html/storage
+      - ${MOTHERSHIP_STATE}/higgsfield-session:/var/lib/mothership/.config/higgsfield
+      - ${MOTHERSHIP_STATE}/generated/workers:/studio-runtime:ro
+    # The FPM image's own check probes port 9000, which a queue worker never opens.
+    healthcheck:
+      test: ["CMD", "php", "-r", "$$p=(int)@file_get_contents('/tmp/studio-worker.pid'); exit($$p>1 && is_dir('/proc/'.$$p) ? 0 : 1);"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  vectorization-queue:
+    <<: *worker
+    container_name: mothership-private-vectorization-queue
+    cpus: 1
+    mem_limit: 1g
+    environment:
+      <<: *app-environment
+      QUEUE_WORKER_CONNECTION: vectorization
+    command: ["/studio-runtime/worker-supervisor.sh", "php", "artisan", "queue:work", "vectorization",
+              "--queue=vectorization", "--timeout=480", "--tries=1", "--memory=512", "--max-jobs=50"]
+
+  ai-index-queue:
+    <<: *worker
+    container_name: mothership-private-ai-index-queue
+    cpus: 1
+    mem_limit: 1g
+    environment:
+      <<: *app-environment
+      QUEUE_WORKER_CONNECTION: ai-index
+    command: ["/studio-runtime/worker-supervisor.sh", "php", "artisan", "queue:work", "ai-index",
+              "--queue=ai-index", "--timeout=300", "--tries=4", "--memory=512", "--max-jobs=200"]
+
+  scheduler:
+    <<: *worker
+    container_name: mothership-private-scheduler
+    cpus: 1
+    # The 03:00 background fan-out starts nine PHP commands alongside schedule:work.
+    mem_limit: 1g
+    environment:
+      <<: *app-environment
+    command: ["/studio-runtime/worker-supervisor.sh", "php", "artisan", "schedule:work", "--no-interaction"]
+
+  nginx:
+    image: docker.io/library/nginx:1.27-alpine
+    container_name: mothership-private-nginx
+    restart: unless-stopped
+    logging: *logging
+    cpus: 1
+    mem_limit: 256m
+    ports:
+      - "127.0.0.1:18090:80"
+    volumes:
+      - ${MOTHERSHIP_SOURCE:?}/public:/var/www/html/public:ro
+      - ${MOTHERSHIP_STATE}/storage:/var/www/html/storage:ro
+      - ${MOTHERSHIP_STATE}/generated/nginx:/etc/nginx/conf.d:ro
+    networks: [mothership-private]
+    depends_on:
+      fpm:
+        condition: service_healthy
+
+  # The two native macOS bridges, in containers on the host network so they listen on the private
+  # network's gateway address exactly as on macOS (app.env keeps MOTHERSHIP_AI_API and
+  # MOTHERSHIP_HOME_VIDEO_API unchanged). The optimizer (Clop) is macOS-only and not served here.
+  ai-bridge:
+    image: ${BRIDGES_IMAGE:?}
+    container_name: mothership-ai-bridge
+    restart: unless-stopped
+    logging: *logging
+    network_mode: host
+    command: ["ai"]
+    environment:
+      AI_HOST: 192.168.164.1
+      AI_PORT: "18767"
+      AI_CAPTION_MODEL: qwen3.5:9b
+      AI_EMBED_MODEL: qwen3-embedding:0.6b
+
+  video-bridge:
+    image: ${BRIDGES_IMAGE:?}
+    container_name: mothership-video-bridge
+    restart: unless-stopped
+    logging: *logging
+    network_mode: host
+    command: ["video"]
+    environment:
+      VIDEO_HOST: 192.168.164.1
+      VIDEO_PORT: "18769"
+      VIDEO_DATA: /data
+      VIDEO_DOWNIE: /usr/local/bin/downie
+      VIDEO_YTDLP: /usr/local/bin/yt-dlp
+      VIDEO_FFMPEG_DIR: /usr/bin
+      VIDEO_OPTIMIZER_API: "off"
+    volumes:
+      - ${MOTHERSHIP_STATE}/video:/data
+
+  tunnel:
+    image: docker.io/cloudflare/cloudflared:2026.11.1
+    container_name: mothership-tunnel
+    profiles: [tunnel]
+    restart: unless-stopped
+    logging: *logging
+    network_mode: host
+    user: ${MOTHERSHIP_UID}:${MOTHERSHIP_GID}
+    command: ["tunnel", "--no-autoupdate", "--loglevel", "info", "--metrics", "127.0.0.1:20241",
+              "run", "--cred-file", "/etc/cloudflared/credentials.json",
+              "--url", "http://127.0.0.1:18090", "${TUNNEL_ID:-}"]
+    volumes:
+      - ${MOTHERSHIP_STATE}/tunnel/credentials.json:/etc/cloudflared/credentials.json:ro
+
+networks:
+  mothership-private:
+    name: mothership-private
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: mothership0
+    ipam:
+      config:
+        - subnet: 192.168.164.0/24
+          gateway: 192.168.164.1
+          # Containers draw addresses from the upper half; FPM's fixed address sits below it.
+          ip_range: 192.168.164.128/25
+
+volumes:
+  postgres-data:
+    name: mothership-private-postgres-data
+  redis-data:
+    name: mothership-private-redis-data
+  elasticsearch-data:
+    name: mothership-private-elasticsearch-data
