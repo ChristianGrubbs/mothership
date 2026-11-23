@@ -24657,6 +24657,196 @@
         "source": "packages/Mothership/DAM/src/Http/Controllers/Organization/LibraryLabelController.php"
     },
     {
+        "id": "POST * /api/v1/rest/library/tools/create_folder",
+        "method": "POST",
+        "domain": "*",
+        "uri": "/api/v1/rest/library/tools/create_folder",
+        "name": "admin.api.dam.library_tools.create_folder",
+        "action": "Mothership\\DAM\\Http\\Controllers\\API\\Library\\LibraryToolController@call",
+        "middleware": [
+            "api",
+            "auth:api",
+            "api.scope",
+            "accept.json",
+            "request.locale"
+        ],
+        "wheres": {
+            "id": "[0-9]+"
+        },
+        "source": "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php"
+    },
+    {
+        "id": "POST * /api/v1/rest/library/tools/fetch",
+        "method": "POST",
+        "domain": "*",
+        "uri": "/api/v1/rest/library/tools/fetch",
+        "name": "admin.api.dam.library_tools.fetch",
+        "action": "Mothership\\DAM\\Http\\Controllers\\API\\Library\\LibraryToolController@call",
+        "middleware": [
+            "api",
+            "auth:api",
+            "api.scope",
+            "accept.json",
+            "request.locale"
+        ],
+        "wheres": {
+            "id": "[0-9]+"
+        },
+        "source": "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php"
+    },
+    {
+        "id": "POST * /api/v1/rest/library/tools/get_asset",
+        "method": "POST",
+        "domain": "*",
+        "uri": "/api/v1/rest/library/tools/get_asset",
+        "name": "admin.api.dam.library_tools.get_asset",
+        "action": "Mothership\\DAM\\Http\\Controllers\\API\\Library\\LibraryToolController@call",
+        "middleware": [
+            "api",
+            "auth:api",
+            "api.scope",
+            "accept.json",
+            "request.locale"
+        ],
+        "wheres": {
+            "id": "[0-9]+"
+        },
+        "source": "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php"
+    },
+    {
+        "id": "POST * /api/v1/rest/library/tools/list_folders",
+        "method": "POST",
+        "domain": "*",
+        "uri": "/api/v1/rest/library/tools/list_folders",
+        "name": "admin.api.dam.library_tools.list_folders",
+        "action": "Mothership\\DAM\\Http\\Controllers\\API\\Library\\LibraryToolController@call",
+        "middleware": [
+            "api",
+            "auth:api",
+            "api.scope",
+            "accept.json",
+            "request.locale"
+        ],
+        "wheres": {
+            "id": "[0-9]+"
+        },
+        "source": "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php"
+    },
+    {
+        "id": "POST * /api/v1/rest/library/tools/list_stack",
+        "method": "POST",
+        "domain": "*",
+        "uri": "/api/v1/rest/library/tools/list_stack",
+        "name": "admin.api.dam.library_tools.list_stack",
+        "action": "Mothership\\DAM\\Http\\Controllers\\API\\Library\\LibraryToolController@call",
+        "middleware": [
+            "api",
+            "auth:api",
+            "api.scope",
+            "accept.json",
+            "request.locale"
+        ],
+        "wheres": {
+            "id": "[0-9]+"
+        },
+        "source": "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php"
+    },
+    {
+        "id": "POST * /api/v1/rest/library/tools/save",
+        "method": "POST",
+        "domain": "*",
+        "uri": "/api/v1/rest/library/tools/save",
+        "name": "admin.api.dam.library_tools.save",
+        "action": "Mothership\\DAM\\Http\\Controllers\\API\\Library\\LibraryToolController@call",
+        "middleware": [
+            "api",
+            "auth:api",
+            "api.scope",
+            "accept.json",
+            "request.locale"
+        ],
+        "wheres": {
+            "id": "[0-9]+"
+        },
+        "source": "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php"
+    },
+    {
+        "id": "POST * /api/v1/rest/library/tools/search",
+        "method": "POST",
+        "domain": "*",
+        "uri": "/api/v1/rest/library/tools/search",
+        "name": "admin.api.dam.library_tools.search",
+        "action": "Mothership\\DAM\\Http\\Controllers\\API\\Library\\LibraryToolController@call",
+        "middleware": [
+            "api",
+            "auth:api",
+            "api.scope",
+            "accept.json",
+            "request.locale"
+        ],
+        "wheres": {
+            "id": "[0-9]+"
+        },
+        "source": "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php"
+    },
+    {
+        "id": "POST * /api/v1/rest/library/tools/update",
+        "method": "POST",
+        "domain": "*",
+        "uri": "/api/v1/rest/library/tools/update",
+        "name": "admin.api.dam.library_tools.update",
+        "action": "Mothership\\DAM\\Http\\Controllers\\API\\Library\\LibraryToolController@call",
+        "middleware": [
+            "api",
+            "auth:api",
+            "api.scope",
+            "accept.json",
+            "request.locale"
+        ],
+        "wheres": {
+            "id": "[0-9]+"
+        },
+        "source": "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php"
+    },
+    {
+        "id": "POST * /api/v1/rest/library/tools/vectorization",
+        "method": "POST",
+        "domain": "*",
+        "uri": "/api/v1/rest/library/tools/vectorization",
+        "name": "admin.api.dam.library_tools.vectorization",
+        "action": "Mothership\\DAM\\Http\\Controllers\\API\\Library\\LibraryToolController@call",
+        "middleware": [
+            "api",
+            "auth:api",
+            "api.scope",
+            "accept.json",
+            "request.locale"
+        ],
+        "wheres": {
+            "id": "[0-9]+"
+        },
+        "source": "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php"
+    },
+    {
+        "id": "POST * /api/v1/rest/library/tools/vectorize",
+        "method": "POST",
+        "domain": "*",
+        "uri": "/api/v1/rest/library/tools/vectorize",
+        "name": "admin.api.dam.library_tools.vectorize",
+        "action": "Mothership\\DAM\\Http\\Controllers\\API\\Library\\LibraryToolController@call",
+        "middleware": [
+            "api",
+            "auth:api",
+            "api.scope",
+            "accept.json",
+            "request.locale"
+        ],
+        "wheres": {
+            "id": "[0-9]+"
+        },
+        "source": "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php"
+    },
+    {
         "id": "POST * /api/v1/rest/locales",
         "method": "POST",
         "domain": "*",

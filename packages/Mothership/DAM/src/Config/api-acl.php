@@ -19,6 +19,12 @@ return [
         'route' => 'admin.api.dam.metadata_fields.index',
         'sort'  => 1,
     ], [
+        // The library tools for the local `mothership` launcher (LibraryToolController) reuse each REST twin's scope.
+        'key'   => 'api.dam.assets',
+        'name'  => 'dam::app.admin.acl.asset',
+        'route' => 'admin.api.dam.library_tools.search',
+        'sort'  => 1,
+    ], [
         'key'   => 'api.dam.assets.edit',
         'name'  => 'dam::app.admin.acl.edit',
         'route' => 'admin.api.dam.assets.edit',
@@ -29,6 +35,11 @@ return [
         'route' => 'admin.api.dam.assets.update',
         'sort'  => 1,
     ], [
+        'key'   => 'api.dam.assets.update',
+        'name'  => 'dam::app.admin.acl.update',
+        'route' => 'admin.api.dam.library_tools.update',
+        'sort'  => 1,
+    ], [
         'key'   => 'api.dam.assets.delete',
         'name'  => 'dam::app.admin.acl.delete',
         'route' => 'admin.api.dam.assets.destroy',
@@ -37,6 +48,11 @@ return [
         'key'   => 'api.dam.assets.upload',
         'name'  => 'dam::app.admin.acl.upload',
         'route' => 'admin.api.dam.assets.upload',
+        'sort'  => 3,
+    ], [
+        'key'   => 'api.dam.assets.upload',
+        'name'  => 'dam::app.admin.acl.upload',
+        'route' => 'admin.api.dam.library_tools.save',
         'sort'  => 3,
     ], [
         'key'   => 'api.dam.assets.re-upload',
@@ -55,9 +71,19 @@ return [
         'key'   => 'api.dam.assets.download', 'name' => 'dam::app.admin.acl.download',
         'route' => 'admin.api.dam.assets.files.model-thumbnail.source', 'sort' => 5,
     ], [
+        'key'   => 'api.dam.assets.download',
+        'name'  => 'dam::app.admin.acl.download',
+        'route' => 'admin.api.dam.library_tools.fetch',
+        'sort'  => 5,
+    ], [
         'key'   => 'api.dam.assets.getById',
         'name'  => 'dam::app.admin.dam.index.directory.actions.get-by-id',
         'route' => 'admin.api.dam.assets.show',
+        'sort'  => 6,
+    ], [
+        'key'   => 'api.dam.assets.getById',
+        'name'  => 'dam::app.admin.dam.index.directory.actions.get-by-id',
+        'route' => 'admin.api.dam.library_tools.get_asset',
         'sort'  => 6,
     ], [
         'key'   => 'api.dam.assets.metadata',
@@ -99,6 +125,11 @@ return [
         'key'   => 'api.dam.assets.files.index',
         'name'  => 'dam::app.admin.acl.view',
         'route' => 'admin.api.dam.assets.files.index',
+        'sort'  => 1,
+    ], [
+        'key'   => 'api.dam.assets.files.index',
+        'name'  => 'dam::app.admin.acl.view',
+        'route' => 'admin.api.dam.library_tools.list_stack',
         'sort'  => 1,
     ], [
         'key'   => 'api.dam.assets.files.store',
@@ -279,6 +310,11 @@ return [
         'route' => 'admin.api.dam.assets.vectorize',
         'sort'  => 1,
     ], [
+        'key'   => 'api.dam.vectorizations.create',
+        'name'  => 'dam::app.admin.acl.create',
+        'route' => 'admin.api.dam.library_tools.vectorize',
+        'sort'  => 1,
+    ], [
         'key'   => 'api.dam.vectorizations.show',
         'name'  => 'dam::app.admin.acl.view',
         'route' => 'admin.api.dam.vectorizations.show',
@@ -287,6 +323,11 @@ return [
         'key'   => 'api.dam.vectorizations.show',
         'name'  => 'dam::app.admin.acl.view',
         'route' => 'admin.api.dam.vectorizations.file',
+        'sort'  => 2,
+    ], [
+        'key'   => 'api.dam.vectorizations.show',
+        'name'  => 'dam::app.admin.acl.view',
+        'route' => 'admin.api.dam.library_tools.vectorization',
         'sort'  => 2,
     ], [
         // P6 D26: tokenized embeds of a video or audio asset.
@@ -337,9 +378,20 @@ return [
         'route' => 'admin.api.dam.directory.index',
         'sort'  => 1,
     ], [
+        // Before api.dam.directory's children: Tree::add replaces the node, and with it any children added so far.
+        'key'   => 'api.dam.directory',
+        'name'  => 'dam::app.admin.acl.directory',
+        'route' => 'admin.api.dam.library_tools.list_folders',
+        'sort'  => 1,
+    ], [
         'key'   => 'api.dam.directory.create',
         'name'  => 'dam::app.admin.acl.create',
         'route' => 'admin.api.dam.directory.store',
+        'sort'  => 1,
+    ], [
+        'key'   => 'api.dam.directory.create',
+        'name'  => 'dam::app.admin.acl.create',
+        'route' => 'admin.api.dam.library_tools.create_folder',
         'sort'  => 1,
     ], [
         'key'   => 'api.dam.directory.edit',

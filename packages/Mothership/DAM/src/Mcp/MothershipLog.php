@@ -12,13 +12,14 @@ use Illuminate\Support\Str;
 final class MothershipLog
 {
     /** Context keys an event may carry; anything else is dropped before the sink. */
-    private const KEYS = ['operation', 'ok', 'outcome', 'reason', 'size', 'mode', 'replayed', 'count', 'reused'];
+    private const KEYS = ['operation', 'ok', 'outcome', 'reason', 'size', 'mode', 'replayed', 'count', 'reused', 'via'];
 
     private static ?string $runId = null;
 
-    public static function operation(string $operation, bool $ok, ?string $reason = null): void
+    /** @param  string  $via  stdio (the artisan server) or rest (LibraryToolController) */
+    public static function operation(string $operation, bool $ok, ?string $reason = null, string $via = 'stdio'): void
     {
-        self::write(level: $ok ? 'info' : 'warning', event: 'mothership.operation', loc: 'LibraryTool::handle', ctx: ['operation' => $operation, 'ok' => $ok, 'reason' => $reason]);
+        self::write(level: $ok ? 'info' : 'warning', event: 'mothership.operation', loc: 'LibraryTool::perform', ctx: ['operation' => $operation, 'ok' => $ok, 'reason' => $reason, 'via' => $via]);
     }
 
     /** @param array<string, scalar|null> $ctx */

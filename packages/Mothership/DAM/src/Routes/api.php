@@ -16,6 +16,7 @@ Route::group([
 ], function () {
     require 'V1/asset-routes.php';
     require 'V1/organization-routes.php';
+    require 'V1/library-tool-routes.php';
 });
 
 Route::group([

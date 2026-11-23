@@ -1,7 +1,7 @@
 {
-  "accounted": 1605,
+  "accounted": 1615,
   "counts": {
-    "api": 292,
+    "api": 302,
     "authentication": 10,
     "head-alias": 497,
     "health": 1,
@@ -12,7 +12,7 @@
     "unsupported": 0
   },
   "missing": [],
-  "registered": 1605,
+  "registered": 1615,
   "routes": [
     {
       "id": "DELETE * /admin/ai-agent/agents/{id}",
@@ -7238,6 +7238,56 @@
       "id": "POST * /api/v1/rest/labels/{label}/assets",
       "kind": "api",
       "reason": "Supported DAM integration operation."
+    },
+    {
+      "id": "POST * /api/v1/rest/library/tools/create_folder",
+      "kind": "api",
+      "reason": "Supported DAM integration operation: the local mothership launcher's library tools."
+    },
+    {
+      "id": "POST * /api/v1/rest/library/tools/fetch",
+      "kind": "api",
+      "reason": "Supported DAM integration operation: the local mothership launcher's library tools."
+    },
+    {
+      "id": "POST * /api/v1/rest/library/tools/get_asset",
+      "kind": "api",
+      "reason": "Supported DAM integration operation: the local mothership launcher's library tools."
+    },
+    {
+      "id": "POST * /api/v1/rest/library/tools/list_folders",
+      "kind": "api",
+      "reason": "Supported DAM integration operation: the local mothership launcher's library tools."
+    },
+    {
+      "id": "POST * /api/v1/rest/library/tools/list_stack",
+      "kind": "api",
+      "reason": "Supported DAM integration operation: the local mothership launcher's library tools."
+    },
+    {
+      "id": "POST * /api/v1/rest/library/tools/save",
+      "kind": "api",
+      "reason": "Supported DAM integration operation: the local mothership launcher's library tools."
+    },
+    {
+      "id": "POST * /api/v1/rest/library/tools/search",
+      "kind": "api",
+      "reason": "Supported DAM integration operation: the local mothership launcher's library tools."
+    },
+    {
+      "id": "POST * /api/v1/rest/library/tools/update",
+      "kind": "api",
+      "reason": "Supported DAM integration operation: the local mothership launcher's library tools."
+    },
+    {
+      "id": "POST * /api/v1/rest/library/tools/vectorization",
+      "kind": "api",
+      "reason": "Supported DAM integration operation: the local mothership launcher's library tools."
+    },
+    {
+      "id": "POST * /api/v1/rest/library/tools/vectorize",
+      "kind": "api",
+      "reason": "Supported DAM integration operation: the local mothership launcher's library tools."
     },
     {
       "id": "POST * /api/v1/rest/locales",

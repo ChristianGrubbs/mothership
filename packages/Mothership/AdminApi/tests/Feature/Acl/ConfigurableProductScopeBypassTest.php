@@ -28,7 +28,10 @@ it('maps every mutating API scope route in api-acl so no write route fails open'
 
         $isWrite = (bool) array_intersect($route->methods(), ['POST', 'PUT', 'PATCH', 'DELETE']);
 
-        if ($hasScope && $isWrite && ! isset($roles[str_replace('.get', '.index', $name)])) {
+        // The same lookup as ScopeMiddleware::getAclForCurrentRoute: the route's own name, then its .get alias as .index.
+        $mapped = isset($roles[$name]) || isset($roles[str_replace('.get', '.index', $name)]);
+
+        if ($hasScope && $isWrite && ! $mapped) {
             $unmapped[] = $name;
         }
     }

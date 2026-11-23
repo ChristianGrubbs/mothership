@@ -15,6 +15,7 @@ $hiddenAssetP2s1 = ['Feature/AssetHiddenEqualsMissingTest.php', 'answers a comme
 $hiddenAssetRestP2s1 = ['Feature/AssetHiddenEqualsMissingTest.php', 'answers a comment or property on a hidden asset like a missing one on the REST API (P2 S1)'];
 $hiddenAssetLibrary = ['Feature/AssetTest.php', 'refuses a folder-visible but file-private asset everywhere the Library hides it'];
 $p1bReports = ['Feature/AnalyticsReportsTest.php', 'never counts or names a hidden asset\'s events in any report'];
+$libraryToolsRest = ['Feature/Api/LibraryToolApiTest.php', 'keeps hidden folders and assets out of every library tool over REST'];
 $hiddenFolderEndpoints = ['Feature/DirectoryHiddenEqualsMissingTest.php', 'answers a folder the viewer cannot see like a missing one on every folder-id endpoint'];
 
 // P2 S3: a non-editor member under grants, a folder-hidden asset or folder and a draft and an expired asset in a
@@ -142,11 +143,17 @@ return [
     'admin.home.vectorization.file'          => [$s3HomeBytes, $s3rDerived],
     // Agent REST results: only the starting account, and only while it keeps the paid tool.
     'admin.api.dam.vectorizations.file'      => [['Feature/Api/VectorizationApiTest.php', 'refuses without a bearer, without the scope, and for another account\'s conversion']],
+    // The library tools for the local `mothership` launcher: a hidden asset, or another account's conversion, is missing.
+    'admin.api.dam.library_tools.fetch'         => [$libraryToolsRest],
+    'admin.api.dam.library_tools.vectorization' => [['Feature/Api/LibraryToolApiTest.php', 'answers another account\'s conversion like a missing one over REST']],
 
     // listing
     // P3b-2: suggestions never name or count a member the viewer cannot list, on a fresh or a cached read.
     'admin.api.dam.assets.embeds.index'         => [$p6EmbedListRest],
     'admin.api.dam.assets.index'                => [['Feature/Api/AssetApiTest.php', 'only lists assets from granted directories for a custom-role api user'], $p4cServed, $p5aPending],
+    'admin.api.dam.library_tools.list_folders'  => [$libraryToolsRest],
+    'admin.api.dam.library_tools.list_stack'    => [$libraryToolsRest],
+    'admin.api.dam.library_tools.search'        => [$libraryToolsRest],
     'admin.api.dam.assets.related'              => [['Feature/RelatedAssetsTest.php', 'answers a hidden seed like a missing one over REST, and lists only what the key owner may see']],
     'admin.api.dam.batches.show'                => [$p6BatchRest],
     'admin.api.dam.collections.assets.index'    => [$p4cRest, $p4cRestClosed],

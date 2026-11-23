@@ -3,6 +3,8 @@
 namespace Mothership\DAM\Mcp;
 
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
@@ -73,30 +75,48 @@ class LibraryTool extends Tool
 
     public function handle(Request $request, LibraryOperations $operations): Response|ResponseFactory
     {
-        $fields = $this->fields();
-        if (array_diff(array_keys($request->all()), array_keys($fields)) !== []) {
-            return Response::error('Unknown tool argument. Use the published input schema.');
+        try {
+            return Response::structured($this->perform(
+                input: $request->all(),
+                run: fn (array $arguments): array => $operations->execute(operation: $this->action, arguments: $arguments),
+            ));
+        } catch (LibraryRefusal $e) {
+            return Response::error($e->getMessage());
         }
-        $rules = [];
-        foreach ($fields as $key => $field) {
-            $rules[$key] = $field[2];
-            foreach ($field[3] ?? [] as $nested => $rule) {
-                $rules[$key.'.'.$nested] = $rule;
-            }
+    }
+
+    /**
+     * The tool's checks and wording, shared by the stdio server (handle) and the REST route (LibraryToolController):
+     * unknown arguments, the field rules, the 1 MiB cap, then $run with the validated arguments. A refusal is thrown
+     * as LibraryRefusal carrying the text the agent reads; a rule failure as the ValidationException itself.
+     *
+     * @template T
+     *
+     * @param  array<array-key, mixed>  $input
+     * @param  callable(array<string, mixed>): T  $run
+     * @return T
+     *
+     * @throws ValidationException
+     * @throws LibraryRefusal
+     */
+    public function perform(array $input, callable $run, string $via = 'stdio'): mixed
+    {
+        if (array_diff(array_keys($input), array_keys($this->fields())) !== []) {
+            throw new LibraryRefusal(message: 'Unknown tool argument. Use the published input schema.', status: 422);
         }
-        $arguments = $request->validate($rules);
+        $arguments = Validator::validate($input, $this->rules());
         if (strlen(json_encode($arguments, JSON_THROW_ON_ERROR)) > 1024 * 1024) {
-            return Response::error('Tool arguments exceed the 1 MiB limit.');
+            throw new LibraryRefusal(message: 'Tool arguments exceed the 1 MiB limit.', status: 413);
         }
         try {
-            $result = $operations->execute(operation: $this->action, arguments: $arguments);
-            MothershipLog::operation(operation: $this->action, ok: true);
+            $result = $run($arguments);
+            MothershipLog::operation(operation: $this->action, ok: true, via: $via);
 
-            return Response::structured($result);
+            return $result;
         } catch (HttpExceptionInterface $e) {
-            MothershipLog::operation(operation: $this->action, ok: false, reason: 'http_'.$e->getStatusCode());
+            MothershipLog::operation(operation: $this->action, ok: false, reason: 'http_'.$e->getStatusCode(), via: $via);
 
-            return Response::error(match ($e->getStatusCode()) {
+            throw new LibraryRefusal(status: $e->getStatusCode(), message: match ($e->getStatusCode()) {
                 404     => 'Not found.',
                 403     => 'The library account cannot do this (it lacks the permission, or the folder or asset is not open to it).',
                 409     => $e->getMessage() !== '' ? $e->getMessage() : 'The request conflicts with an earlier save, or the asset was merged into another asset.',
@@ -106,18 +126,32 @@ class LibraryTool extends Tool
                 default => 'The operation could not be completed.',
             });
         } catch (ModelNotFoundException) {
-            MothershipLog::operation(operation: $this->action, ok: false, reason: 'not_found');
+            MothershipLog::operation(operation: $this->action, ok: false, reason: 'not_found', via: $via);
 
-            return Response::error('Not found.');
+            throw new LibraryRefusal(message: 'Not found.', status: 404);
         } catch (ContentUnavailable) {
-            MothershipLog::operation(operation: $this->action, ok: false, reason: 'content_unavailable');
+            MothershipLog::operation(operation: $this->action, ok: false, reason: 'content_unavailable', via: $via);
 
-            return Response::error('The stored bytes of this file cannot be read right now (the storage may be offline). Try again later.');
+            throw new LibraryRefusal(message: 'The stored bytes of this file cannot be read right now (the storage may be offline). Try again later.', status: 503);
         } catch (LibraryFailure $e) {
-            MothershipLog::operation(operation: $this->action, ok: false, reason: 'refused');
+            MothershipLog::operation(operation: $this->action, ok: false, reason: 'refused', via: $via);
 
-            return Response::error($e->getMessage());
+            throw new LibraryRefusal(message: $e->getMessage(), status: 422);
         }
+    }
+
+    /** @return array<string, list<mixed>> the Laravel rules of fields(), nested keys spelled out */
+    private function rules(): array
+    {
+        $rules = [];
+        foreach ($this->fields() as $key => $field) {
+            $rules[$key] = $field[2];
+            foreach ($field[3] ?? [] as $nested => $rule) {
+                $rules[$key.'.'.$nested] = $rule;
+            }
+        }
+
+        return $rules;
     }
 
     /**

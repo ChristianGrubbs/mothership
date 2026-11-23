@@ -62,9 +62,13 @@ class LibraryOperations
         private AssetTagWriter $tags,
     ) {}
 
-    public function execute(string $operation, array $arguments): array
+    /**
+     * @param  Admin|null  $actor  the REST caller's own account (LibraryToolController); null for the stdio server,
+     *                             which acts as the configured owner
+     */
+    public function execute(string $operation, array $arguments, ?Admin $actor = null): array
     {
-        $actor = $this->actor();
+        $actor = $actor === null ? $this->actor() : $this->signIn(actor: $actor);
 
         return match ($operation) {
             'search'        => $this->search(actor: $actor, arguments: $arguments),
@@ -95,6 +99,37 @@ class LibraryOperations
         if (! $actor instanceof Admin || ! $actor->status) {
             throw new LibraryFailure('MOTHERSHIP_MCP_USER_ID does not name an active admin account. Fix it in The Mothership\'s .env, then restart the server.');
         }
+        auth('admin')->setUser($actor);
+
+        return $actor;
+    }
+
+    /**
+     * library_fetch, or library_vectorization with format, for a caller that writes the copy itself (the REST route):
+     * the same checks and source as execute, but the stored bytes are handed back open instead of being copied into a
+     * folder on this machine. dest_dir is never read here.
+     */
+    public function transfer(string $operation, array $arguments, Admin $actor): LibraryTransfer
+    {
+        $actor = $this->signIn(actor: $actor);
+        [$open, $sha256, $size, $name, $result] = match (true) {
+            $operation === 'fetch'                                        => $this->fetchSource(actor: $actor, arguments: $arguments),
+            $operation === 'vectorization' && isset($arguments['format']) => $this->vectorizationSource(actor: $actor, arguments: $arguments),
+            default                                                       => throw new LibraryFailure('Only library_fetch, and library_vectorization with format, copy a file out.'),
+        };
+        $stream = $open();
+        MothershipLog::decision(event: $operation, loc: 'LibraryOperations::transfer', ctx: ['outcome' => 'streamed', 'size' => $size]);
+
+        return new LibraryTransfer(stream: $stream, sha256: $sha256, size: $size, name: $name, result: $result);
+    }
+
+    /**
+     * A REST caller acts as its own account, made the admin guard's user as actor() does for the owner. auth:api and
+     * api.scope have already refused an inactive account or a revoked key.
+     */
+    private function signIn(Admin $actor): Admin
+    {
+        $actor->loadMissing('role');
         auth('admin')->setUser($actor);
 
         return $actor;
@@ -327,6 +362,22 @@ class LibraryOperations
      */
     private function fetch(Admin $actor, array $arguments): array
     {
+        [$open, $sha256, $size, $name, $result] = $this->fetchSource(actor: $actor, arguments: $arguments);
+        $directory = $this->fetchDirectory(requested: $arguments['dest_dir'] ?? null);
+        [$path, $reused] = $this->copyOut(open: $open, sha256: $sha256, size: $size, directory: $directory, name: $name);
+        MothershipLog::decision(event: 'fetch', loc: 'LibraryOperations::fetch', ctx: ['outcome' => 'copied', 'size' => $size, 'reused' => $reused]);
+
+        return array_replace($result, ['path' => $path, 'name' => basename($path), 'reused' => $reused]);
+    }
+
+    /**
+     * What library_fetch copies out, after its access checks: how to open the bytes, their sha256 and size, the name
+     * to copy them under, and the result with path, name and reused left null.
+     *
+     * @return array{0: callable(): resource, 1: string, 2: int, 3: string, 4: array<string, mixed>}
+     */
+    private function fetchSource(Admin $actor, array $arguments): array
+    {
         abort_unless($this->can(actor: $actor, permission: 'dam.asset.download'), 403);
         $asset = $this->access->for(context: AccessContext::forAdmin(admin: $actor, purpose: AccessContext::PURPOSE_DOWNLOAD), asset: (int) $arguments['asset_id'])->allowedOrFail();
         $proxy = ($arguments['proxy'] ?? false) === true;
@@ -350,22 +401,25 @@ class LibraryOperations
         } else {
             $object = $this->content->current(asset: $asset);
         }
-        $directory = $this->fetchDirectory(requested: $arguments['dest_dir'] ?? null);
-        [$path, $reused] = $this->copyOut(open: fn () => $this->content->open(object: $object), sha256: (string) $object->sha256, size: (int) $object->size, directory: $directory, name: CreativeHubSaver::cleanName(name: $name));
         [$width, $height] = self::pixels(object: $object);
-        MothershipLog::decision(event: 'fetch', loc: 'LibraryOperations::fetch', ctx: ['outcome' => 'copied', 'size' => (int) $object->size, 'reused' => $reused]);
 
         return [
-            'path'     => $path,
-            'name'     => basename($path),
-            'sha256'   => (string) $object->sha256,
-            'size'     => (int) $object->size,
-            'asset_id' => (int) $asset->id,
-            ...(isset($arguments['file_id']) ? ['file_id' => (int) $arguments['file_id']] : []),
-            ...($proxy ? ['proxy' => true] : []),
-            ...($width !== null ? ['width' => $width, 'height' => $height] : []),
-            'reused'   => $reused,
-            'note'     => 'This is your own copy: changing it never changes the library. Save results back with library_save.',
+            fn () => $this->content->open(object: $object),
+            (string) $object->sha256,
+            (int) $object->size,
+            CreativeHubSaver::cleanName(name: $name),
+            [
+                'path'     => null,
+                'name'     => null,
+                'sha256'   => (string) $object->sha256,
+                'size'     => (int) $object->size,
+                'asset_id' => (int) $asset->id,
+                ...(isset($arguments['file_id']) ? ['file_id' => (int) $arguments['file_id']] : []),
+                ...($proxy ? ['proxy' => true] : []),
+                ...($width !== null ? ['width' => $width, 'height' => $height] : []),
+                'reused'   => null,
+                'note'     => 'This is your own copy: changing it never changes the library. Save results back with library_save.',
+            ],
         ];
     }
 
@@ -500,12 +554,28 @@ class LibraryOperations
     /** A conversion's status and, given format, a verified local copy of its completed result. */
     private function vectorization(Admin $actor, array $arguments): array
     {
+        if (! isset($arguments['format'])) {
+            $agent = app(AgentVectorizations::class);
+
+            return $agent->present(row: $agent->find(actor: $actor, via: AccessContext::VIA_LIBRARY, id: (string) $arguments['id']));
+        }
+        [$open, $sha256, $size, $name, $result] = $this->vectorizationSource(actor: $actor, arguments: $arguments);
+        $directory = $this->fetchDirectory(requested: $arguments['dest_dir'] ?? null);
+        [$path, $reused] = $this->copyOut(open: $open, sha256: $sha256, size: $size, directory: $directory, name: $name);
+
+        return array_replace($result, ['path' => $path, 'name' => basename($path), 'reused' => $reused]);
+    }
+
+    /**
+     * A completed conversion's result in format, shaped like fetchSource.
+     *
+     * @return array{0: callable(): resource, 1: string, 2: int, 3: string, 4: array<string, mixed>}
+     */
+    private function vectorizationSource(Admin $actor, array $arguments): array
+    {
         $agent = app(AgentVectorizations::class);
         $row = $agent->find(actor: $actor, via: AccessContext::VIA_LIBRARY, id: (string) $arguments['id']);
         $result = $agent->present(row: $row);
-        if (! isset($arguments['format'])) {
-            return $result;
-        }
         if ($row->status !== 'completed') {
             throw new LibraryFailure('This conversion is '.$row->status.', so there is no result to copy'.($row->status === 'failed' ? '.' : ' yet. Poll again shortly.'));
         }
@@ -517,17 +587,16 @@ class LibraryOperations
         }
         $sha256 = (string) hash_file('sha256', $source);
         $size = (int) filesize($source);
-        $directory = $this->fetchDirectory(requested: $arguments['dest_dir'] ?? null);
-        [$path, $reused] = $this->copyOut(open: function () use ($source) {
+        $open = function () use ($source) {
             $stream = @fopen($source, 'rb');
             if ($stream === false) {
                 throw new LibraryFailure('The conversion result cannot be read right now. Try again later.');
             }
 
             return $stream;
-        }, sha256: $sha256, size: $size, directory: $directory, name: CreativeHubSaver::cleanName(name: $base.'.'.$format));
+        };
 
-        return $result + ['path' => $path, 'name' => basename($path), 'sha256' => $sha256, 'size' => $size, 'reused' => $reused];
+        return [$open, $sha256, $size, CreativeHubSaver::cleanName(name: $base.'.'.$format), $result + ['path' => null, 'name' => null, 'sha256' => $sha256, 'size' => $size, 'reused' => null]];
     }
 
     private static function identical(string $path, int $size, string $sha256): bool
