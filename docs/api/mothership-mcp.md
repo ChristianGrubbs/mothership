@@ -18,7 +18,7 @@ The tools exist twice on the server, with one implementation behind both:
   exactly as the stdio server does, as the API key's own admin.
 
 Agent sessions use the HTTPS routes through the local launcher, which Skill Scope registers as the stdio server
-`mothership`:
+`mothership`, with `MOTHERSHIP_URL` set to the site's address in its environment:
 
 ```bash
 /usr/bin/python3 -I -S <checkout>/tools/mcp-launcher/launcher.py
@@ -66,7 +66,7 @@ runs one copy per open agent session, and at about 100 MB of PHP per copy that i
 
 | Launcher setting | Meaning |
 | --- | --- |
-| `MOTHERSHIP_URL` | The site the launcher calls (default `https://themothership.app`). |
+| `MOTHERSHIP_URL` | Required: the site's address, such as `https://library.example`. Without it every tool call is refused with a message naming this setting; `initialize` and `tools/list` still answer. |
 | `MOTHERSHIP_MCP_MAX_FILE_BYTES` | The largest file `library_save` or `library_vectorize` sends (default 50 MiB). |
 | `MOTHERSHIP_MCP_FETCH_DIR` | The folder copies go to when a call names no `dest_dir` (default `$TMPDIR/mothership-library`). |
 | `MOTHERSHIP_MCP_IDLE_SECONDS` | Idle time before the launcher returns to its idle size (default 15). |

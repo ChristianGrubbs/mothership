@@ -24,7 +24,6 @@ CHECKOUT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 SERVER_COMMAND = ("artisan", "mcp:start", "mothership")
 ROUTE_PREFIX = "/api/v1/rest/library/tools/"
 TOOL_PREFIX = "library_"
-DEFAULT_URL = "https://themothership.app"
 # The deployed stack's PHP upload_max_filesize: the largest file one HTTPS upload carries.
 DEFAULT_MAX_FILE_BYTES = 50 * 1024 * 1024
 CHUNK_BYTES = 1024 * 1024
@@ -54,7 +53,8 @@ class Settings:
     """Everything configurable, read once from the environment."""
 
     def __init__(self, environ) -> None:
-        self.base_url = (environ.get("MOTHERSHIP_URL") or DEFAULT_URL).rstrip("/")
+        # The site's address comes only from the environment: this repository names no site.
+        self.base_url = (environ.get("MOTHERSHIP_URL") or "").strip().rstrip("/")
         home = os.path.expanduser("~")
         self.state_dir = environ.get("MOTHERSHIP_MCP_STATE_DIR") or os.path.join(home, "Library/Caches/mothership-mcp")
         temporary = environ.get("TMPDIR", "/tmp").rstrip("/") or "/tmp"
@@ -536,6 +536,11 @@ class Library:
         self.files = LocalFiles(settings=settings, log=log)
 
     def call(self, name: str, arguments: dict) -> dict:
+        if not self.settings.base_url.startswith(("https://", "http://")):
+            raise LauncherFailure(
+                "MOTHERSHIP_URL is not set to the site's address (https://...), so the library cannot be reached. "
+                "Set it in this MCP server's environment."
+            )
         tool = name[len(TOOL_PREFIX):]
         if name in UPLOAD_TOOLS and isinstance(arguments.get("local_path"), str):
             return self._upload(tool=tool, arguments=arguments)

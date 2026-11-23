@@ -50483,7 +50483,7 @@
             "application/json": {
               "example": {
                 "asset_id": 41,
-                "dest_dir": "/Users/agent/work",
+                "dest_dir": "/home/agent/work",
                 "file_id": 9
               },
               "schema": {
@@ -51214,7 +51214,7 @@
           "content": {
             "multipart/form-data": {
               "example": {
-                "arguments": "{\"local_path\": \"/Users/agent/renders/hero.png\", \"folder_id\": 12, \"title\": \"Hero render\", \"tags\": [\"lobby\"], \"producer\": {\"tool\": \"blender\", \"version\": \"4.4\"}, \"provenance\": {\"backend\": \"cycles\", \"reference_asset_ids\": [7]}, \"notes\": \"Final lighting pass.\", \"request_id\": \"6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f\"}",
+                "arguments": "{\"local_path\": \"/home/agent/renders/hero.png\", \"folder_id\": 12, \"title\": \"Hero render\", \"tags\": [\"lobby\"], \"producer\": {\"tool\": \"blender\", \"version\": \"4.4\"}, \"provenance\": {\"backend\": \"cycles\", \"reference_asset_ids\": [7]}, \"notes\": \"Final lighting pass.\", \"request_id\": \"6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f\"}",
                 "file": "binary file",
                 "upload": "{\"name\": \"hero.png\"}"
               },
@@ -52050,7 +52050,7 @@
           "content": {
             "multipart/form-data": {
               "example": {
-                "arguments": "{\"local_path\": \"/Users/agent/logo.png\", \"request_id\": \"6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f\"}",
+                "arguments": "{\"local_path\": \"/home/agent/logo.png\", \"request_id\": \"6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f\"}",
                 "file": "binary file"
               },
               "schema": {

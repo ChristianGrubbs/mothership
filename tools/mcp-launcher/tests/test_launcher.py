@@ -258,6 +258,12 @@ class CallTest(LauncherCase):
         self.assert_refused(result, "The Mothership is not answering right now")
         self.assertEqual({}, session.request("ping")["result"])
 
+    def test_without_a_site_address_a_call_is_refused_without_a_request(self):
+        result = self.session(MOTHERSHIP_URL="").call("library_list_folders")
+
+        self.assert_refused(result, "MOTHERSHIP_URL is not set")
+        self.assertEqual(([], 0), (self.site.tool_calls(), self.site.grants))
+
     def test_never_follows_a_redirect_with_the_bearer(self):
         self.site.script("search", (302, b"", {"Location": self.site.url + "/elsewhere"}))
         result = self.session().call("library_search", {})
