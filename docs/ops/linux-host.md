@@ -129,8 +129,10 @@ propagates.
 
 - `postgres.dump`: `pg_dump` custom format.
 - `redis.rdb`: a fresh `BGSAVE`, covering every Redis database.
-- `state.tar.gz`: `app.env`, `stack.env`, `storage/`, `looper/`, `video/`,
-  `higgsfield-session/` and `tunnel/`.
+- `state.tar.gz`: `app.env`, `stack.env`, `storage/` (without logs and
+  framework caches), `looper/`, `video/`, `higgsfield-session/` and `tunnel/`.
+  It is published only from a clean read. If a file changes while it is
+  archived, the archive is retried up to three times, then the run fails.
 - `manifest.json`: the bytes and sha256 of each file, the exact row count of
   every table and the Redis keyspace.
 
@@ -187,8 +189,46 @@ Run it by hand with `schtasks /run /tn "\Mothership\Mothership Backup Pull"`.
 
 ### Restoring the live stack from a set
 
-1. Run `stack.sh stop`.
-2. Unpack `state.tar.gz` into `state/`.
-3. Restore Postgres and Redis as in "First install and data migration", steps
-   4 and 5, using the set's `postgres.dump` and `redis.rdb`.
-4. Run `stack.sh up`, then `stack.sh verify`.
+This replaces the live data with the set. Anything written after the set was
+taken is lost, so take a fresh `backup.sh create` first if the stack still
+runs. Run every step from `/srv/mothership`, with `SET` set to the set's
+folder.
+
+1. Check the set: `source/deploy/linux-host/backup.sh restore-test "$SET"`
+   must exit 0.
+2. Stop every writer. Postgres and Redis stay up:
+
+   ```bash
+   source/deploy/linux-host/stack.sh stop tunnel nginx fpm queue panorama-queue \
+     stylepress-queue vectorization-queue ai-index-queue scheduler looper ai-bridge video-bridge
+   ```
+
+3. Replace the database. The restore stops at its first error, so a failed
+   run leaves an incomplete database to restore again, never a mixed one:
+
+   ```bash
+   docker exec mothership-private-postgres sh -c \
+     'dropdb -U "$POSTGRES_USER" --force "$POSTGRES_DB" && createdb -U "$POSTGRES_USER" "$POSTGRES_DB"'
+   docker exec -i mothership-private-postgres sh -c \
+     'pg_restore --no-owner --exit-on-error -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "$SET/postgres.dump"
+   ```
+
+4. Replace Redis. The compose service starts with `--appendonly yes`, which
+   would load an empty AOF and ignore the RDB. So load the RDB once in a
+   temporary container with AOF off, switch AOF on, then return to the
+   service:
+
+   ```bash
+   source/deploy/linux-host/stack.sh stop redis
+   docker run --rm -v mothership-private-redis-data:/data -v "$SET":/set:ro redis:7.2-alpine \
+     sh -c 'rm -rf /data/appendonlydir /data/dump.rdb && cp /set/redis.rdb /data/dump.rdb && chown redis:redis /data/dump.rdb'
+   docker run -d --name mothership-redis-restore -v mothership-private-redis-data:/data redis:7.2-alpine redis-server --appendonly no
+   docker exec mothership-redis-restore redis-cli INFO keyspace          # compare with the manifest's redis_keyspace
+   docker exec mothership-redis-restore redis-cli CONFIG SET appendonly yes
+   docker exec mothership-redis-restore redis-cli INFO persistence       # repeat until aof_rewrite_in_progress:0
+   docker stop mothership-redis-restore && docker rm mothership-redis-restore
+   source/deploy/linux-host/stack.sh up redis
+   ```
+
+5. Restore the state files: `tar -C state -xzf "$SET/state.tar.gz"`.
+6. Run `stack.sh up`, then `stack.sh verify`.

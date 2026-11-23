@@ -8,6 +8,8 @@
 # Elasticsearch is not backed up: its indices are rebuilt from Postgres. Asset bytes live in the S3 bucket, not here.
 # Every run appends JSONL events to $MOTHERSHIP_BACKUPS/backup.jsonl.
 set -euo pipefail
+# Keep errexit inside $(...): stream calls create through a command substitution.
+shopt -s inherit_errexit
 
 HOME_DIR="${MOTHERSHIP_HOME:-/srv/mothership}"
 STATE="$HOME_DIR/state"
@@ -59,7 +61,7 @@ save_redis() {
   done
   [ "$after" != "$before" ] || fail "redis BGSAVE did not finish in 120s"
   redis INFO persistence | grep -q '^rdb_last_bgsave_status:ok' || fail "redis BGSAVE reported an error"
-  docker cp "$REDIS:$dir/$file" "$dest"
+  docker cp "$REDIS:$dir/$file" "$dest" || fail "copying the RDB out of redis failed"
 }
 
 write_manifest() {
@@ -99,7 +101,7 @@ create() {
   install -d -m 0700 "$BACKUPS"
   exec 9>"$BACKUPS/.lock"
   flock -n 9 || fail "another backup is running"
-  local stamp work final status
+  local stamp work final status attempt
   stamp="$(date -u +%Y%m%dT%H%M%SZ)"
   work="$BACKUPS/.incoming-$stamp"
   final="$BACKUPS/$stamp"
@@ -112,12 +114,19 @@ create() {
   save_redis "$work/redis.rdb"
   redis INFO keyspace | tr -d '\r' | grep '^db' > "$work/.keyspace" || true
 
-  # GNU tar exits 1 when a file changed while it was read (logs); that still leaves a usable archive.
-  status=0
-  tar -C "$STATE" --exclude=storage/framework/views -czf "$work/state.tar.gz" \
-    app.env stack.env storage looper video higgsfield-session tunnel || status=$?
-  [ "$status" -le 1 ] || fail "state archive failed (tar exit $status)"
-  [ "$status" -eq 0 ] || log "warning: a state file changed while it was archived"
+  # Logs and framework caches are not needed to restore and change constantly, so they are left out. GNU tar exits 1
+  # when a file changed (or shrank, padded with zeros) while it was read: retry, and publish only a clean pass.
+  for attempt in 1 2 3; do
+    status=0
+    tar -C "$STATE" --exclude=storage/logs --exclude=storage/framework/views --exclude=storage/framework/cache \
+      --exclude=storage/framework/sessions -czf "$work/state.tar.gz" \
+      app.env stack.env storage looper video higgsfield-session tunnel || status=$?
+    [ "$status" -eq 0 ] && break
+    [ "$status" -eq 1 ] || fail "state archive failed (tar exit $status)"
+    log "a state file changed while it was archived (attempt $attempt); retrying"
+    sleep 5
+  done
+  [ "$status" -eq 0 ] || fail "state files kept changing during 3 archive attempts"
 
   write_manifest "$work" "$work/.counts" "$work/.keyspace"
   rm -f "$work/.counts" "$work/.keyspace"
@@ -125,7 +134,7 @@ create() {
   mv "$work" "$final"
 
   # Keep the newest $KEEP sets here; the off-host copies are the history.
-  find "$BACKUPS" -mindepth 1 -maxdepth 1 -type d -name '20*Z' | sort | head -n "-$KEEP" | xargs -r rm -rf --
+  find "$BACKUPS" -mindepth 1 -maxdepth 1 -type d -name '20*Z' -print0 | sort -z | head -z -n "-$KEEP" | xargs -0 -r rm -rf --
   find "$BACKUPS" -mindepth 1 -maxdepth 1 -type d -name '.incoming-*' -mmin +240 -exec rm -rf -- {} +
 
   event info backup.created "set=$stamp" "bytes=$(du -sb "$final" | cut -f1)"

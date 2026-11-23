@@ -3,7 +3,7 @@
 #   stack.sh build    build the four images from the checkout's HEAD and record their tags
 #   stack.sh up       render generated files, then create/start every service
 #   stack.sh verify   the launcher's verify checks against this stack
-#   stack.sh stop     stop every service (containers, volumes and state stay)
+#   stack.sh stop [SERVICE...]  stop every service, or the named ones (containers, volumes and state stay)
 #   stack.sh ps|logs  pass through to docker compose
 #   stack.sh backup create|stream|restore-test   back up the data (backup.sh)
 # MOTHERSHIP_HOME (default /srv/mothership) holds source/ (the checkout) and state/.
@@ -82,7 +82,7 @@ case "${1:-}" in
   render) render ;;
   up) render; shift; compose up --detach --remove-orphans "$@" ;;
   verify) python3 "$SOURCE/deploy/linux-host/host.py" verify --state "$STATE" --fpm-image "$(stack_value FPM_IMAGE)" ;;
-  stop) compose stop ;;
+  stop) shift; compose stop "$@" ;;
   ps|logs|config|exec) cmd="$1"; shift; compose "$cmd" "$@" ;;
   backup) shift; exec "$SOURCE/deploy/linux-host/backup.sh" "$@" ;;
   *) sed -n '2,9p' "$0"; exit 2 ;;

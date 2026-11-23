@@ -9,7 +9,32 @@ param(
 $ErrorActionPreference = 'Stop'
 New-Item -ItemType Directory -Force -Path $Destination, $ScriptDir, (Split-Path $KeyFile) | Out-Null
 # The sets include app.env and the tunnel credentials: only the owner, SYSTEM and Administrators may read them.
-& icacls.exe $Destination /inheritance:r /grant:r "$($User):(OI)(CI)F" 'SYSTEM:(OI)(CI)F' 'Administrators:(OI)(CI)F' | Out-Null
+# Replace the folder's DACL outright (no inherited or leftover explicit entries), make everything already inside
+# inherit only from it, then check the result.
+$allowed = @(
+  (New-Object Security.Principal.NTAccount("$env:COMPUTERNAME\$User")).Translate([Security.Principal.SecurityIdentifier]).Value,
+  'S-1-5-18',      # SYSTEM
+  'S-1-5-32-544'   # Administrators
+)
+$acl = New-Object Security.AccessControl.DirectorySecurity
+$acl.SetAccessRuleProtection($true, $false)
+foreach ($sid in $allowed) {
+  $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule(
+    (New-Object Security.Principal.SecurityIdentifier($sid)), 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
+}
+Set-Acl -LiteralPath $Destination -AclObject $acl
+if (Get-ChildItem -LiteralPath $Destination -Force) {
+  & icacls.exe (Join-Path $Destination '*') /reset /T /C /Q | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "icacls /reset exited $LASTEXITCODE" }
+}
+$items = @(Get-Item -LiteralPath $Destination) + @(Get-ChildItem -LiteralPath $Destination -Recurse -Force)
+foreach ($item in $items) {
+  foreach ($rule in (Get-Acl -LiteralPath $item.FullName).Access) {
+    $sid = $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value
+    if ($allowed -notcontains $sid) { throw "unexpected access for $sid on $($item.FullName)" }
+    if ($item.FullName -ne $Destination -and -not $rule.IsInherited) { throw "explicit access entry left on $($item.FullName)" }
+  }
+}
 $source = Join-Path $PSScriptRoot 'pull-backup.ps1'
 $target = Join-Path $ScriptDir 'pull-backup.ps1'
 if ((Resolve-Path $source).Path -ne [IO.Path]::GetFullPath($target)) { Copy-Item -Force $source $target }
