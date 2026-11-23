@@ -25,6 +25,8 @@ public enum Overall: String, Sendable, Equatable {
 
 public enum ActionKind: String, Sendable, Equatable, Codable {
     case start, stop, restart, login
+    /// The restart the app runs by itself after the stack's drive drops off and comes back.
+    case recover
     case craftApps = "craft-apps"
     case craftEngines = "craft-engines"
     case craftMCP = "craft-mcp"
@@ -33,7 +35,7 @@ public enum ActionKind: String, Sendable, Equatable, Codable {
     public var isCraft: Bool {
         switch self {
         case .craftApps, .craftEngines, .craftMCP, .craftMCPForce: true
-        case .start, .stop, .restart, .login: false
+        case .start, .stop, .restart, .recover, .login: false
         }
     }
 
@@ -41,7 +43,7 @@ public enum ActionKind: String, Sendable, Equatable, Codable {
         switch self {
         case .start, .login: .starting
         case .stop: .stopping
-        case .restart: .restarting
+        case .restart, .recover: .restarting
         case .craftApps, .craftEngines, .craftMCP, .craftMCPForce: .updating
         }
     }
@@ -51,6 +53,7 @@ public enum ActionKind: String, Sendable, Equatable, Codable {
         case .start, .login: "Start failed"
         case .stop: "Stop failed"
         case .restart: "Restart failed"
+        case .recover: "Recovery failed"
         case .craftApps: "App update failed"
         case .craftEngines: "Engine update failed"
         case .craftMCP, .craftMCPForce: "Server restart failed"

@@ -61,6 +61,8 @@ enum BarPaths {
     static let loginMarker = root.appending(path: "login-session")
     static let preferences = root.appending(path: "start-at-login")
     static let craftStatus = root.appending(path: "craft-status.json")
+    /// When the stack's drive last dropped off while the stack ran. Present only until the app has dealt with it.
+    static let driveDrop = root.appending(path: "drive-dropped")
 }
 
 /// Structured log for later diagnosis. Holds event names and small typed values, never command output.

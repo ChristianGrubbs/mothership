@@ -298,8 +298,27 @@ zsh tools/studio/menubar/scripts/install.sh --wrapper <stack-wrapper> --app-env 
 - The app is the LaunchAgent `app.themothership.menubar`. At each login it waits
   for the container runtime and runs `up` unless the stack is already running.
   Clear **Start site at login** in the panel to turn that off.
-- The app starts the stack only at login or when you click its control. It never
-  restarts the stack because it looks down, so a planned outage stays down.
+- The app starts the stack only at login, when you click its control, or after the
+  stack's drive drops off. It never restarts the stack because it looks down, so a
+  planned outage stays down.
+- **Drive drops.** If the `--disk` volume unmounts or disappears while the stack is
+  running, even for under a second, the containers that had files open on it break
+  and can't be stopped normally. The app hears the drop from macOS Disk Arbitration
+  and records it in `drive-dropped` in its folder. Once the volume has been back for
+  20 seconds and nothing else is changing the stack, it runs **recover** once. If no
+  stack container is still listed as running, the stack was stopped cleanly, perhaps
+  on purpose, so recover leaves it down and the panel says so. Otherwise it stops each
+  stack container, sends SIGKILL to any that don't stop, and boots
+  out of launchd the runtime helper of any that still don't. Only if a stale record
+  still shows a container running does it restart the container service, which also
+  stops any other container on the Mac. It then runs `down` and `up` and waits for the
+  site as **Restart** does. If the runtime can't list its containers, it stops there
+  and never restarts the container service. A stack that is healthy again when the
+  drive returns is left alone. A drop is ignored while an action or another session
+  is changing the stack. A pending recovery is cancelled by any Start, Stop or
+  Restart you click, by another session running the stack's `up` or `down`, and
+  after an hour. If the containers still won't stop, it reports **Recovery failed**
+  and starts nothing.
 - With `--bridge-source` and `--bridge-native` set, the app also watches the
   optimizer, AI and video bridges. A bridge that fails two health reads in a row is
   restarted with its own manager's `up`, one bridge at a time. The app never runs the

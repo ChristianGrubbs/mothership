@@ -2,8 +2,11 @@
 # Runs one stack action, detached from the menu bar app, so quitting the app never interrupts it.
 # Usage: stack-action.sh <id> <action> <wrapper> <action-dir> <container-binary> <python> <craft-tool> <coordinator> <deploy-lease> <site-url>
 #        [<bridge-python> <bridge-source> <native-services> <bridge-label> <bridge-host> <bridge-port>]
-# Actions: start, stop, restart, login, craft-apps, craft-engines, craft-mcp, craft-mcp-force, bridge-restart, queue-read.
+# Actions: start, stop, restart, recover, login, craft-apps, craft-engines, craft-mcp, craft-mcp-force, bridge-restart, queue-read.
 # queue-read only prints the site's queue counts as JSON. It changes nothing, takes no lock and writes no files.
+# recover is the restart for after the stack's drive dropped off and came back. Containers whose runtime helpers
+# held files on the old mount can't be stopped, so it clears them first: stop, then SIGKILL, then removing each
+# stuck helper from launchd, and only if a stale record still shows running, a restart of the container service.
 # Writes <action-dir>/<id>.progress.jsonl (one JSON object per step) and <id>.log (wrapper output).
 # While it changes the stack it also keeps <action-dir>/stack-action.json, which deploys read:
 #   {"action","pid","process_start","started_at"}. process_start is `LC_ALL=C ps -o lstart= -p <pid>`, trimmed.
@@ -26,6 +29,9 @@ readonly DRIVE_PROBE_TENTHS=50 EX_USAGE=64 EX_CRAFT_IN_USE=3 EX_CRAFT_STACK_RUNN
 readonly EX_DEPLOY_RUNNING=79 EX_QUEUES_BUSY=80 EX_BUILDER_RUNNING=81 EX_SITE_NOT_BACK=82 STACK_PREFIX=mothership-private-
 readonly EX_BRIDGE_PORT_HELD=83 EX_STACK_NOT_RUNNING=84 BRIDGE_START_LIMIT=180
 readonly SITE_WAIT=${MOTHERSHIP_SITE_WAIT:-180}
+readonly EX_STUCK_CONTAINERS=85 EX_STACK_ALREADY_STOPPED=86 HELPER_LABEL_PREFIX=com.apple.container.container-runtime-linux.
+# Tests point this at a stand-in, so a test run can never remove a real container helper.
+readonly LAUNCHCTL=${MOTHERSHIP_BAR_LAUNCHCTL:-/bin/launchctl}
 # TODO 2026-11-18: re-read these connection and queue names from tools/studio/runtime.py after each release.
 readonly QUEUE_CHECK='$m=["redis"=>["webhooks","system","completeness","default","broadcastable"],"panorama"=>["panorama","video-preview"],"database"=>["stylepress"],"vectorization"=>["vectorization"],"ai-index"=>["ai-index"]]; $o=[]; foreach($m as $c=>$qs){foreach($qs as $q){$o[$c."/".$q]=Queue::connection($c)->size($q);}} $o["chunk_uploads_open"]=DB::table("dam_chunk_uploads")->whereNotIn("state",["completed","failed","cancelled","expired"])->count(); echo json_encode(["idle"=>array_sum($o)===0,"counts"=>$o]),PHP_EOL;'
 
@@ -279,6 +285,74 @@ bring_site_back() {
   (( up_rc == 0 )) || finish $up_rc
 }
 
+# The stack's containers the runtime lists as running, one per line. Three tries; fails when the runtime never answers.
+running_stack_containers() {
+  local listing attempt
+  for attempt in 1 2 3; do
+    if listing=$(gtimeout --preserve-status 60 "$container" list --quiet 2>>"$log"); then
+      print -r -- "$listing" | grep "^$STACK_PREFIX"
+      return 0
+    fi
+    sleep 5
+  done
+  return 1
+}
+
+# Ends the recovery when the runtime can't list containers. Without a listing nothing escalates, so an unreadable
+# runtime never leads to the container service restart, which would stop unrelated containers.
+stop_unlisted() {
+  print -r -- "the container runtime didn't list its containers, so nothing more was done" >> "$log"
+  emit clear end 1
+  finish 1
+}
+
+# Brings every running stack container down, escalating only as far as it has to. After the stack's drive drops,
+# the helpers that held files on the old mount ignore stop and even SIGKILL, so the last two rungs remove them
+# from launchd and, if a stale record still says running, restart the container service. That restart also
+# stops any other container on this Mac, which is why it runs only when nothing gentler worked.
+clear_stuck_containers() {
+  local name names
+  emit clear start
+  names=$(running_stack_containers) || stop_unlisted
+  # A drop leaves containers listed as running, stuck on the old mount. With none running, the stack was stopped
+  # cleanly, maybe on purpose and maybe while the app was closed, so it stays down until someone starts it.
+  if [[ -z $names ]]; then
+    print -r -- "no stack container was running, so the stack was left down" >> "$log"
+    emit clear end $EX_STACK_ALREADY_STOPPED
+    finish $EX_STACK_ALREADY_STOPPED
+  fi
+  for name in ${(f)names}; do
+    print -r -- "stopping $name" >> "$log"
+    gtimeout --preserve-status 40 "$container" stop --time 10 "$name" >> "$log" 2>&1 && continue
+    print -r -- "$name didn't stop; sending SIGKILL" >> "$log"
+    gtimeout --preserve-status 30 "$container" kill --signal KILL "$name" >> "$log" 2>&1
+  done
+  sleep 3
+  names=$(running_stack_containers) || stop_unlisted
+  for name in ${(f)names}; do
+    print -r -- "$name ignored SIGKILL; removing its runtime helper from launchd" >> "$log"
+    gtimeout --preserve-status 30 "$LAUNCHCTL" bootout "gui/$(id -u)/$HELPER_LABEL_PREFIX$name" >> "$log" 2>&1
+  done
+  [[ -n $names ]] && sleep 5
+  names=$(running_stack_containers) || stop_unlisted
+  if [[ -n $names ]]; then
+    print -r -- "still listed as running after their helpers were removed: ${(f)names}; restarting the container service" >> "$log"
+    if ! gtimeout --preserve-status 300 "$container" system stop >> "$log" 2>&1; then
+      print -r -- "the container service didn't stop; removing its API server from launchd" >> "$log"
+      gtimeout --preserve-status 30 "$LAUNCHCTL" bootout "gui/$(id -u)/com.apple.container.apiserver" >> "$log" 2>&1
+      sleep 2
+    fi
+    gtimeout --preserve-status 120 "$container" system start >> "$log" 2>&1
+  fi
+  names=$(running_stack_containers) || stop_unlisted
+  if [[ -n $names ]]; then
+    print -r -- "stack containers still running after every way of stopping them: ${(f)names}" >> "$log"
+    emit clear end $EX_STUCK_CONTAINERS
+    finish $EX_STUCK_CONTAINERS
+  fi
+  emit clear end 0
+}
+
 # True only when the runtime lists the site's PHP container as running. A restart copies the bridge's server
 # from the deployed checkout, and that checkout moves while a deploy has the stack down.
 site_container_is_running() {
@@ -377,7 +451,7 @@ if [[ $action != craft-(apps|mcp|mcp-force) && ( -z $coordinator || -z $deploy_l
   print -r -- "the deploy lease check is not configured" >> "$log"
   finish $EX_USAGE
 fi
-if [[ $action == (craft-engines|start|restart) && -z $site_url ]]; then
+if [[ $action == (craft-engines|start|restart|recover) && -z $site_url ]]; then
   print -r -- "the site address is not configured, so this action could not confirm the site came back" >> "$log"
   finish $EX_USAGE
 fi
@@ -399,6 +473,11 @@ case $action in
   start) wait_for_runtime $RUNTIME_WAIT_MANUAL; guard_stack_action; run_step up; wait_for_site ;;
   stop) wait_for_runtime $RUNTIME_WAIT_MANUAL; guard_stack_action; run_step down ;;
   restart) wait_for_runtime $RUNTIME_WAIT_MANUAL; guard_stack_action; run_step down; run_step up; wait_for_site ;;
+  # The drive has only just come back, so the runtime gets the login wait.
+  recover)
+    wait_for_runtime $RUNTIME_WAIT_LOGIN; guard_stack_action; clear_stuck_containers
+    run_step down; run_step up; wait_for_site
+    ;;
   bridge-restart) restart_bridge ;;
   *) print -r -- "unknown action: $action" >> "$log"; finish 64 ;;
 esac

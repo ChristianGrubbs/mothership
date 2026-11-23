@@ -44,6 +44,7 @@ public func siteResultMessage(for kind: ActionKind, seconds: Int) -> String? {
     switch kind {
     case .start: lead = "Site started."
     case .restart: lead = "Site restarted."
+    case .recover: lead = "The drive dropped off and came back, so the site was restarted."
     default: return nil
     }
     let time = seconds < 60 ? "\(seconds) s" : "\(seconds / 60) min \(seconds % 60) s"
