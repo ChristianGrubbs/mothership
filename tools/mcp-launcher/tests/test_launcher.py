@@ -67,7 +67,11 @@ class Session:
         except queue.Empty:
             with open(self.stderr_path, "r", encoding="utf-8", errors="replace") as handle:
                 stderr = handle.read()[-4000:]
-            raise AssertionError("The launcher sent no answer in time. Its stderr:\n" + stderr) from None
+            status = self.process.poll()
+            raise AssertionError(
+                "The launcher sent no answer in time (exit status %s). Its stderr:\n%s"
+                % ("none, still running" if status is None else status, stderr)
+            ) from None
 
     def wait(self, request_id, timeout=20):
         deadline = time.monotonic() + timeout
@@ -118,6 +122,10 @@ class LauncherCase(unittest.TestCase):
             "MOTHERSHIP_MCP_TIMEOUT_SECONDS": "10",
             "FAKE_KEYCHAIN": self.keychain,
         }
+        # A Linux Python from actions/setup-python finds its own libpython only through LD_LIBRARY_PATH. Without it the
+        # launcher can start on another installed libpython of the same minor version, beside this Python's modules.
+        if os.environ.get("LD_LIBRARY_PATH"):
+            self.env["LD_LIBRARY_PATH"] = os.environ["LD_LIBRARY_PATH"]
         self.store_credentials(fake_mothership.CREDENTIALS)
 
     def _folder(self, name):
