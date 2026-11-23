@@ -192,8 +192,8 @@ it('gives the stdio server\'s words for a refusal', function () {
         ['save', ['folder_id' => (int) $this->folder->id], 422],
         // local_path with no file and no request_id: the field rules answer first, as on stdio, not the missing upload.
         ['save', ['local_path' => $this->scratch.'/in/absent.png', 'folder_id' => (int) $this->folder->id, 'producer' => ['tool' => 'blender']], 422],
-        ['search', ['surprise' => true], 422],
-        ['get_asset', ['asset_id' => (int) $hidden->id], 404],
+        ['search', ['surprise'         => true], 422],
+        ['get_asset', ['asset_id'      => (int) $hidden->id], 404],
         ['create_folder', ['parent_id' => (int) $this->folder->id, 'name' => 'a/b'], 422],
     ];
 

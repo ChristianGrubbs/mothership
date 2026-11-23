@@ -113,9 +113,9 @@ class LibraryOperations
     {
         $actor = $this->signIn(actor: $actor);
         [$open, $sha256, $size, $name, $result] = match (true) {
-            $operation === 'fetch'                                       => $this->fetchSource(actor: $actor, arguments: $arguments),
+            $operation === 'fetch'                                        => $this->fetchSource(actor: $actor, arguments: $arguments),
             $operation === 'vectorization' && isset($arguments['format']) => $this->vectorizationSource(actor: $actor, arguments: $arguments),
-            default                                                      => throw new LibraryFailure('Only library_fetch, and library_vectorization with format, copy a file out.'),
+            default                                                       => throw new LibraryFailure('Only library_fetch, and library_vectorization with format, copy a file out.'),
         };
         $stream = $open();
         MothershipLog::decision(event: $operation, loc: 'LibraryOperations::transfer', ctx: ['outcome' => 'streamed', 'size' => $size]);
