@@ -1,80 +1,135 @@
-# The `mothership` library server (MCP, stdio)
+# The `mothership` library server (MCP)
 
 The Mothership is the asset library and system of record for finished creative work. Local creative tools (Blender, the
 image and video generators, ArtCraft through its own relay, plain scripts) reach it through one MCP server, `mothership`,
-with eight `library_*` tools. The server runs no engines and keeps no sessions: tools make files on this machine, and the
-library keeps them.
+with ten `library_*` tools. The server runs no engines and keeps no sessions: tools make files on the agent's machine, and
+the library keeps them.
 
 It replaced the hosted Craft MCP (`/mcp/craft`, the `craft_*` tools, upload links and the Craft worker) in November 2026.
 
 ## Running it
 
-The server is `php artisan mcp:start mothership`. It speaks MCP over stdin and stdout, has no web route and no sign-in,
-and every call acts as one admin account, named in `.env`. In the deployed stack it lives inside the FPM container, where
-the database and the asset storage are, and agents run on the Mac. Skill Scope therefore registers the Mac launcher as the
-stdio server, never the PHP command:
+The tools exist twice on the server, with one implementation behind both:
+
+- **stdio:** `php artisan mcp:start mothership`. It speaks MCP over stdin and stdout, has no web route and no sign-in,
+  and every call acts as one admin account, named in `.env`. It runs where the app runs.
+- **HTTPS:** `POST /api/v1/rest/library/tools/<tool>` (route names `admin.api.dam.library_tools.<tool>`), one route per
+  tool, behind the REST API's OAuth and scope checks. Each call runs `LibraryTool::perform` and `LibraryOperations`
+  exactly as the stdio server does, as the API key's own admin.
+
+Agent sessions use the HTTPS routes through the local launcher, which Skill Scope registers as the stdio server
+`mothership`:
 
 ```bash
-/opt/homebrew/bin/python3 -I -S <deployed checkout>/tools/mcp-launcher/launcher.py
+/usr/bin/python3 -I -S <checkout>/tools/mcp-launcher/launcher.py
 ```
 
-Do not register `container exec ... php artisan mcp:start mothership` directly. A global MCP server runs one copy per open
-agent session. At about 100 MB of PHP per copy and more than 50 sessions, that is more memory than the 4 GB FPM container
-has, and the site goes down with it.
+The checkout needs only `tools/mcp-launcher/` (a sparse checkout is enough). The machine needs no PHP, no SSH and no
+container runtime: the stock `/usr/bin/python3` (3.9 or later) and the Keychain items below are all it uses.
 
-### The Mac launcher
+The container path is retired. The launcher no longer runs `container exec ... php artisan mcp:start mothership` on the
+Mac, and none of its settings remain. Never register the PHP command itself as a global MCP server either: a global server
+runs one copy per open agent session, and at about 100 MB of PHP per copy that is more memory than the app's host has.
 
-`tools/mcp-launcher/launcher.py` uses only the Python standard library.
+### The launcher
 
-- **No PHP until it is needed.** `initialize` and `tools/list` are answered from `tools_manifest.json`. The first
-  `tools/call` starts PHP in the container. PHP stops after 15 idle seconds, and the launcher then restarts itself in place
-  to return to its idle size.
-- **Idle cost.** One idle launcher holds 14.2 MB resident, 7.0 MB of it physical footprint (Python 3.15 on Apple Silicon).
-  It reaches about 24 MB while working.
-- **A cap across the Mac.** At most two PHP servers run at once, across every agent session. Other calls wait their turn
-  for up to two minutes, then get a "busy" refusal they can retry. A session holding a server gives it up after 60 seconds
-  of steady use, so a queued session is not starved.
-- **Worst-case memory in the container.** One server measures about 100 MB, so two typically use about 0.2 GB. The hard
-  ceiling is 1 GB: two servers at PHP's 512 MB `memory_limit`.
-- **Files cross the container boundary as checked copies.** `library_save` copies the Mac file into a private staging folder
-  in the container and `library_fetch` copies the result back, with sha256 verified after each copy. A failed copy leaves no
-  partial file. The rules below for `local_path` and `dest_dir` are enforced on the Mac as well, including `name-2` naming
-  and refusing a `dest_dir` inside The Mothership's `storage/`.
+`tools/mcp-launcher/launcher.py` and `bridge.py` use only the Python standard library.
+
+- **No network until it is needed.** `initialize` and `tools/list` are answered from `tools_manifest.json`. The first
+  `tools/call` loads `bridge.py`. After 15 idle seconds with every call answered, the launcher restarts itself in place to
+  return to its idle size.
+- **Idle cost.** One idle launcher holds 13.6 MB resident, 9.0 MB of it physical footprint, under `/usr/bin/python3`
+  3.9.6 on Apple Silicon (14.0 MB and 6.7 MB under Python 3.15).
+- **Sign-in.** The launcher signs in with the OAuth password grant at `/oauth/token`, using the agent API credentials in
+  the Keychain. The token is kept in the Keychain until 60 seconds before it expires, and a refresh happens under a lock
+  file in `MOTHERSHIP_MCP_STATE_DIR`, so concurrent sessions sign in once. A 401 signs in again once.
+- **Retries.** A dropped connection, a 429, 502 or 504, and a 503 that is not the app's own refusal are tried up to three
+  times in all, waiting for `Retry-After` (at most 30 seconds) or else 1 then 2 seconds. Every tool is safe to retry:
+  `library_save` and `library_vectorize` replay their `request_id`. Redirects are never followed.
+- **Files in.** For `library_save` and `library_vectorize` with `local_path`, the launcher applies the server's rules for
+  `local_path` on this machine, copies the file to a private snapshot, checks the original did not change while it was
+  read, and sends the snapshot as the multipart field `file` with the arguments as the JSON field `arguments`. The file's
+  own name travels as the upload's file name, so the saved name is the one the stdio server would use.
+- **Files out.** For `library_fetch` and `library_vectorization` with `format`, the server checks access and the
+  arguments, then answers with the file's bytes and the result in the `X-Library-Result` header (base64 JSON). The
+  launcher then checks `dest_dir` on this machine, streams into a hidden partial file there, verifies size and sha256,
+  and names the copy under the server's rules (below). A mismatch writes nothing.
+- **Size ceiling: 50 MiB.** That is the deployed stack's PHP `upload_max_filesize`, the most one upload carries. A larger
+  file is refused before anything is sent; a file the server still finds too large is refused with HTTP 413. Fetches have
+  no such limit.
 - **The tool list cannot drift unnoticed.** `tests/Feature/MothershipMcpLibraryTest.php` compares the manifest with the
-  server's code. After a change to the tools, regenerate it from the running server with `launcher.py --write-manifest`;
-  `launcher.py --check-manifest` exits 1 when the two differ.
+  server's code. After a change to the tools, regenerate it in a full checkout with `launcher.py --write-manifest`, which
+  runs that checkout's stdio server; `launcher.py --check-manifest` exits 1 when the two differ.
 
 | Launcher setting | Meaning |
 | --- | --- |
-| `MOTHERSHIP_MCP_MAX_SERVERS` | PHP servers allowed at once across the Mac (default 2). |
-| `MOTHERSHIP_MCP_IDLE_SECONDS` | Idle time before PHP stops (default 15). |
-| `MOTHERSHIP_MCP_HOLD_SECONDS` | How long a busy session keeps one server before giving its slot up (default 60). |
-| `MOTHERSHIP_MCP_QUEUE_SECONDS` | How long a call waits for a free slot (default 120). |
-| `MOTHERSHIP_MCP_START_SECONDS` | How long PHP may take to answer when it starts (default 30). |
-| `MOTHERSHIP_MCP_CALL_SECONDS` | How long one tool call may run (default 1800). |
-| `MOTHERSHIP_MCP_MAX_FILE_BYTES` | The largest file `library_save` copies in (default 2 GiB). The server applies its own limit too. |
-| `MOTHERSHIP_MCP_FETCH_DIR` | The Mac folder `library_fetch` uses when a call names no `dest_dir` (default `$TMPDIR/mothership-library`). |
-| `MOTHERSHIP_MCP_LAUNCHER_LOG` | `1` or `true` writes redacted JSONL: operation, outcome, size and timing, never a path, name, title or byte content. |
+| `MOTHERSHIP_URL` | The site the launcher calls (default `https://themothership.app`). |
+| `MOTHERSHIP_MCP_MAX_FILE_BYTES` | The largest file `library_save` or `library_vectorize` sends (default 50 MiB). |
+| `MOTHERSHIP_MCP_FETCH_DIR` | The folder copies go to when a call names no `dest_dir` (default `$TMPDIR/mothership-library`). |
+| `MOTHERSHIP_MCP_IDLE_SECONDS` | Idle time before the launcher returns to its idle size (default 15). |
+| `MOTHERSHIP_MCP_TIMEOUT_SECONDS` | How long one network read or write may stall before the attempt fails (default 120). |
+| `MOTHERSHIP_MCP_STATE_DIR` | Where the token refresh lock lives (default `~/Library/Caches/mothership-mcp`). |
+| `MOTHERSHIP_MCP_SECURITY_BIN` | The Keychain command (default `/usr/bin/security`). |
+| `MOTHERSHIP_MCP_PHP` | The PHP binary `--write-manifest` and `--check-manifest` run (default `php`). Not used while serving. |
+| `MOTHERSHIP_MCP_LAUNCHER_LOG` | `1` or `true` writes redacted JSONL: operation, outcome, HTTP status, size and timing, never a credential, token, path, name, title or byte content. |
 | `MOTHERSHIP_MCP_LAUNCHER_LOG_PATH` | Where that log goes (default `~/Library/Logs/mothership-mcp-launcher.jsonl`). |
-| `MOTHERSHIP_MCP_CONTAINER_BIN`, `MOTHERSHIP_MCP_CONTAINER`, `MOTHERSHIP_MCP_CONTAINER_USER`, `MOTHERSHIP_MCP_CONTAINER_WORKDIR` | How the container is reached (defaults `/opt/homebrew/bin/container`, `mothership-private-fpm`, `www-data`, `/var/www/html`). |
-| `MOTHERSHIP_MCP_CONTAINER_STAGING` | The staging folder inside the container (default `/tmp/mothership-mcp`). |
-| `MOTHERSHIP_MCP_STATE_DIR` | Where the Mac keeps the cap's lock files (default `~/Library/Caches/mothership-mcp`). |
+
+### Keychain items
+
+Both are generic passwords whose account is the login user name.
+
+| Item | Holds |
+| --- | --- |
+| `mothership-agent-api` | The agent API credentials, as JSON with `client_id`, `client_secret`, `username` and `password`: a password-grant client and the admin it signs in as, whose API key carries the scopes below. Written by the operator; the launcher only reads it. |
+| `mothership-agent-api-token` | The current access token and its expiry. Written by the launcher. |
+
+### API key scopes
+
+Each route is checked against the scope of its REST twin, so an `all` key reaches every tool and a narrower key reaches
+the tools its scopes name. A missing scope reads "This action is unauthorized" and names the tool.
+
+| Tool | Scope |
+| --- | --- |
+| `library_search` | `api.dam.assets` |
+| `library_get_asset` | `api.dam.assets.getById` |
+| `library_list_stack` | `api.dam.assets.files.index` |
+| `library_update` | `api.dam.assets.update` |
+| `library_save` | `api.dam.assets.upload` |
+| `library_fetch` | `api.dam.assets.download` |
+| `library_list_folders` | `api.dam.directory` |
+| `library_create_folder` | `api.dam.directory.create` |
+| `library_vectorize` | `api.dam.vectorizations.create` |
+| `library_vectorization` | `api.dam.vectorizations.show` |
+
+The admin's own permissions and folder access apply on top, as listed under Tools.
+
+### How HTTPS answers compare with stdio
+
+The validation, the operations, the result JSON and the refusal sentences are the stdio server's own, so an agent reads
+the same answer either way. The differences:
+
+- Calls act as the API key's admin, not `MOTHERSHIP_MCP_USER_ID`.
+- The launcher's settings, not the server's, decide the file size ceiling and the default fetch folder.
+- `dest_dir` is on the agent's machine, so the server's rule that it lies outside The Mothership's `storage/` does not
+  arise. It is checked after the server answers, as the stdio server checks access before the folder.
+- An unknown tool name is answered by the launcher with the stdio server's words, without a network call.
+- PHP keeps only the part of an uploaded file name after its last `\`. A local file whose name contains `\` is therefore
+  saved under that last part unless the call passes `name`.
 
 ### Server settings
 
-These belong to the PHP server. The deployed stack caches its config when the container starts, so a changed value needs a
-restart.
+These belong to the PHP server. The deployed stack caches its config when it starts, so a changed value needs a restart.
 
 | Setting | Meaning |
 | --- | --- |
-| `MOTHERSHIP_MCP_USER_ID` | The admin account every call acts as. Its own permissions and folder access apply, and assets it saves are created by it. Unset, 0 or an inactive account: every tool refuses with a message that names this setting. |
-| `MOTHERSHIP_MCP_MAX_FILE_BYTES` | The largest local file `library_save` publishes (default 2 GiB). |
-| `MOTHERSHIP_MCP_FETCH_DIR` | Where `library_fetch` writes copies when a call names no `dest_dir` (default `<system temp>/mothership-library`). |
+| `MOTHERSHIP_MCP_USER_ID` | The admin account every stdio call acts as. Its own permissions and folder access apply, and assets it saves are created by it. Unset, 0 or an inactive account: every stdio tool refuses with a message that names this setting. HTTPS calls act as the API key's admin instead. |
+| `MOTHERSHIP_MCP_MAX_FILE_BYTES` | The largest local file a stdio `library_save` publishes (default 2 GiB). |
+| `MOTHERSHIP_MCP_FETCH_DIR` | Where a stdio `library_fetch` writes copies when a call names no `dest_dir` (default `<system temp>/mothership-library`). |
 | `MOTHERSHIP_MCP_SEARCH_EXCLUDED_FOLDERS` | Folder ids (comma-separated) that `library_search` leaves out unless asked for by `folder_id`, such as QA output. |
 | `MOTHERSHIP_MCP_LOGGING` | `true` writes redacted JSONL to `storage/logs/mothership-mcp.jsonl`: operation, outcome, reason code, size and counts only, never a path, name, title, tag, note or byte content. One `run_id` per server process. |
 
-Whoever can start the process on this machine acts as that account, so name an account whose access fits the tools that
-use it.
+Whoever can start the stdio process on the server acts as that account, so name an account whose access fits the tools
+that use it.
 
 ## Tools
 
@@ -103,14 +158,15 @@ No tool deletes or overwrites anything in the library.
   agent's own: changing it never changes the library. A file already at that name with the same bytes is reused
   (`reused: true`); any other file of that name is never overwritten, and the copy is named `name-2`, `name-3` and so on.
   The name is taken with an exclusive create before the copy moves in, so two fetches at once never replace each other.
-  `dest_dir` must be absolute and outside The Mothership's `storage/`, so no answer ever points into the blob store, which
-  may live off this machine.
+  `dest_dir` must be absolute. On stdio it must also lie outside The Mothership's `storage/`, so no answer ever points
+  into the blob store.
 - **In (`library_save`).** `local_path` must be an absolute path to a regular, non-empty file within the size limit. It is
   copied to a private staging file first, so a tool still writing the original cannot change what is published. The
   bytes must be what the name says (`CreativeHubSaver::contentMatches`), and an MP4 or MOV must hold its `moov` index
-  and end on a whole box (a render cut short is refused). `name` overrides the saved file name and must carry an extension. Publication goes
-  through `CreativeHubSaver` (`saveNew` / `addToStack`), the same create-only path as the Library's Creative Hub: a name
-  already in the folder or stack is saved under the next free one and reported as `renamed_from`.
+  and end on a whole box (a render cut short is refused). `name` overrides the saved file name and must carry an
+  extension. Publication goes through `CreativeHubSaver` (`saveNew` / `addToStack`), the same create-only path as the
+  Library's Creative Hub: a name already in the folder or stack is saved under the next free one and reported as
+  `renamed_from`.
 - **Retries.** `request_id` (a UUID) is claimed in `dam_creative_hub_saves` per account. The same id with the same file
   and destination returns the first result (`replayed: true`); with other bytes or another destination it is refused.
   A retry changes nothing: title and tags are set only by the first save, so later edits stay, and a retry for an
@@ -143,11 +199,18 @@ that reference; in stack mode the link starts from the stack's asset, as its tag
 ## Code
 
 - `packages/Mothership/DAM/src/Mcp/MothershipServer.php`: the server and its instructions.
-- `packages/Mothership/DAM/src/Mcp/LibraryTool.php`: each tool's input schema and validation rules, from one table.
-- `packages/Mothership/DAM/src/Mcp/LibraryOperations.php`: the operations.
+- `packages/Mothership/DAM/src/Mcp/LibraryTool.php`: each tool's input schema and validation rules, from one table, and
+  `perform`, the rules both the stdio server and the HTTPS routes run.
+- `packages/Mothership/DAM/src/Mcp/LibraryOperations.php`: the operations; `transfer` hands a copy-out to the HTTPS
+  route as a `LibraryTransfer`.
+- `packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php` and
+  `packages/Mothership/DAM/src/Routes/V1/library-tool-routes.php`: the HTTPS routes; their scopes are in
+  `packages/Mothership/DAM/src/Config/api-acl.php`.
 - `packages/Mothership/DAM/src/Providers/MothershipMcpServiceProvider.php`: `Mcp::local('mothership', ...)`.
-- `config/mothership-mcp.php`; tests in `tests/Feature/MothershipMcpLibraryTest.php`.
-- `tools/mcp-launcher/`: the Mac launcher (`launcher.py`, `bridge.py`), its manifest and its tests.
+- `config/mothership-mcp.php`; tests in `tests/Feature/MothershipMcpLibraryTest.php` and
+  `packages/Mothership/DAM/tests/Feature/Api/LibraryToolApiTest.php`.
+- `tools/mcp-launcher/`: the launcher (`launcher.py`, `bridge.py`), its manifest and its tests, which run it over real
+  stdio against a local HTTP stand-in for the site (`tests/fake_mothership.py`).
 
 The OAuth classes in `packages/Mothership/AdminApi` (`Mcp*`, [mcp-oauth.md](mcp-oauth.md)) stay registered but inactive:
 `mcp-oauth.enabled` is `false` in `config/mcp-oauth.php`, so that OAuth surface is switched off. A remote mode for this

@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""The Mac side of The Mothership's `mothership` library MCP server.
+"""The local side of The Mothership's `mothership` library MCP server, run by each agent session on this machine.
 
-The server itself (`php artisan mcp:start mothership`) runs inside the FPM container, where the database and the asset
-storage are. Agents run on the Mac, one launcher per agent session, and most sessions never touch the library, so this
-file is deliberately small: it answers `initialize` and `tools/list` from tools_manifest.json without starting PHP.
+The library itself runs on the site. Each tool call goes to its REST route over HTTPS, which runs the same validation and
+operations as the stdio server (`php artisan mcp:start mothership`). Most sessions never touch the library, so this file
+is deliberately small: it answers `initialize` and `tools/list` from tools_manifest.json without any network call.
 
-The first `tools/call` loads bridge.py, which starts PHP, caps how many PHP servers run across the Mac and carries files
-across the container boundary. Once PHP has stopped on idle, the process replaces itself with a fresh copy of this file
-and so returns to its idle size. Python standard library only. Contract: docs/api/mothership-mcp.md.
+The first `tools/call` loads bridge.py, which signs in with the agent API key in the Keychain and carries files over
+HTTPS. After a quiet spell the process replaces itself with a fresh copy of this file and so returns to its idle size.
+Python standard library only, 3.9 or later. Contract: docs/api/mothership-mcp.md.
 
     launcher.py                   serve MCP over stdin and stdout
-    launcher.py --write-manifest  regenerate tools_manifest.json from the running server
-    launcher.py --check-manifest  exit 1 when tools_manifest.json differs from the running server
+    launcher.py --write-manifest  regenerate tools_manifest.json from this checkout's stdio server
+    launcher.py --check-manifest  exit 1 when tools_manifest.json differs from this checkout's stdio server
 """
 import os
 import sys
@@ -83,8 +83,8 @@ def dumps(value):
 class Log:
     """Redacted JSONL at a fixed path, on only with MOTHERSHIP_MCP_LAUNCHER_LOG=1.
 
-    Events carry operation names, outcomes, sizes, counts and timings. Never a path, file name, title, argument or byte
-    of content.
+    Events carry operation names, outcomes, HTTP statuses, sizes, counts and timings. Never a path, file name, title,
+    argument, credential or byte of content.
     """
 
     def __init__(self, environ):
@@ -122,6 +122,7 @@ class Launcher:
         self.server_info = manifest["serverInfo"]
         self.instructions = manifest["instructions"]
         self.tools_json = dumps(manifest["tools"])
+        self.tool_names = [tool["name"] for tool in manifest["tools"]]
         self.protocol_version = environ.get(PROTOCOL_KEY) or self.versions[0]
         self.worker = None
         self.write_lock = None
@@ -247,7 +248,7 @@ class Launcher:
                 settings=bridge.Settings(environ=self.environ),
                 log=self.log,
                 send=self.send,
-                protocol_version=self.protocol_version,
+                tool_names=self.tool_names,
             )
         return self.worker
 

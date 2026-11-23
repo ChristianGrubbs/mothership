@@ -1,74 +1,78 @@
 """The working half of the library MCP launcher, imported by launcher.py on a session's first tool call.
 
-It starts the PHP server inside the FPM container, keeps the machine-wide cap on how many of those run, and carries files
-across the container boundary with the server's own rules kept on the Mac side. Contract: docs/api/mothership-mcp.md.
+Each tool call goes to The Mothership's REST route for that tool, POST /api/v1/rest/library/tools/<tool>, which runs the
+same validation and operations as the stdio server (LibraryTool::perform, LibraryOperations) as the API key's own admin.
+This side signs in with the agent API credentials in the Keychain, carries files over HTTPS, and writes copies under the
+server's naming rules. Python standard library only. Contract: docs/api/mothership-mcp.md.
 """
 from __future__ import annotations
 
+import base64
+import hashlib
+import http.client
 import json
 import os
 import queue
 import threading
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 
 MANIFEST_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools_manifest.json")
-SERVER_COMMAND = ("php", "artisan", "mcp:start", "mothership")
-STORAGE_MOUNT = "/var/www/html/storage"
+CHECKOUT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+SERVER_COMMAND = ("artisan", "mcp:start", "mothership")
+ROUTE_PREFIX = "/api/v1/rest/library/tools/"
+TOOL_PREFIX = "library_"
+DEFAULT_URL = "https://themothership.app"
+# The deployed stack's PHP upload_max_filesize: the largest file one HTTPS upload carries.
+DEFAULT_MAX_FILE_BYTES = 50 * 1024 * 1024
 CHUNK_BYTES = 1024 * 1024
-# LibraryOperations::MAX_NAME_TRIES: how many name, name-2, name-3 ... a fetch tries before giving up.
+# LibraryOperations::MAX_NAME_TRIES: how many name, name-2, name-3 ... a copy tries before giving up.
 MAX_NAME_TRIES = 1000
-DEFAULT_MAX_FILE_BYTES = 2 * 1024 * 1024 * 1024
-# A slow copy is still a live copy: allow five minutes plus 5 MiB/s before calling a transfer stuck.
-TRANSFER_GRACE_SECONDS = 300.0
-TRANSFER_MIN_BYTES_PER_SECOND = 5 * 1024 * 1024
-
-# Runs inside the container. Clears staging folders a killed launcher left behind, then receives one file on stdin and
-# prints its sha256. Arguments: staging root, staging folder, file name.
-RECEIVE_SCRIPT = (
-    'umask 077; mkdir -p "$1" || exit 1; '
-    'find "$1" -mindepth 1 -maxdepth 1 -type d -mmin +240 -exec rm -rf {} + 2>/dev/null; '
-    'mkdir -p "$1/$2" && cat > "$1/$2/$3" && sha256sum < "$1/$2/$3"'
-)
-DISCARD_SCRIPT = 'rm -rf "$1/$2"'
+CREDENTIAL_SERVICE = "mothership-agent-api"
+TOKEN_SERVICE = "mothership-agent-api-token"
+TOKEN_MARGIN_SECONDS = 60
+# `security -i` reads one command per line; a longer line is cut off.
+KEYCHAIN_LINE_LIMIT = 3900
+# One call and two retries for a dropped connection or a busy gateway. Every library tool is idempotent (save and
+# vectorize replay their request_id), so a retry never applies a call twice.
+ATTEMPTS = 3
+RETRY_STATUSES = (429, 502, 503, 504)
+MAX_RETRY_SECONDS = 30.0
+ERROR_BODY_BYTES = 1024 * 1024
+USER_AGENT = "mothership-mcp-launcher/2"
+UPLOAD_TOOLS = ("library_save", "library_vectorize")
+NOT_ANSWERING = "The Mothership is not answering right now (%s). Try again shortly."
 
 
 class LauncherFailure(Exception):
     """A refusal or failure the agent can act on; the message becomes the MCP tool error."""
 
 
-class UpstreamGone(LauncherFailure):
-    """The PHP server stopped answering."""
-
-
 class Settings:
     """Everything configurable, read once from the environment."""
 
     def __init__(self, environ) -> None:
-        self.container_bin = environ.get("MOTHERSHIP_MCP_CONTAINER_BIN", "/opt/homebrew/bin/container")
-        self.container = environ.get("MOTHERSHIP_MCP_CONTAINER", "mothership-private-fpm")
-        self.container_user = environ.get("MOTHERSHIP_MCP_CONTAINER_USER", "www-data")
-        self.container_workdir = environ.get("MOTHERSHIP_MCP_CONTAINER_WORKDIR", "/var/www/html")
-        self.staging_root = environ.get("MOTHERSHIP_MCP_CONTAINER_STAGING", "/tmp/mothership-mcp").rstrip("/")
+        self.base_url = (environ.get("MOTHERSHIP_URL") or DEFAULT_URL).rstrip("/")
         home = os.path.expanduser("~")
-        self.state_dir = environ.get("MOTHERSHIP_MCP_STATE_DIR", os.path.join(home, "Library/Caches/mothership-mcp"))
+        self.state_dir = environ.get("MOTHERSHIP_MCP_STATE_DIR") or os.path.join(home, "Library/Caches/mothership-mcp")
         temporary = environ.get("TMPDIR", "/tmp").rstrip("/") or "/tmp"
         self.fetch_dir = environ.get("MOTHERSHIP_MCP_FETCH_DIR") or temporary + "/mothership-library"
-        self.max_servers = _positive_int(environ=environ, key="MOTHERSHIP_MCP_MAX_SERVERS", default=2)
         self.max_file_bytes = _positive_int(
             environ=environ, key="MOTHERSHIP_MCP_MAX_FILE_BYTES", default=DEFAULT_MAX_FILE_BYTES
         )
         self.idle_seconds = _positive_float(environ=environ, key="MOTHERSHIP_MCP_IDLE_SECONDS", default=15.0)
-        self.hold_seconds = _positive_float(environ=environ, key="MOTHERSHIP_MCP_HOLD_SECONDS", default=60.0)
-        self.queue_seconds = _positive_float(environ=environ, key="MOTHERSHIP_MCP_QUEUE_SECONDS", default=120.0)
-        self.start_seconds = _positive_float(environ=environ, key="MOTHERSHIP_MCP_START_SECONDS", default=30.0)
-        self.call_seconds = _positive_float(environ=environ, key="MOTHERSHIP_MCP_CALL_SECONDS", default=1800.0)
+        self.timeout_seconds = _positive_float(environ=environ, key="MOTHERSHIP_MCP_TIMEOUT_SECONDS", default=120.0)
+        self.security_bin = environ.get("MOTHERSHIP_MCP_SECURITY_BIN") or "/usr/bin/security"
+        self.account = environ.get("USER") or environ.get("LOGNAME") or _login_name()
+        self.php = environ.get("MOTHERSHIP_MCP_PHP") or "php"
 
-    def exec_command(self, arguments, interactive: bool = False) -> list:
-        command = [self.container_bin, "exec"]
-        if interactive:
-            command.append("-i")
-        command += ["--user", self.container_user, "--workdir", self.container_workdir, self.container]
-        return command + list(arguments)
+
+def _login_name() -> str:
+    import pwd
+
+    return pwd.getpwuid(os.getuid()).pw_name
 
 
 def _positive_int(environ, key: str, default: int) -> int:
@@ -84,169 +88,264 @@ def _positive_float(environ, key: str, default: float) -> float:
     return value if value > 0 else default
 
 
-class SlotPool:
-    """The machine-wide cap on PHP servers: one flock per slot, released by the kernel if a launcher dies."""
-
-    def __init__(self, settings: Settings) -> None:
-        self.directory = os.path.join(settings.state_dir, "slots")
-        self.size = settings.max_servers
-        self.descriptor = None
-
-    def try_acquire(self) -> bool:
-        import fcntl
-
-        os.makedirs(self.directory, exist_ok=True)
-        for index in range(self.size):
-            descriptor = os.open(os.path.join(self.directory, "slot-%d.lock" % index), os.O_RDWR | os.O_CREAT, 0o600)
-            try:
-                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except OSError:
-                os.close(descriptor)
-                continue
-            self.descriptor = descriptor
-            return True
-        return False
-
-    def release(self) -> None:
-        if self.descriptor is not None:
-            os.close(self.descriptor)
-            self.descriptor = None
-
-
-class Upstream:
-    """One PHP server in the container, spoken to over JSON-RPC on its stdin and stdout."""
-
-    def __init__(self, settings: Settings, protocol_version: str) -> None:
-        import subprocess
-
-        self.settings = settings
-        self.protocol_version = protocol_version
-        self.started_at = time.monotonic()
-        self.next_id = 0
-        self.buffer = bytearray()
-        self.process = subprocess.Popen(
-            settings.exec_command(arguments=SERVER_COMMAND, interactive=True),
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-        )
-
-    def handshake(self) -> dict:
-        reply = self.request(
-            method="initialize",
-            params={
-                "protocolVersion": self.protocol_version,
-                "capabilities": {},
-                "clientInfo": {"name": "mothership-mcp-launcher", "version": "1"},
-            },
-            timeout=self.settings.start_seconds,
-        )
-        self._write({"jsonrpc": "2.0", "method": "notifications/initialized"})
-        return reply
-
-    def request(self, method: str, params: dict, timeout: float) -> dict:
-        self.next_id += 1
-        expected = self.next_id
-        self._write({"jsonrpc": "2.0", "id": expected, "method": method, "params": params})
-        message = self._read_reply(expected_id=expected, deadline=time.monotonic() + timeout)
-        if "error" in message:
-            error = message["error"] if isinstance(message["error"], dict) else {}
-            raise LauncherFailure(str(error.get("message") or "The library server refused the request."))
-        result = message.get("result")
-        return result if isinstance(result, dict) else {}
-
-    def alive(self) -> bool:
-        return self.process.poll() is None
-
-    def stop(self) -> None:
-        import subprocess
-
-        try:
-            self.process.stdin.close()
-        except OSError:
-            pass
-        try:
-            self.process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                self.process.kill()
-                self.process.wait()
-        self.process.stdout.close()
-
-    def _write(self, message: dict) -> None:
-        try:
-            self.process.stdin.write(json.dumps(message).encode("utf-8") + b"\n")
-            self.process.stdin.flush()
-        except OSError as error:
-            raise UpstreamGone("The library server stopped. Try again.") from error
-
-    def _read_reply(self, expected_id: int, deadline: float) -> dict:
-        import select
-
-        descriptor = self.process.stdout.fileno()
-        while True:
-            newline = self.buffer.find(b"\n")
-            if newline >= 0:
-                line = bytes(self.buffer[:newline])
-                del self.buffer[: newline + 1]
-                try:
-                    message = json.loads(line)
-                except ValueError:
-                    continue
-                if isinstance(message, dict) and message.get("id") == expected_id:
-                    return message
-                continue
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise UpstreamGone("The library server did not answer in time. Try again.")
-            ready, _, _ = select.select([descriptor], [], [], min(remaining, 1.0))
-            if ready:
-                chunk = os.read(descriptor, 65536)
-                if not chunk:
-                    raise UpstreamGone("The library server stopped during this call. Try again.")
-                self.buffer += chunk
-
-
-class ContainerFiles:
-    """Moves files across the container boundary and keeps the server's rules on the Mac side."""
+class Keychain:
+    """Generic passwords through macOS `security`, as the `mothership` CLI keeps them. Values never reach a command line."""
 
     def __init__(self, settings: Settings, log) -> None:
         self.settings = settings
         self.log = log
-        self.active = None
-        self.storage_source = None
 
-    def kill_active(self) -> None:
-        process = self.active
-        if process is not None and process.poll() is None:
-            process.kill()
-
-    def new_staging(self) -> str:
-        return os.urandom(16).hex()
-
-    def staging_path(self, staging: str) -> str:
-        return self.settings.staging_root + "/" + staging
-
-    def discard(self, staging: str) -> None:
+    def read(self, service: str):
         import subprocess
 
-        arguments = ["sh", "-c", DISCARD_SCRIPT, "sh", self.settings.staging_root, staging]
+        command = [self.settings.security_bin, "find-generic-password", "-a", self.settings.account, "-s", service, "-w"]
         try:
-            subprocess.run(
-                self.settings.exec_command(arguments=arguments),
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=30,
-            )
+            done = subprocess.run(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=30)
         except (OSError, subprocess.SubprocessError):
-            self.log.event("warn", "staging.discard_failed", "ContainerFiles.discard", {})
+            raise LauncherFailure("The Keychain cannot be read right now, so the library cannot sign in. Try again.") from None
+        if done.returncode != 0:
+            return None
+        return done.stdout.decode("utf-8", "replace").strip()
+
+    def write(self, service: str, value: str) -> None:
+        """Stores through `security -i` on stdin, so the value never appears in a process listing."""
+        import subprocess
+
+        line = "add-generic-password -a %s -s %s -U -X %s\n" % (self.settings.account, service, value.encode("utf-8").hex())
+        stored = False
+        if len(line) <= KEYCHAIN_LINE_LIMIT:
+            try:
+                done = subprocess.run(
+                    [self.settings.security_bin, "-i"], input=line.encode("utf-8"),
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30,
+                )
+                stored = done.returncode == 0
+            except (OSError, subprocess.SubprocessError):
+                stored = False
+        if not stored:
+            # Only the shared cache: the next call signs in again.
+            self.log.event("warn", "keychain.write_failed", "Keychain.write", {"service": service})
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuses redirects, so the bearer credential is never sent to another location."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
+        return None
+
+
+class Unreachable(LauncherFailure):
+    """The site did not answer: no connection, a timeout, or a connection dropped mid-answer."""
+
+
+class Http:
+    """Requests on the configured site only, without following redirects."""
+
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+        self.opener = urllib.request.build_opener(_NoRedirect)
+
+    def open(self, request: urllib.request.Request) -> tuple:
+        """Sends one request. Returns (status, headers, response) with the body unread."""
+        try:
+            response = self.opener.open(request, timeout=self.settings.timeout_seconds)
+            return response.status, response.headers, response
+        except urllib.error.HTTPError as error:
+            return error.code, error.headers, error
+        except urllib.error.URLError as error:
+            raise Unreachable(NOT_ANSWERING % _cause(error=error.reason)) from None
+        except (http.client.HTTPException, OSError) as error:
+            raise Unreachable(NOT_ANSWERING % _cause(error=error)) from None
+
+
+def _cause(error) -> str:
+    if isinstance(error, (TimeoutError, OSError)) and "timed out" in str(error):
+        return "timed out"
+    text = str(error).strip()
+    return text[:200] if text else type(error).__name__
+
+
+def _read_json_object(response):
+    """The JSON object of an answer that is not a file (a refusal, a sign-in), or None. Reads at most ERROR_BODY_BYTES."""
+    try:
+        raw = response.read(ERROR_BODY_BYTES)
+    except (http.client.HTTPException, OSError):
+        raw = b""
+    finally:
+        response.close()
+    try:
+        payload = json.loads(raw.decode("utf-8")) if raw else None
+    except ValueError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+class Credentials:
+    """The bearer for the library's REST routes: the agent API key's password grant, cached in the Keychain like the CLI.
+
+    TOKEN_SERVICE holds "<expires_at> <access_token>", shared with the `mothership` CLI and every other launcher. A refresh
+    holds an flock, so launchers that find it stale at the same moment sign in once between them.
+    """
+
+    def __init__(self, settings: Settings, log, http: Http) -> None:
+        self.settings = settings
+        self.log = log
+        self.http = http
+        self.keychain = Keychain(settings=settings, log=log)
+        self.token = None
+
+    def current(self) -> str:
+        if self.token is None:
+            self.token = self._cached(stale=None) or self.refresh(stale=None)
+        return self.token
+
+    def refresh(self, stale) -> str:
+        """A token other than stale: one another process has cached since, or a fresh sign-in."""
+        with self._lock():
+            token = self._cached(stale=stale)
+            if token is None:
+                token, expires_in = self._grant()
+                self.keychain.write(service=TOKEN_SERVICE, value="%d %s" % (int(time.time()) + expires_in, token))
+            self.token = token
+            return token
+
+    def _cached(self, stale):
+        raw = self.keychain.read(service=TOKEN_SERVICE)
+        expiry, _, token = (raw or "").partition(" ")
+        if not expiry.isdigit() or int(expiry) - TOKEN_MARGIN_SECONDS <= time.time() or not token or token == stale:
+            return None
+        return token
+
+    def _lock(self):
+        settings = self.settings
+
+        class _Held:
+            def __enter__(held):  # noqa: N805
+                import fcntl
+
+                os.makedirs(settings.state_dir, mode=0o700, exist_ok=True)
+                held.descriptor = os.open(os.path.join(settings.state_dir, "token.lock"), os.O_RDWR | os.O_CREAT, 0o600)
+                deadline = time.monotonic() + settings.timeout_seconds + 10
+                while True:
+                    try:
+                        fcntl.flock(held.descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        return held
+                    except OSError:
+                        # A holder that hangs past one sign-in's timeout is stuck; sign in without it.
+                        if time.monotonic() >= deadline:
+                            return held
+                        time.sleep(0.05)
+
+            def __exit__(held, *_exc):  # noqa: N805
+                os.close(held.descriptor)
+
+        return _Held()
+
+    def _grant(self) -> tuple:
+        credentials = self._credentials()
+        body = urllib.parse.urlencode({
+            "grant_type": "password",
+            "client_id": credentials["client_id"],
+            "client_secret": credentials["client_secret"],
+            "username": credentials["username"],
+            "password": credentials["password"],
+        }).encode("utf-8")
+        request = urllib.request.Request(
+            self.settings.base_url + "/oauth/token", data=body, method="POST",
+            headers={"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded", "User-Agent": USER_AGENT},
+        )
+        status, _, response = self.http.open(request=request)
+        payload = _read_json_object(response=response)
+        self.log.event("info" if status == 200 else "warn", "token.grant", "Credentials._grant", {"status": status})
+        token = payload.get("access_token") if payload else None
+        if status == 200 and isinstance(token, str) and token:
+            expires_in = payload.get("expires_in")
+            return token, expires_in if isinstance(expires_in, int) and expires_in > 0 else 3600
+        if status >= 500 or status == 429:
+            raise LauncherFailure(NOT_ANSWERING % ("HTTP %d" % status))
+        if status == 200:
+            raise LauncherFailure(NOT_ANSWERING % "its sign-in answer held no access token")
+        raise LauncherFailure(
+            "The Mothership refused the library sign-in (HTTP %d). Check the agent API credentials in the Keychain item %s."
+            % (status, CREDENTIAL_SERVICE)
+        )
+
+    def _credentials(self) -> dict:
+        raw = self.keychain.read(service=CREDENTIAL_SERVICE)
+        if raw is None:
+            raise LauncherFailure(
+                "The Keychain item %s is missing, so the library cannot sign in. Store the agent API credentials there "
+                "(JSON with client_id, client_secret, username and password)." % CREDENTIAL_SERVICE
+            )
+        try:
+            credentials = json.loads(raw)
+        except ValueError:
+            credentials = None
+        if not isinstance(credentials, dict):
+            raise LauncherFailure("The Keychain item %s is not a JSON object, so the library cannot sign in." % CREDENTIAL_SERVICE)
+        missing = [key for key in ("client_id", "client_secret", "username", "password") if not isinstance(credentials.get(key), (str, int)) or credentials.get(key) == ""]
+        if missing:
+            raise LauncherFailure("The Keychain item %s lacks %s, so the library cannot sign in." % (CREDENTIAL_SERVICE, ", ".join(missing)))
+        return {key: str(credentials[key]) for key in ("client_id", "client_secret", "username", "password")}
+
+
+class Multipart:
+    """A seekable multipart/form-data body over one file, so a retry sends the same bytes without holding them in memory."""
+
+    def __init__(self, fields: list, file_field: str, file_name: str, file_path: str) -> None:
+        self.boundary = "mothership" + os.urandom(16).hex()
+        self.content_type = "multipart/form-data; boundary=" + self.boundary
+        self.parts = []
+        for name, value in fields:
+            self.parts.append(
+                ('--%s\r\nContent-Disposition: form-data; name="%s"\r\n\r\n' % (self.boundary, _quoted(text=name))).encode("utf-8")
+                + value.encode("utf-8") + b"\r\n"
+            )
+        head = '--%s\r\nContent-Disposition: form-data; name="%s"; filename="%s"\r\nContent-Type: application/octet-stream\r\n\r\n' % (
+            self.boundary, _quoted(text=file_field), _quoted(text=file_name),
+        )
+        self.parts += [head.encode("utf-8"), file_path, b"\r\n", ("--%s--\r\n" % self.boundary).encode("utf-8")]
+        self.length = sum(os.path.getsize(part) if isinstance(part, str) else len(part) for part in self.parts)
+        self.index = 0
+        self.handle = None
+
+    def read(self, size: int = -1) -> bytes:
+        size = CHUNK_BYTES if size is None or size < 0 else size
+        while self.index < len(self.parts):
+            part = self.parts[self.index]
+            if isinstance(part, bytes):
+                self.index += 1
+                return part
+            if self.handle is None:
+                self.handle = open(part, "rb")
+            chunk = self.handle.read(size)
+            if chunk:
+                return chunk
+            self.handle.close()
+            self.handle = None
+            self.index += 1
+        return b""
+
+    def close(self) -> None:
+        if self.handle is not None:
+            self.handle.close()
+            self.handle = None
+
+
+def _quoted(text: str) -> str:
+    """A quoted-string for a multipart header, escaped the way PHP's form parser reads it."""
+    return text.replace("\\", "\\\\").replace('"', '\\"').replace("\r", " ").replace("\n", " ")
+
+
+class LocalFiles:
+    """The files on this machine: the server's rules for local_path and dest_dir, checked copies in and out."""
+
+    def __init__(self, settings: Settings, log) -> None:
+        self.settings = settings
+        self.log = log
 
     def source(self, path: str) -> tuple:
-        """The server's rules for local_path, checked before anything starts. Returns (real path, size)."""
+        """The server's rules for local_path, checked before anything is sent. Returns (real path, size)."""
         import stat
 
         if not path.startswith("/"):
@@ -270,64 +369,36 @@ class ContainerFiles:
             )
         return real, details.st_size
 
-    def send_in(self, real_path: str, size: int, staging: str) -> str:
-        """Copies a Mac file into the staging folder and proves the bytes arrived. Returns the container path."""
-        import hashlib
-        import subprocess
+    def snapshot(self, real_path: str, size: int) -> tuple:
+        """A private copy of the file to upload, so a tool still writing the original cannot change what is sent.
 
-        started = time.monotonic()
-        name = os.path.basename(real_path)
-        command = ["sh", "-c", RECEIVE_SCRIPT, "sh", self.settings.staging_root, staging, name]
-        process = subprocess.Popen(
-            self.settings.exec_command(arguments=command, interactive=True),
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-        )
-        self.active = process
-        watchdog = threading.Timer(_transfer_seconds(size=size), process.kill)
-        watchdog.daemon = True
-        watchdog.start()
-        digest = hashlib.sha256()
-        sent = 0
+        Returns (folder, path); the caller removes the folder.
+        """
+        import shutil
+        import tempfile
+
+        folder = tempfile.mkdtemp(prefix="mothership-mcp-")
+        path = os.path.join(folder, "upload")
+        copied = 0
         try:
-            try:
-                with open(real_path, "rb") as handle:
-                    before = os.fstat(handle.fileno())
-                    while True:
-                        chunk = handle.read(CHUNK_BYTES)
-                        if not chunk:
-                            break
-                        digest.update(chunk)
-                        process.stdin.write(chunk)
-                        sent += len(chunk)
-                    after = os.fstat(handle.fileno())
-                changed = sent != size or (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns)
-                process.stdin.close()
-                output = process.stdout.read(256)
-                code = process.wait()
-            except OSError:
-                process.kill()
-                process.wait()
-                raise LauncherFailure("Copying the file into The Mothership failed, so nothing was saved. Try again.") from None
-        finally:
-            watchdog.cancel()
-            self.active = None
-            process.stdout.close()
-        if changed:
+            with open(real_path, "rb") as source:
+                before = os.fstat(source.fileno())
+                descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(descriptor, "wb") as target:
+                    for chunk in iter(lambda: source.read(CHUNK_BYTES), b""):
+                        target.write(chunk)
+                        copied += len(chunk)
+                after = os.fstat(source.fileno())
+        except OSError:
+            shutil.rmtree(folder, True)
+            raise LauncherFailure("The file at local_path could not be read in full (is the disk full?), so nothing was saved.") from None
+        if copied != size or (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
+            shutil.rmtree(folder, True)
             raise LauncherFailure("The file at local_path changed while it was being read. Save it again once it is finished.")
-        received = output.decode("ascii", "replace").split()[0] if output.strip() else ""
-        if code != 0 or received != digest.hexdigest():
-            self.log.event("error", "transfer.in", "ContainerFiles.send_in", {"outcome": "sha256_mismatch", "size": size})
-            raise LauncherFailure("The copy inside The Mothership did not match the file, so nothing was saved. Try again.")
-        self.log.event(
-            "info", "transfer.in", "ContainerFiles.send_in",
-            {"outcome": "ok", "size": size, "seconds": round(time.monotonic() - started, 3)},
-        )
-        return self.staging_path(staging=staging) + "/" + name
+        return folder, path
 
     def destination(self, requested) -> str:
-        """The server's rules for dest_dir that need no container. Returns the real folder, created when missing."""
+        """The server's rules for dest_dir. Returns the real folder, created when missing."""
         directory = requested if requested is not None else self.settings.fetch_dir
         if not directory.startswith("/"):
             raise LauncherFailure("dest_dir must be an absolute path on this machine.")
@@ -340,71 +411,49 @@ class ContainerFiles:
             raise LauncherFailure("Cannot write to dest_dir. Pass a folder this server can write to.")
         return real
 
-    def refuse_storage(self, directory: str) -> None:
-        """dest_dir must sit outside The Mothership's storage, which on this Mac is the container's storage bind."""
-        storage = self._storage_source()
-        if directory == storage or directory.startswith(storage.rstrip("/") + "/"):
-            raise LauncherFailure("dest_dir is inside The Mothership's own storage. Choose a folder outside it.")
-
-    def bring_out(self, container_path: str, name: str, size: int, sha256: str, directory: str) -> tuple:
-        """Copies a verified file to directory under the server's naming rules. Returns (path, reused)."""
+    def bring_out(self, response, name: str, size: int, sha256: str, directory: str) -> tuple:
+        """Writes the streamed bytes to directory under the server's naming rules. Returns (path, reused)."""
         base, extension = _split_name(name=name)
         for attempt in range(1, MAX_NAME_TRIES + 1):
             candidate = _numbered(directory=directory, base=base, extension=extension, attempt=attempt)
             if not os.path.lexists(candidate):
                 break
             if _identical(path=candidate, size=size, sha256=sha256):
+                # Reused without reading the body.
                 return candidate, True
-        part = self._stream_out(container_path=container_path, size=size, sha256=sha256, directory=directory)
+        part = self._stream_out(response=response, size=size, sha256=sha256, directory=directory)
         return self._claim_name(part=part, name_parts=(base, extension), size=size, sha256=sha256, directory=directory)
 
-    def _stream_out(self, container_path: str, size: int, sha256: str, directory: str) -> str:
-        import hashlib
-        import subprocess
-
+    def _stream_out(self, response, size: int, sha256: str, directory: str) -> str:
         started = time.monotonic()
         part = os.path.join(directory, "." + os.urandom(8).hex() + ".mothership-part")
         try:
             descriptor = os.open(part, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
         except OSError:
             raise LauncherFailure("Cannot write to dest_dir. Pass a folder this server can write to.") from None
-        process = subprocess.Popen(
-            self.settings.exec_command(arguments=["cat", container_path]),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-        )
-        self.active = process
-        watchdog = threading.Timer(_transfer_seconds(size=size), process.kill)
-        watchdog.daemon = True
-        watchdog.start()
         digest = hashlib.sha256()
         written = 0
         try:
             with os.fdopen(descriptor, "wb") as output:
-                while True:
-                    chunk = process.stdout.read(CHUNK_BYTES)
+                while written <= size:
+                    try:
+                        chunk = response.read(CHUNK_BYTES)
+                    except (http.client.HTTPException, OSError):
+                        chunk = None
                     if not chunk:
                         break
                     digest.update(chunk)
                     output.write(chunk)
                     written += len(chunk)
-            code = process.wait()
         except OSError:
-            process.kill()
-            process.wait()
             _remove(path=part)
             raise LauncherFailure("Writing the copy failed part way (is the disk full?). Nothing was written.") from None
-        finally:
-            watchdog.cancel()
-            self.active = None
-            process.stdout.close()
-        if code != 0 or written != size or digest.hexdigest() != sha256:
+        if written != size or digest.hexdigest() != sha256:
             _remove(path=part)
-            self.log.event("error", "transfer.out", "ContainerFiles._stream_out", {"outcome": "sha256_mismatch", "size": size})
+            self.log.event("error", "transfer.out", "LocalFiles._stream_out", {"outcome": "sha256_mismatch", "size": size, "received": written})
             raise LauncherFailure("The copy out of The Mothership did not match its recorded sha256, so nothing was written. Try again.")
         self.log.event(
-            "info", "transfer.out", "ContainerFiles._stream_out",
+            "info", "transfer.out", "LocalFiles._stream_out",
             {"outcome": "ok", "size": size, "seconds": round(time.monotonic() - started, 3)},
         )
         return part
@@ -434,37 +483,9 @@ class ContainerFiles:
         _remove(path=part)
         raise LauncherFailure("dest_dir already holds too many files named like %s%s. Pass another dest_dir." % (base, extension))
 
-    def _storage_source(self) -> str:
-        import subprocess
-
-        if self.storage_source is None:
-            try:
-                output = subprocess.run(
-                    [self.settings.container_bin, "inspect", self.settings.container],
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.DEVNULL,
-                    timeout=30,
-                    check=True,
-                ).stdout
-                details = json.loads(output)
-                details = details[0] if isinstance(details, list) else details
-                configuration = details.get("configuration", details)
-                source = next(
-                    mount["source"] for mount in configuration["mounts"] if mount.get("destination") == STORAGE_MOUNT
-                )
-            except (OSError, ValueError, KeyError, IndexError, StopIteration, TypeError, AttributeError, subprocess.SubprocessError):
-                raise LauncherFailure("Cannot confirm dest_dir is outside The Mothership's storage, so nothing was copied. Try again.") from None
-            self.storage_source = os.path.realpath(source)
-        return self.storage_source
-
 
 def _megabytes(bytes_count: int) -> str:
     return "{:,.1f} MB".format(bytes_count / 1048576)
-
-
-def _transfer_seconds(size: int) -> float:
-    return TRANSFER_GRACE_SECONDS + size / TRANSFER_MIN_BYTES_PER_SECOND
 
 
 def _split_name(name: str) -> tuple:
@@ -478,8 +499,6 @@ def _numbered(directory: str, base: str, extension: str, attempt: int) -> str:
 
 
 def _identical(path: str, size: int, sha256: str) -> bool:
-    import hashlib
-
     if os.path.islink(path) or not os.path.isfile(path) or os.path.getsize(path) != size:
         return False
     digest = hashlib.sha256()
@@ -500,49 +519,202 @@ def tool_error(message: str) -> dict:
     return {"content": [{"type": "text", "text": message}], "isError": True}
 
 
-def _tool_details(result: dict) -> dict:
-    """A tool's JSON result: structuredContent, or the same object as text."""
-    structured = result.get("structuredContent")
-    if isinstance(structured, dict):
-        return structured
-    for part in result.get("content") or []:
-        if isinstance(part, dict) and part.get("type") == "text":
-            try:
-                parsed = json.loads(part.get("text", ""))
-            except ValueError:
-                continue
-            if isinstance(parsed, dict):
-                return parsed
-    return {}
+def structured(result: dict) -> dict:
+    """A tool result as the stdio server gives it (Laravel MCP Response::structured): JSON text plus structuredContent."""
+    text = json.dumps(result, ensure_ascii=False, separators=(",", ":"))
+    return {"content": [{"type": "text", "text": text}], "structuredContent": result}
 
 
-def _with_mac_path(result: dict, updates: dict) -> dict:
-    """Replaces the container's answer with the Mac's, in both forms a client may read."""
-    if isinstance(result.get("structuredContent"), dict):
-        result["structuredContent"].update(updates)
-    for part in result.get("content") or []:
-        if isinstance(part, dict) and part.get("type") == "text":
+class Library:
+    """One tool call over HTTPS: the request, sign-in and retries, and the files it carries."""
+
+    def __init__(self, settings: Settings, log) -> None:
+        self.settings = settings
+        self.log = log
+        self.http = Http(settings=settings)
+        self.credentials = Credentials(settings=settings, log=log, http=self.http)
+        self.files = LocalFiles(settings=settings, log=log)
+
+    def call(self, name: str, arguments: dict) -> dict:
+        tool = name[len(TOOL_PREFIX):]
+        if name in UPLOAD_TOOLS and isinstance(arguments.get("local_path"), str):
+            return self._upload(tool=tool, arguments=arguments)
+        copies_out = name == "library_fetch" or (name == "library_vectorization" and "format" in arguments)
+        body = json.dumps(arguments, ensure_ascii=False).encode("utf-8")
+
+        def build(token: str) -> urllib.request.Request:
+            return self._request(tool=tool, token=token, data=body, content_type="application/json")
+
+        status, headers, response, payload = self._exchange(tool=tool, build=build)
+        if copies_out and status == 200:
+            if response is None:
+                raise LauncherFailure("The Mothership answered without a file. Try again.")
             try:
-                parsed = json.loads(part.get("text", ""))
-            except ValueError:
+                return self._copy_out(response=response, headers=headers, requested=arguments.get("dest_dir"))
+            finally:
+                response.close()
+        if response is not None:
+            response.close()
+            raise LauncherFailure("The Mothership answered in a shape the launcher does not know (HTTP %d). Try again." % status)
+        return self._answer(tool=tool, status=status, payload=payload)
+
+    def _upload(self, tool: str, arguments: dict) -> dict:
+        """library_save, or library_vectorize with local_path: the file goes with the call, its bytes standing in for local_path."""
+        import shutil
+
+        real_path, size = self.files.source(path=arguments["local_path"])
+        folder, snapshot = self.files.snapshot(real_path=real_path, size=size)
+        started = time.monotonic()
+        try:
+            fields = [("arguments", json.dumps(arguments, ensure_ascii=False))]
+            bodies = []
+
+            def build(token: str) -> urllib.request.Request:
+                body = Multipart(fields=fields, file_field="file", file_name=os.path.basename(real_path), file_path=snapshot)
+                bodies.append(body)
+                request = self._request(tool=tool, token=token, data=body, content_type=body.content_type)
+                request.add_header("Content-Length", str(body.length))
+                return request
+
+            try:
+                status, _, response, payload = self._exchange(tool=tool, build=build)
+            finally:
+                for body in bodies:
+                    body.close()
+            if response is not None:
+                response.close()
+                raise LauncherFailure("The Mothership answered in a shape the launcher does not know (HTTP %d). Try again." % status)
+            self.log.event(
+                "info", "transfer.in", "Library._upload",
+                {"status": status, "size": size, "seconds": round(time.monotonic() - started, 3)},
+            )
+            return self._answer(tool=tool, status=status, payload=payload)
+        finally:
+            shutil.rmtree(folder, True)
+
+    def _copy_out(self, response, headers, requested) -> dict:
+        """library_fetch, or library_vectorization with format: the bytes stream back, the result in X-Library-Result."""
+        try:
+            details = json.loads(base64.b64decode(headers.get("X-Library-Result", ""), validate=True).decode("utf-8"))
+            name, sha256, size, result = details["name"], details["sha256"], details["size"], details["result"]
+            usable = (
+                isinstance(name, str) and name not in ("", ".", "..") and "/" not in name and "\x00" not in name
+                and isinstance(sha256, str) and isinstance(size, int) and size >= 0 and isinstance(result, dict)
+            )
+        except (ValueError, KeyError, TypeError):
+            usable = False
+        if not usable:
+            raise LauncherFailure("The Mothership answered without a usable file. Try again.")
+        # After the server's own checks, as the stdio server checks dest_dir after access.
+        directory = self.files.destination(requested=requested)
+        path, reused = self.files.bring_out(response=response, name=name, size=size, sha256=sha256, directory=directory)
+        return structured(result=dict(result, path=path, name=os.path.basename(path), reused=reused))
+
+    def _request(self, tool: str, token: str, data, content_type: str) -> urllib.request.Request:
+        return urllib.request.Request(
+            self.settings.base_url + ROUTE_PREFIX + urllib.parse.quote(tool, safe=""), data=data, method="POST",
+            headers={
+                "Accept": "application/json",
+                "Authorization": "Bearer " + token,
+                "Content-Type": content_type,
+                "User-Agent": USER_AGENT,
+            },
+        )
+
+    def _exchange(self, tool: str, build) -> tuple:
+        """Sends one tool call. A dropped connection or a busy gateway is tried again twice; a refused bearer once, after
+        a refresh. Returns (status, headers, response, payload): response is the unread body of a 200 that is not JSON,
+        payload the JSON object of any other answer.
+        """
+        refreshed = False
+        attempt = 0
+        while True:
+            attempt += 1
+            token = self.credentials.current()
+            started = time.monotonic()
+            try:
+                status, headers, response = self.http.open(request=build(token))
+            except Unreachable:
+                self.log.event("warn", "http.unreachable", "Library._exchange", {"tool": tool, "attempt": attempt})
+                if attempt < ATTEMPTS:
+                    time.sleep(_backoff(retry_after=None, attempt=attempt))
+                    continue
+                raise
+            self.log.event(
+                "info" if status < 400 else "warn", "http.response", "Library._exchange",
+                {"tool": tool, "status": status, "attempt": attempt, "ms": int((time.monotonic() - started) * 1000)},
+            )
+            json_answer = (headers.get("Content-Type") or "").split(";")[0].strip() == "application/json"
+            if status == 200 and not json_answer:
+                return status, headers, response, None
+            if status == 200:
+                try:
+                    payload = json.loads(response.read().decode("utf-8"))
+                except (http.client.HTTPException, OSError, ValueError):
+                    payload = None
+                finally:
+                    response.close()
+                return status, headers, None, payload if isinstance(payload, dict) else None
+            payload = _read_json_object(response=response)
+            if status == 401 and not refreshed:
+                refreshed = True
+                attempt -= 1
+                self.credentials.refresh(stale=token)
                 continue
-            if isinstance(parsed, dict):
-                parsed.update(updates)
-                part["text"] = json.dumps(parsed)
-    return result
+            # A 503 carrying the app's own {"error"} is a refusal to pass on; without one it is the gateway.
+            app_refusal = status == 503 and isinstance(payload, dict) and isinstance(payload.get("error"), str)
+            if status in RETRY_STATUSES and not app_refusal and attempt < ATTEMPTS:
+                time.sleep(_backoff(retry_after=headers.get("Retry-After"), attempt=attempt))
+                continue
+            return status, headers, None, payload
+
+    def _answer(self, tool: str, status: int, payload) -> dict:
+        result = payload.get("result") if isinstance(payload, dict) else None
+        if status == 200 and isinstance(result, dict):
+            return structured(result=result)
+        raise LauncherFailure(_refusal(tool=tool, status=status, payload=payload))
+
+
+def _backoff(retry_after, attempt: int) -> float:
+    if retry_after is not None and retry_after.strip().isdigit():
+        return min(float(retry_after.strip()), MAX_RETRY_SECONDS)
+    return float(2 ** (attempt - 1))
+
+
+def _refusal(tool: str, status: int, payload) -> str:
+    """The text an agent reads for a call the server did not complete."""
+    error = payload.get("error") if isinstance(payload, dict) else None
+    if isinstance(error, str) and error:
+        if status == 403 and error.startswith("This action is unauthorized"):
+            return (
+                "This action is unauthorized: the library's API key lacks the scope library_%s needs. "
+                "docs/api/mothership-mcp.md lists each tool's scope." % tool
+            )
+        # The app's own refusal: the same words the stdio server gives.
+        return error
+    if status == 401:
+        return (
+            "The Mothership refused the library credentials (HTTP 401) even after a fresh sign-in. "
+            "Check the agent API key in the Keychain item %s." % CREDENTIAL_SERVICE
+        )
+    if 300 <= status < 400:
+        return "The Mothership answered with a redirect (HTTP %d), which the launcher does not follow. Check MOTHERSHIP_URL." % status
+    if status == 413:
+        return "The file is larger than The Mothership accepts in one upload, so nothing was saved."
+    if status == 429 or status >= 500:
+        return NOT_ANSWERING % ("HTTP %d" % status)
+    return "The Mothership refused the call (HTTP %d)." % status
 
 
 class Worker:
-    """Runs one session's tool calls in order on its own thread and owns that session's PHP server."""
+    """Runs one session's tool calls in order on its own thread."""
 
-    def __init__(self, settings: Settings, log, send, protocol_version: str) -> None:
+    def __init__(self, settings: Settings, log, send, tool_names) -> None:
         self.settings = settings
         self.log = log
         self.send = send
-        self.protocol_version = protocol_version
-        self.slots = SlotPool(settings=settings)
-        self.files = ContainerFiles(settings=settings, log=log)
-        self.upstream = None
+        self.tool_names = frozenset(tool_names)
+        self.library = Library(settings=settings, log=log)
         self.jobs = queue.Queue()
         self.cancelled = set()
         self.closing = False
@@ -560,7 +732,7 @@ class Worker:
         self.cancelled.add(request_id)
 
     def recyclable(self) -> bool:
-        """True once PHP has stopped on idle and every call this session made has been answered."""
+        """True once the session has been idle for MOTHERSHIP_MCP_IDLE_SECONDS and every call it made is answered."""
         return self.parked and self.submitted == self.finished
 
     def finish(self) -> None:
@@ -569,27 +741,20 @@ class Worker:
         self.thread.join(timeout=5)
 
     def shutdown(self) -> None:
+        """The agent has gone: a call still running is abandoned with the process."""
         self.closing = True
-        self.files.kill_active()
         self.jobs.put(None)
         self.thread.join(timeout=2)
-        upstream = self.upstream
-        if self.thread.is_alive() and upstream is not None:
-            # A call is still running and its agent has gone: end it so the staged copy is cleaned up.
-            upstream.process.terminate()
-        self.thread.join(timeout=13)
 
     def _run(self) -> None:
         while True:
             try:
                 job = self.jobs.get(timeout=self.settings.idle_seconds)
             except queue.Empty:
-                self._stop_upstream(reason="idle")
                 self.parked = True
                 continue
             self.parked = False
             if job is None:
-                self._stop_upstream(reason="shutdown")
                 return
             self._handle(request_id=job[0], params=job[1])
             self.finished += 1
@@ -601,21 +766,24 @@ class Worker:
             self.cancelled.discard(request_id)
             return
         name = params.get("name")
-        logged_name = name if isinstance(name, str) and name.startswith("library_") and len(name) <= 40 else "other"
+        known = isinstance(name, str) and name in self.tool_names
+        logged_name = name if known else "other"
         arguments = params.get("arguments")
         arguments = arguments if isinstance(arguments, dict) else {}
         started = time.monotonic()
         try:
-            result = self._dispatch(request_id=request_id, name=name, arguments=arguments)
-            outcome = "refused" if result.get("isError") else "ok"
-        except UpstreamGone as failure:
-            self._stop_upstream(reason="lost")
-            result, outcome = tool_error(str(failure)), "lost"
+            if name is None:
+                result, outcome = tool_error("Missing [name] parameter."), "refused"
+            elif not known:
+                result, outcome = tool_error("Tool [%s] not found." % name), "refused"
+            else:
+                result, outcome = self.library.call(name=name, arguments=arguments), "ok"
+        except Unreachable as failure:
+            result, outcome = tool_error(str(failure)), "unreachable"
         except LauncherFailure as failure:
             result, outcome = tool_error(str(failure)), "refused"
         except Exception as failure:  # A launcher bug must answer the call, never hang the agent.
             self.log.event("error", "tool.crash", "Worker._handle", {"tool": logged_name, "class": type(failure).__name__})
-            self._stop_upstream(reason="crash")
             result, outcome = tool_error("The library launcher failed during this call. Try again."), "crash"
         self.log.event(
             "info", "tool.call", "Worker._handle",
@@ -626,104 +794,6 @@ class Worker:
             return
         self.send({"jsonrpc": "2.0", "id": request_id, "result": result})
 
-    def _dispatch(self, request_id, name, arguments: dict) -> dict:
-        # Tools that read a Mac file (local_path) or write one (dest_dir): the file crosses the container boundary here.
-        if name in ("library_save", "library_vectorize") and isinstance(arguments.get("local_path"), str):
-            return self._save(request_id=request_id, name=name, arguments=arguments)
-        if name == "library_fetch" and isinstance(arguments.get("dest_dir", ""), str):
-            return self._fetch(request_id=request_id, name=name, arguments=arguments)
-        if name == "library_vectorization" and "format" in arguments and isinstance(arguments.get("dest_dir", ""), str):
-            return self._fetch(request_id=request_id, name=name, arguments=arguments)
-        return self._call(request_id=request_id, name=name, arguments=arguments)
-
-    def _call(self, request_id, name, arguments: dict) -> dict:
-        upstream = self._ready_upstream(request_id=request_id)
-        return upstream.request(
-            method="tools/call", params={"name": name, "arguments": arguments}, timeout=self.settings.call_seconds
-        )
-
-    def _save(self, request_id, name: str, arguments: dict) -> dict:
-        real_path, size = self.files.source(path=arguments["local_path"])
-        upstream = self._ready_upstream(request_id=request_id)
-        staging = self.files.new_staging()
-        try:
-            staged = self.files.send_in(real_path=real_path, size=size, staging=staging)
-            return upstream.request(
-                method="tools/call",
-                params={"name": name, "arguments": dict(arguments, local_path=staged)},
-                timeout=self.settings.call_seconds,
-            )
-        finally:
-            self.files.discard(staging=staging)
-
-    def _fetch(self, request_id, name: str, arguments: dict) -> dict:
-        directory = self.files.destination(requested=arguments.get("dest_dir"))
-        upstream = self._ready_upstream(request_id=request_id)
-        self.files.refuse_storage(directory=directory)
-        staging = self.files.new_staging()
-        inside = self.files.staging_path(staging=staging)
-        try:
-            result = upstream.request(
-                method="tools/call",
-                params={"name": name, "arguments": dict(arguments, dest_dir=inside)},
-                timeout=self.settings.call_seconds,
-            )
-            if result.get("isError"):
-                return result
-            details = _tool_details(result=result)
-            container_path = details.get("path")
-            if not isinstance(container_path, str) or not container_path.startswith(inside + "/"):
-                raise LauncherFailure("The library server answered without a file. Try again.")
-            path, reused = self.files.bring_out(
-                container_path=container_path,
-                name=os.path.basename(container_path),
-                size=int(details.get("size", -1)),
-                sha256=str(details.get("sha256", "")),
-                directory=directory,
-            )
-            return _with_mac_path(result=result, updates={"path": path, "name": os.path.basename(path), "reused": reused})
-        finally:
-            self.files.discard(staging=staging)
-
-    def _ready_upstream(self, request_id) -> Upstream:
-        upstream = self.upstream
-        if upstream is not None and upstream.alive():
-            if time.monotonic() - upstream.started_at < self.settings.hold_seconds:
-                return upstream
-            # A busy session gives its slot up now and then, so a queued session is not starved.
-            self._stop_upstream(reason="hold")
-            time.sleep(0.5)
-        elif upstream is not None:
-            self._stop_upstream(reason="exited")
-        self._acquire_slot(request_id=request_id)
-        try:
-            upstream = Upstream(settings=self.settings, protocol_version=self.protocol_version)
-            self.upstream = upstream
-            upstream.handshake()
-        except (OSError, LauncherFailure):
-            self._stop_upstream(reason="start_failed")
-            raise UpstreamGone("The Mothership is not answering right now, so the library server could not start. Try again shortly.") from None
-        self.log.event("info", "upstream.start", "Worker._ready_upstream", {"outcome": "ok"})
-        return upstream
-
-    def _acquire_slot(self, request_id) -> None:
-        started = time.monotonic()
-        while not self.slots.try_acquire():
-            if self.closing or request_id in self.cancelled:
-                raise LauncherFailure("The call was cancelled.")
-            if time.monotonic() - started >= self.settings.queue_seconds:
-                self.log.event("warn", "slot.busy", "Worker._acquire_slot", {"waited_seconds": round(time.monotonic() - started, 3)})
-                raise LauncherFailure("The library is busy with other agents right now. Try again in a moment.")
-            time.sleep(0.2)
-        self.log.event("info", "slot.acquired", "Worker._acquire_slot", {"waited_seconds": round(time.monotonic() - started, 3)})
-
-    def _stop_upstream(self, reason: str) -> None:
-        upstream, self.upstream = self.upstream, None
-        if upstream is not None:
-            upstream.stop()
-            self.log.event("info", "upstream.stop", "Worker._stop_upstream", {"reason": reason})
-        self.slots.release()
-
 
 def load_manifest() -> dict:
     with open(MANIFEST_PATH, "r", encoding="utf-8") as handle:
@@ -731,23 +801,59 @@ def load_manifest() -> dict:
 
 
 def read_server_manifest(settings: Settings) -> dict:
-    """What the running server publishes, in the manifest's shape."""
+    """What this checkout's stdio server (`php artisan mcp:start mothership`) publishes, in the manifest's shape."""
+    import subprocess
+
     versions = load_manifest()["protocolVersions"]
-    upstream = Upstream(settings=settings, protocol_version=versions[0])
+    process = subprocess.Popen(
+        [settings.php, *SERVER_COMMAND], cwd=CHECKOUT_ROOT,
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    )
+    watchdog = threading.Timer(60.0, process.kill)
+    watchdog.daemon = True
+    watchdog.start()
+    next_id = [0]
+
+    def request(method: str, params: dict) -> dict:
+        next_id[0] += 1
+        process.stdin.write(json.dumps({"jsonrpc": "2.0", "id": next_id[0], "method": method, "params": params}).encode("utf-8") + b"\n")
+        process.stdin.flush()
+        for line in process.stdout:
+            try:
+                message = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(message, dict) and message.get("id") == next_id[0]:
+                if "error" in message:
+                    raise LauncherFailure("The stdio server refused %s." % method)
+                return message.get("result") or {}
+        raise LauncherFailure("The stdio server stopped before it answered %s." % method)
+
     try:
-        hello = upstream.handshake()
+        hello = request(method="initialize", params={
+            "protocolVersion": versions[0], "capabilities": {}, "clientInfo": {"name": "mothership-mcp-launcher", "version": "2"},
+        })
+        process.stdin.write(b'{"jsonrpc":"2.0","method":"notifications/initialized"}\n')
         tools = []
         cursor = None
         while True:
-            page = upstream.request(
-                method="tools/list", params={"cursor": cursor} if cursor else {}, timeout=settings.start_seconds
-            )
+            page = request(method="tools/list", params={"cursor": cursor} if cursor else {})
             tools += page.get("tools", [])
             cursor = page.get("nextCursor")
             if not cursor:
                 break
     finally:
-        upstream.stop()
+        watchdog.cancel()
+        try:
+            process.stdin.close()
+        except OSError:
+            pass
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+        process.stdout.close()
     return {
         "protocolVersions": versions,
         "serverInfo": hello.get("serverInfo", {}),
@@ -766,5 +872,5 @@ def write_manifest() -> int:
 
 def check_manifest() -> int:
     same = read_server_manifest(settings=Settings(environ=os.environ)) == load_manifest()
-    print("tools_manifest.json matches the running server" if same else "tools_manifest.json differs from the running server")
+    print("tools_manifest.json matches this checkout's server" if same else "tools_manifest.json differs from this checkout's server")
     return 0 if same else 1
