@@ -118,6 +118,6 @@ Create a locally managed Cloudflare tunnel. Put its credentials JSON in
 on the host network with origin `http://127.0.0.1:18090`. Its readiness endpoint
 is `127.0.0.1:20241/ready`.
 
-Point the public hostname's proxied CNAME at `<id>.cfargotunnel.com`. To roll
-back, point it at the previous tunnel. The site moves as soon as the DNS change
+Point the public hostname's proxied CNAME at the new tunnel (Cloudflare's
+tunnel address for its id). To roll back, point it at the previous tunnel. The site moves as soon as the DNS change
 propagates.
