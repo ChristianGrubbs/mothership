@@ -31535,6 +31535,2023 @@
     }
   },
   {
+    "id": "POST * /api/v1/rest/library/tools/create_folder",
+    "kind": "api",
+    "reason": "Supported DAM integration operation: the local mothership launcher's library tools.",
+    "reviewed": true,
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php"
+    ],
+    "operation": {
+      "operationId": "admin.api.dam.library_tools.create_folder",
+      "summary": "Library tool: create_folder",
+      "description": "Create a subfolder, or return the folder of that name already there. Runs the library_create_folder tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
+      "security": [
+        {
+          "integrationBearer": []
+        }
+      ],
+      "x-surface": "integration",
+      "x-permissions": [
+        "api.dam.directory.create"
+      ],
+      "x-feature-flags": [],
+      "x-evidence": [
+        "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php",
+        "packages/Mothership/DAM/src/Mcp/LibraryTool.php",
+        "packages/Mothership/DAM/src/Mcp/LibraryOperations.php"
+      ],
+      "parameters": [],
+      "responses": {
+        "200": {
+          "description": "The tool result as {result: ...}.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "result": {
+                    "type": "object",
+                    "properties": {
+                      "folder_id": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "parent_id": {
+                        "type": "integer"
+                      },
+                      "created": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "result": {
+                  "folder_id": 12,
+                  "name": "Renders",
+                  "parent_id": 1,
+                  "created": true
+                }
+              }
+            }
+          }
+        },
+        "401": {
+          "description": "Missing or invalid bearer authentication (integration routes).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "403": {
+          "description": "The key lacks this tool's scope, or the account may not do this.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "This action is unauthorized"
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "The asset, folder, file or conversion does not exist or is not open to the account.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "Not found."
+              }
+            }
+          }
+        },
+        "422": {
+          "description": "An unknown argument, a failed rule (all messages joined), or a refusal written for the agent.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "The producer field is required."
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "description": "Create a subfolder, or return the folder of that name already there. Runs the library_create_folder tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "parent_id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "parent_id",
+                "name"
+              ]
+            },
+            "example": {
+              "parent_id": 1,
+              "name": "Renders"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "POST * /api/v1/rest/library/tools/fetch",
+    "kind": "api",
+    "reason": "Supported DAM integration operation: the local mothership launcher's library tools.",
+    "reviewed": true,
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php"
+    ],
+    "operation": {
+      "operationId": "admin.api.dam.library_tools.fetch",
+      "summary": "Library tool: fetch",
+      "description": "Copy out one asset file: the main file, a stack file (file_id) or the 1080p web proxy (proxy). dest_dir is checked against the tool's rules and otherwise ignored: the launcher writes the copy. Runs the library_fetch tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
+      "security": [
+        {
+          "integrationBearer": []
+        }
+      ],
+      "x-surface": "integration",
+      "x-permissions": [
+        "api.dam.assets.download"
+      ],
+      "x-feature-flags": [],
+      "x-evidence": [
+        "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php",
+        "packages/Mothership/DAM/src/Mcp/LibraryTool.php",
+        "packages/Mothership/DAM/src/Mcp/LibraryOperations.php"
+      ],
+      "parameters": [],
+      "responses": {
+        "200": {
+          "description": "The file's bytes. X-Library-Result carries base64 JSON {name, sha256, size, result}: the launcher checks the bytes against sha256 and size, picks a free local name from name, and fills result's null path, name and reused.",
+          "headers": {
+            "X-Library-Result": {
+              "description": "base64 JSON {name, sha256, size, result}",
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              },
+              "example": "file bytes"
+            }
+          }
+        },
+        "401": {
+          "description": "Missing or invalid bearer authentication (integration routes).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "403": {
+          "description": "The key lacks this tool's scope, or the account may not do this.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "This action is unauthorized"
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "The asset, folder, file or conversion does not exist or is not open to the account.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "Not found."
+              }
+            }
+          }
+        },
+        "422": {
+          "description": "An unknown argument, a failed rule (all messages joined), or a refusal written for the agent.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "The producer field is required."
+              }
+            }
+          }
+        },
+        "503": {
+          "description": "The stored bytes cannot be read right now.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "The stored bytes of this file cannot be read right now (the storage may be offline). Try again later."
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "description": "Copy out one asset file: the main file, a stack file (file_id) or the 1080p web proxy (proxy). dest_dir is checked against the tool's rules and otherwise ignored: the launcher writes the copy. Runs the library_fetch tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "asset_id": {
+                  "type": "integer"
+                },
+                "file_id": {
+                  "type": "integer"
+                },
+                "dest_dir": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "asset_id"
+              ]
+            },
+            "example": {
+              "asset_id": 41,
+              "file_id": 9,
+              "dest_dir": "/Users/agent/work"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "POST * /api/v1/rest/library/tools/get_asset",
+    "kind": "api",
+    "reason": "Supported DAM integration operation: the local mothership launcher's library tools.",
+    "reviewed": true,
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php"
+    ],
+    "operation": {
+      "operationId": "admin.api.dam.library_tools.get_asset",
+      "summary": "Library tool: get_asset",
+      "description": "Read one asset with its producer, provenance and notes. Runs the library_get_asset tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
+      "security": [
+        {
+          "integrationBearer": []
+        }
+      ],
+      "x-surface": "integration",
+      "x-permissions": [
+        "api.dam.assets.getById"
+      ],
+      "x-feature-flags": [],
+      "x-evidence": [
+        "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php",
+        "packages/Mothership/DAM/src/Mcp/LibraryTool.php",
+        "packages/Mothership/DAM/src/Mcp/LibraryOperations.php"
+      ],
+      "parameters": [],
+      "responses": {
+        "200": {
+          "description": "The tool result as {result: ...}.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "result": {
+                    "type": "object",
+                    "properties": {
+                      "asset_id": {
+                        "type": "integer"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "file_name": {
+                        "type": "string"
+                      },
+                      "sha256": {
+                        "type": "string"
+                      },
+                      "producer": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "result": {
+                  "asset_id": 41,
+                  "title": "Hero render",
+                  "file_name": "hero.png",
+                  "sha256": "e3b0c442",
+                  "producer": "blender"
+                }
+              }
+            }
+          }
+        },
+        "401": {
+          "description": "Missing or invalid bearer authentication (integration routes).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "403": {
+          "description": "The key lacks this tool's scope, or the account may not do this.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "This action is unauthorized"
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "The asset, folder, file or conversion does not exist or is not open to the account.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "Not found."
+              }
+            }
+          }
+        },
+        "422": {
+          "description": "An unknown argument, a failed rule (all messages joined), or a refusal written for the agent.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "The producer field is required."
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "description": "Read one asset with its producer, provenance and notes. Runs the library_get_asset tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "asset_id": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "asset_id"
+              ]
+            },
+            "example": {
+              "asset_id": 41
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "POST * /api/v1/rest/library/tools/list_folders",
+    "kind": "api",
+    "reason": "Supported DAM integration operation: the local mothership launcher's library tools.",
+    "reviewed": true,
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php"
+    ],
+    "operation": {
+      "operationId": "admin.api.dam.library_tools.list_folders",
+      "summary": "Library tool: list_folders",
+      "description": "List the folders the account can open, by parent_id or name. Runs the library_list_folders tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
+      "security": [
+        {
+          "integrationBearer": []
+        }
+      ],
+      "x-surface": "integration",
+      "x-permissions": [
+        "api.dam.directory"
+      ],
+      "x-feature-flags": [],
+      "x-evidence": [
+        "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php",
+        "packages/Mothership/DAM/src/Mcp/LibraryTool.php",
+        "packages/Mothership/DAM/src/Mcp/LibraryOperations.php"
+      ],
+      "parameters": [],
+      "responses": {
+        "200": {
+          "description": "The tool result as {result: ...}.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "result": {
+                    "type": "object",
+                    "properties": {
+                      "folders": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "folder_id": {
+                              "type": "integer"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "parent_id": {
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      },
+                      "next_after_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "result": {
+                  "folders": [
+                    {
+                      "folder_id": 12,
+                      "name": "Renders",
+                      "parent_id": 1
+                    }
+                  ],
+                  "next_after_id": null
+                }
+              }
+            }
+          }
+        },
+        "401": {
+          "description": "Missing or invalid bearer authentication (integration routes).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "403": {
+          "description": "The key lacks this tool's scope, or the account may not do this.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "This action is unauthorized"
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "The asset, folder, file or conversion does not exist or is not open to the account.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "Not found."
+              }
+            }
+          }
+        },
+        "422": {
+          "description": "An unknown argument, a failed rule (all messages joined), or a refusal written for the agent.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "The producer field is required."
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": false,
+        "description": "List the folders the account can open, by parent_id or name. Runs the library_list_folders tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "parent_id": {
+                  "type": "integer"
+                }
+              }
+            },
+            "example": {
+              "parent_id": 1
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "POST * /api/v1/rest/library/tools/list_stack",
+    "kind": "api",
+    "reason": "Supported DAM integration operation: the local mothership launcher's library tools.",
+    "reviewed": true,
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php"
+    ],
+    "operation": {
+      "operationId": "admin.api.dam.library_tools.list_stack",
+      "summary": "Library tool: list_stack",
+      "description": "List the files stacked in one asset. Runs the library_list_stack tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
+      "security": [
+        {
+          "integrationBearer": []
+        }
+      ],
+      "x-surface": "integration",
+      "x-permissions": [
+        "api.dam.assets.files.index"
+      ],
+      "x-feature-flags": [],
+      "x-evidence": [
+        "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php",
+        "packages/Mothership/DAM/src/Mcp/LibraryTool.php",
+        "packages/Mothership/DAM/src/Mcp/LibraryOperations.php"
+      ],
+      "parameters": [],
+      "responses": {
+        "200": {
+          "description": "The tool result as {result: ...}.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "result": {
+                    "type": "object",
+                    "properties": {
+                      "files": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "file_id": {
+                              "type": "integer"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "extension": {
+                              "type": "string"
+                            },
+                            "size": {
+                              "type": "integer"
+                            },
+                            "sha256": {
+                              "type": "string"
+                            },
+                            "is_cover": {
+                              "type": "boolean"
+                            },
+                            "producer": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "next_after_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "result": {
+                  "files": [
+                    {
+                      "file_id": 9,
+                      "label": "hero.blend",
+                      "extension": "blend",
+                      "size": 1048576,
+                      "sha256": "e3b0c442",
+                      "is_cover": false,
+                      "producer": "blender"
+                    }
+                  ],
+                  "next_after_id": null
+                }
+              }
+            }
+          }
+        },
+        "401": {
+          "description": "Missing or invalid bearer authentication (integration routes).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "403": {
+          "description": "The key lacks this tool's scope, or the account may not do this.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "This action is unauthorized"
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "The asset, folder, file or conversion does not exist or is not open to the account.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "Not found."
+              }
+            }
+          }
+        },
+        "422": {
+          "description": "An unknown argument, a failed rule (all messages joined), or a refusal written for the agent.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "The producer field is required."
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "description": "List the files stacked in one asset. Runs the library_list_stack tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "asset_id": {
+                  "type": "integer"
+                },
+                "extension": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "asset_id"
+              ]
+            },
+            "example": {
+              "asset_id": 41,
+              "extension": "blend"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "POST * /api/v1/rest/library/tools/save",
+    "kind": "api",
+    "reason": "Supported DAM integration operation: the local mothership launcher's library tools.",
+    "reviewed": true,
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php"
+    ],
+    "operation": {
+      "operationId": "admin.api.dam.library_tools.save",
+      "summary": "Library tool: save",
+      "description": "Save a file as a new asset (folder_id) or a stack member (stack_asset_id), with producer, provenance, notes and request_id replay. The file is the multipart field file and stands in for local_path, which is checked as an argument and never opened; without name the upload's own file name is used. Runs the library_save tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
+      "security": [
+        {
+          "integrationBearer": []
+        }
+      ],
+      "x-surface": "integration",
+      "x-permissions": [
+        "api.dam.assets.upload"
+      ],
+      "x-feature-flags": [],
+      "x-evidence": [
+        "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php",
+        "packages/Mothership/DAM/src/Mcp/LibraryTool.php",
+        "packages/Mothership/DAM/src/Mcp/LibraryOperations.php"
+      ],
+      "parameters": [],
+      "responses": {
+        "200": {
+          "description": "The tool result as {result: ...}.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "result": {
+                    "type": "object",
+                    "properties": {
+                      "asset_id": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "sha256": {
+                        "type": "string"
+                      },
+                      "source_sha256": {
+                        "type": "string"
+                      },
+                      "replayed": {
+                        "type": "boolean"
+                      },
+                      "derived_from": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "result": {
+                  "asset_id": 41,
+                  "name": "hero.png",
+                  "title": "Hero render",
+                  "sha256": "e3b0c442",
+                  "source_sha256": "e3b0c442",
+                  "replayed": false,
+                  "derived_from": [
+                    7
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "401": {
+          "description": "Missing or invalid bearer authentication (integration routes).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "403": {
+          "description": "The key lacks this tool's scope, or the account may not do this.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "This action is unauthorized"
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "The asset, folder, file or conversion does not exist or is not open to the account.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "Not found."
+              }
+            }
+          }
+        },
+        "422": {
+          "description": "An unknown argument, a failed rule (all messages joined), or a refusal written for the agent.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "The producer field is required."
+              }
+            }
+          }
+        },
+        "409": {
+          "description": "The request_id was already used with other bytes, or the asset was merged.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "The request conflicts with an earlier save, or the asset was merged into another asset."
+              }
+            }
+          }
+        },
+        "413": {
+          "description": "The upload is larger than the server accepts in one request, or than the library limit.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "The file exceeds the library limit."
+              }
+            }
+          }
+        },
+        "503": {
+          "description": "An earlier save with this request_id is still finishing, or the stored bytes cannot be read right now.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "The Mothership is busy finishing an earlier save. Try again shortly with the same request_id."
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "description": "Save a file as a new asset (folder_id) or a stack member (stack_asset_id), with producer, provenance, notes and request_id replay. The file is the multipart field file and stands in for local_path, which is checked as an argument and never opened; without name the upload's own file name is used. Runs the library_save tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
+        "content": {
+          "multipart/form-data": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "arguments": {
+                  "type": "string",
+                  "description": "The tool arguments as one JSON object."
+                },
+                "file": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "required": [
+                "arguments",
+                "file"
+              ]
+            },
+            "example": {
+              "arguments": "{\"local_path\": \"/Users/agent/renders/hero.png\", \"folder_id\": 12, \"title\": \"Hero render\", \"tags\": [\"lobby\"], \"producer\": {\"tool\": \"blender\", \"version\": \"4.4\"}, \"provenance\": {\"backend\": \"cycles\", \"reference_asset_ids\": [7]}, \"notes\": \"Final lighting pass.\", \"request_id\": \"6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f\"}",
+              "file": "binary file"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "POST * /api/v1/rest/library/tools/search",
+    "kind": "api",
+    "reason": "Supported DAM integration operation: the local mothership launcher's library tools.",
+    "reviewed": true,
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php"
+    ],
+    "operation": {
+      "operationId": "admin.api.dam.library_tools.search",
+      "summary": "Library tool: search",
+      "description": "Find library assets by name, title, tag, extension, kind, folder or producer. Runs the library_search tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
+      "security": [
+        {
+          "integrationBearer": []
+        }
+      ],
+      "x-surface": "integration",
+      "x-permissions": [
+        "api.dam.assets"
+      ],
+      "x-feature-flags": [],
+      "x-evidence": [
+        "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php",
+        "packages/Mothership/DAM/src/Mcp/LibraryTool.php",
+        "packages/Mothership/DAM/src/Mcp/LibraryOperations.php"
+      ],
+      "parameters": [],
+      "responses": {
+        "200": {
+          "description": "The tool result as {result: ...}.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "result": {
+                    "type": "object",
+                    "properties": {
+                      "assets": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "asset_id": {
+                              "type": "integer"
+                            },
+                            "title": {
+                              "type": "string"
+                            },
+                            "file_name": {
+                              "type": "string"
+                            },
+                            "extension": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string"
+                            },
+                            "size": {
+                              "type": "integer"
+                            },
+                            "tags": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "producer": {
+                              "type": "string"
+                            },
+                            "created_at": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "next_after_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "result": {
+                  "assets": [
+                    {
+                      "asset_id": 41,
+                      "title": "Hero render",
+                      "file_name": "hero.png",
+                      "extension": "png",
+                      "kind": "image",
+                      "size": 52133,
+                      "tags": [
+                        "lobby"
+                      ],
+                      "producer": "blender",
+                      "created_at": "2026-11-23T12:00:00+00:00"
+                    }
+                  ],
+                  "next_after_id": null
+                }
+              }
+            }
+          }
+        },
+        "401": {
+          "description": "Missing or invalid bearer authentication (integration routes).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "403": {
+          "description": "The key lacks this tool's scope, or the account may not do this.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "This action is unauthorized"
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "The asset, folder, file or conversion does not exist or is not open to the account.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "Not found."
+              }
+            }
+          }
+        },
+        "422": {
+          "description": "An unknown argument, a failed rule (all messages joined), or a refusal written for the agent.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "The producer field is required."
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": false,
+        "description": "Find library assets by name, title, tag, extension, kind, folder or producer. Runs the library_search tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "limit": {
+                  "type": "integer"
+                }
+              }
+            },
+            "example": {
+              "query": "lobby",
+              "kind": "image",
+              "limit": 50
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "POST * /api/v1/rest/library/tools/update",
+    "kind": "api",
+    "reason": "Supported DAM integration operation: the local mothership launcher's library tools.",
+    "reviewed": true,
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php"
+    ],
+    "operation": {
+      "operationId": "admin.api.dam.library_tools.update",
+      "summary": "Library tool: update",
+      "description": "Change one asset's title, or add or remove tags. Runs the library_update tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
+      "security": [
+        {
+          "integrationBearer": []
+        }
+      ],
+      "x-surface": "integration",
+      "x-permissions": [
+        "api.dam.assets.update"
+      ],
+      "x-feature-flags": [],
+      "x-evidence": [
+        "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php",
+        "packages/Mothership/DAM/src/Mcp/LibraryTool.php",
+        "packages/Mothership/DAM/src/Mcp/LibraryOperations.php"
+      ],
+      "parameters": [],
+      "responses": {
+        "200": {
+          "description": "The tool result as {result: ...}.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "result": {
+                    "type": "object",
+                    "properties": {
+                      "asset_id": {
+                        "type": "integer"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "tags": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "result": {
+                  "asset_id": 41,
+                  "title": "Hero render final",
+                  "tags": [
+                    "lobby"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "401": {
+          "description": "Missing or invalid bearer authentication (integration routes).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "403": {
+          "description": "The key lacks this tool's scope, or the account may not do this.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "This action is unauthorized"
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "The asset, folder, file or conversion does not exist or is not open to the account.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "Not found."
+              }
+            }
+          }
+        },
+        "422": {
+          "description": "An unknown argument, a failed rule (all messages joined), or a refusal written for the agent.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "The producer field is required."
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "description": "Change one asset's title, or add or remove tags. Runs the library_update tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "asset_id": {
+                  "type": "integer"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "tags_remove": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "asset_id"
+              ]
+            },
+            "example": {
+              "asset_id": 41,
+              "title": "Hero render final",
+              "tags_remove": [
+                "night"
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "POST * /api/v1/rest/library/tools/vectorization",
+    "kind": "api",
+    "reason": "Supported DAM integration operation: the local mothership launcher's library tools.",
+    "reviewed": true,
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php"
+    ],
+    "operation": {
+      "operationId": "admin.api.dam.library_tools.vectorization",
+      "summary": "Library tool: vectorization",
+      "description": "Read one conversion's status; with format, answer its completed result's bytes as fetch does. Runs the library_vectorization tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
+      "security": [
+        {
+          "integrationBearer": []
+        }
+      ],
+      "x-surface": "integration",
+      "x-permissions": [
+        "api.dam.vectorizations.show"
+      ],
+      "x-feature-flags": [],
+      "x-evidence": [
+        "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php",
+        "packages/Mothership/DAM/src/Mcp/LibraryTool.php",
+        "packages/Mothership/DAM/src/Mcp/LibraryOperations.php"
+      ],
+      "parameters": [],
+      "responses": {
+        "200": {
+          "description": "The tool result as {result: ...}.",
+          "headers": {
+            "X-Library-Result": {
+              "description": "base64 JSON {name, sha256, size, result}",
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "result": {
+                    "type": "object",
+                    "properties": {
+                      "result": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "result": {
+                  "result": {
+                    "id": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+                    "status": "completed"
+                  }
+                }
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              },
+              "example": "file bytes"
+            }
+          }
+        },
+        "401": {
+          "description": "Missing or invalid bearer authentication (integration routes).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "403": {
+          "description": "The key lacks this tool's scope, or the account may not do this.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "This action is unauthorized"
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "The asset, folder, file or conversion does not exist or is not open to the account.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "Not found."
+              }
+            }
+          }
+        },
+        "422": {
+          "description": "An unknown argument, a failed rule (all messages joined), or a refusal written for the agent.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "The producer field is required."
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "description": "Read one conversion's status; with format, answer its completed result's bytes as fetch does. Runs the library_vectorization tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "format": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ]
+            },
+            "example": {
+              "id": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+              "format": "svg"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "POST * /api/v1/rest/library/tools/vectorize",
+    "kind": "api",
+    "reason": "Supported DAM integration operation: the local mothership launcher's library tools.",
+    "reviewed": true,
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php"
+    ],
+    "operation": {
+      "operationId": "admin.api.dam.library_tools.vectorize",
+      "summary": "Library tool: vectorize",
+      "description": "Queue a raster-to-vector conversion: onto asset_id in format (JSON body), or a one-off of an uploaded file standing in for local_path (multipart). Runs the library_vectorize tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
+      "security": [
+        {
+          "integrationBearer": []
+        }
+      ],
+      "x-surface": "integration",
+      "x-permissions": [
+        "api.dam.vectorizations.create"
+      ],
+      "x-feature-flags": [],
+      "x-evidence": [
+        "packages/Mothership/DAM/src/Http/Controllers/API/Library/LibraryToolController.php",
+        "packages/Mothership/DAM/src/Mcp/LibraryTool.php",
+        "packages/Mothership/DAM/src/Mcp/LibraryOperations.php"
+      ],
+      "parameters": [],
+      "responses": {
+        "200": {
+          "description": "The tool result as {result: ...}.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "result": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "type": "string"
+                      },
+                      "note": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "result": {
+                  "id": "6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+                  "status": "queued",
+                  "kind": "one_off",
+                  "note": "Poll library_vectorization with this id until status is completed or failed."
+                }
+              }
+            }
+          }
+        },
+        "401": {
+          "description": "Missing or invalid bearer authentication (integration routes).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "403": {
+          "description": "The key lacks this tool's scope, or the account may not do this.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "This action is unauthorized"
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "The asset, folder, file or conversion does not exist or is not open to the account.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "Not found."
+              }
+            }
+          }
+        },
+        "422": {
+          "description": "An unknown argument, a failed rule (all messages joined), or a refusal written for the agent.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "The producer field is required."
+              }
+            }
+          }
+        },
+        "413": {
+          "description": "The upload is larger than the server accepts in one request, or than the library limit.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "The file exceeds the library limit."
+              }
+            }
+          }
+        },
+        "503": {
+          "description": "Image Vectorization is not connected.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "Image Vectorization is not connected."
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "description": "Queue a raster-to-vector conversion: onto asset_id in format (JSON body), or a one-off of an uploaded file standing in for local_path (multipart). Runs the library_vectorize tool of the `mothership` MCP server (docs/api/mothership-mcp.md) with the same rules and wording, as the key's own admin; the local launcher (tools/mcp-launcher) is its client. A refusal answers {\"error\": text} with the text the stdio server gives.",
+        "content": {
+          "multipart/form-data": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "arguments": {
+                  "type": "string",
+                  "description": "The tool arguments as one JSON object."
+                },
+                "file": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "required": [
+                "arguments",
+                "file"
+              ]
+            },
+            "example": {
+              "arguments": "{\"local_path\": \"/Users/agent/logo.png\", \"request_id\": \"6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f\"}",
+              "file": "binary file"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
     "id": "POST * /api/v1/rest/metadata-fields",
     "kind": "api",
     "reason": "Supported DAM integration operation.",
