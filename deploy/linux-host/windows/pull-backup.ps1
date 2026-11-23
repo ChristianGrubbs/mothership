@@ -10,6 +10,8 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $runId = [guid]::NewGuid().ToString()
+# .NET calls and cmd.exe below resolve relative paths against the process directory, not PowerShell's location.
+$Destination = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Destination).TrimEnd('\')
 New-Item -ItemType Directory -Force -Path $Destination | Out-Null
 $eventLog = Join-Path $Destination 'pull-backup.jsonl'
 
