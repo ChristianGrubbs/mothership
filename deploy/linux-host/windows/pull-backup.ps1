@@ -11,7 +11,10 @@ param(
 $ErrorActionPreference = 'Stop'
 $runId = [guid]::NewGuid().ToString()
 # .NET calls and cmd.exe below resolve relative paths against the process directory, not PowerShell's location.
-$Destination = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Destination).TrimEnd('\')
+$Destination = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Destination)
+# A drive or share root would be drive-relative once trimmed (G:\ -> G:) and is never a backup folder.
+if ($Destination.TrimEnd('\') -eq ([IO.Path]::GetPathRoot($Destination)).TrimEnd('\')) { throw "Destination must be a folder, not the root $Destination" }
+$Destination = $Destination.TrimEnd('\')
 New-Item -ItemType Directory -Force -Path $Destination | Out-Null
 $eventLog = Join-Path $Destination 'pull-backup.jsonl'
 

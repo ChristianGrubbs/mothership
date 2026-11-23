@@ -8,7 +8,10 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 # Resolve against PowerShell's current location (GetFullPath would use the process directory) and drop a trailing \.
-$Destination = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Destination).TrimEnd('\')
+$Destination = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Destination)
+# A drive or share root would be drive-relative once trimmed (G:\ -> G:) and is never a backup folder.
+if ($Destination.TrimEnd('\') -eq ([IO.Path]::GetPathRoot($Destination)).TrimEnd('\')) { throw "Destination must be a folder, not the root $Destination" }
+$Destination = $Destination.TrimEnd('\')
 New-Item -ItemType Directory -Force -Path $Destination, $ScriptDir, (Split-Path $KeyFile) | Out-Null
 # The sets include app.env and the tunnel credentials: only the owner, SYSTEM and Administrators may read them.
 # Replace the folder's DACL outright (no inherited or leftover explicit entries), make everything already inside
