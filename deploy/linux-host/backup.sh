@@ -15,6 +15,7 @@ HOME_DIR="${MOTHERSHIP_HOME:-/srv/mothership}"
 STATE="$HOME_DIR/state"
 BACKUPS="${MOTHERSHIP_BACKUPS:-$HOME_DIR/backups}"
 KEEP="${MOTHERSHIP_BACKUP_KEEP:-4}"
+RETRY_SECONDS="${MOTHERSHIP_BACKUP_RETRY_SECONDS:-5}"
 PG=mothership-private-postgres
 REDIS=mothership-private-redis
 SCRATCH_DB=mothership_restore_check
@@ -124,7 +125,7 @@ create() {
     [ "$status" -eq 0 ] && break
     [ "$status" -eq 1 ] || fail "state archive failed (tar exit $status)"
     log "a state file changed while it was archived (attempt $attempt); retrying"
-    sleep 5
+    sleep "$RETRY_SECONDS"
   done
   [ "$status" -eq 0 ] || fail "state files kept changing during 3 archive attempts"
 

@@ -7,6 +7,7 @@ param(
   [string]$User = $env:USERNAME
 )
 $ErrorActionPreference = 'Stop'
+$Destination = [IO.Path]::GetFullPath($Destination).TrimEnd('\')
 New-Item -ItemType Directory -Force -Path $Destination, $ScriptDir, (Split-Path $KeyFile) | Out-Null
 # The sets include app.env and the tunnel credentials: only the owner, SYSTEM and Administrators may read them.
 # Replace the folder's DACL outright (no inherited or leftover explicit entries), make everything already inside
@@ -32,7 +33,7 @@ foreach ($item in $items) {
   foreach ($rule in (Get-Acl -LiteralPath $item.FullName).Access) {
     $sid = $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value
     if ($allowed -notcontains $sid) { throw "unexpected access for $sid on $($item.FullName)" }
-    if ($item.FullName -ne $Destination -and -not $rule.IsInherited) { throw "explicit access entry left on $($item.FullName)" }
+    if ($item.FullName.TrimEnd('\') -ne $Destination -and -not $rule.IsInherited) { throw "explicit access entry left on $($item.FullName)" }
   }
 }
 $source = Join-Path $PSScriptRoot 'pull-backup.ps1'

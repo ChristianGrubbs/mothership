@@ -226,6 +226,8 @@ folder.
    docker exec mothership-redis-restore redis-cli INFO keyspace          # compare with the manifest's redis_keyspace
    docker exec mothership-redis-restore redis-cli CONFIG SET appendonly yes
    docker exec mothership-redis-restore redis-cli INFO persistence       # repeat until aof_rewrite_in_progress:0
+   # Go on only when it also shows aof_enabled:1 and aof_last_bgrewrite_status:ok. A failed rewrite leaves an incomplete
+   # AOF that the service would load instead of the RDB: run CONFIG SET appendonly yes again and recheck.
    docker stop mothership-redis-restore && docker rm mothership-redis-restore
    source/deploy/linux-host/stack.sh up redis
    ```

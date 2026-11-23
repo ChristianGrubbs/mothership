@@ -82,3 +82,8 @@ jobs:
       - name: Library MCP launcher tests
         if: '!cancelled()'
         run: python -m unittest discover -s tools/mcp-launcher/tests -v
+
+      # deploy/linux-host/backup.sh against tests/fake_bin/docker; Linux only (bash 5 and GNU tools).
+      - name: Linux-host backup tests
+        if: '!cancelled()'
+        run: python -m unittest discover -s deploy/linux-host/tests -v
