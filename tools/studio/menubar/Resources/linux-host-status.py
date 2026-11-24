@@ -3,7 +3,9 @@
 The app runs it over SSH as `python3 - --home <dir> [--stats]`, with this file on standard input.
 It prints one JSON object. From `app.env` it reads only the three bridge address keys, and only
 their health answers leave the host. Every field it cannot read is null, so the app can tell a
-part that is down from a part it could not read.
+part that is down from a part it could not read. The reads run side by side and the report is
+printed within DEADLINE seconds, whatever is still hanging, so a stalled Docker reads as
+unreadable containers and not as an unreachable host.
 """
 
 import json
@@ -16,6 +18,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 STACK_PREFIX = "mothership-private-"
@@ -28,11 +31,16 @@ ORIGIN_URL = "http://127.0.0.1:18090/up"
 TUNNEL_READY_URL = "http://127.0.0.1:20241/ready"
 OLLAMA_PORT = 11434
 BODY_LIMIT = 4096
-# A deploy or another session changing the stack: the wrapper's `up` or `stop`, or compose run by hand.
-CHANGING = (
-    re.compile(r"(^|/)stack\.sh (up|stop)( |$)"),
-    re.compile(r"docker[- ]compose .*--project-name mothership .* (up|down|stop|restart|rm)( |$)"),
-)
+# The app's SSH call allows 30 seconds, and reaching the host through the jump host takes a few.
+DEADLINE = 18
+COMMAND_TIMEOUT = 15
+PROJECT = "mothership"
+# Compose commands that change the stack's containers.
+CHANGING_ACTIONS = {"up", "down", "stop", "start", "restart", "rm", "kill", "create"}
+# Compose's global options that take a value as the next word.
+COMPOSE_VALUE_OPTIONS = {
+    "-f", "--file", "--env-file", "--profile", "--project-directory", "--ansi", "--progress", "--parallel",
+}
 
 opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
@@ -48,18 +56,18 @@ def http(url, timeout=4):
         return None, None
 
 
-def run(arguments, timeout=20):
+def run(arguments, timeout=COMMAND_TIMEOUT, env=None):
     """Returns standard output, or None when the command failed."""
     try:
-        done = subprocess.run(arguments, capture_output=True, text=True, timeout=timeout, check=False)
+        done = subprocess.run(arguments, capture_output=True, text=True, timeout=timeout, check=False, env=env)
     except Exception:
         return None
     return done.stdout if done.returncode == 0 else None
 
 
-def compose_rows(stack):
+def compose_rows(stack, env):
     """Every container of the project, from `stack.sh ps --all`, or None."""
-    text = run([stack, "ps", "--all", "--format", "json"])
+    text = run([stack, "ps", "--all", "--format", "json"], env=env)
     if text is None:
         return None
     text = text.strip()
@@ -71,33 +79,49 @@ def compose_rows(stack):
         return None
 
 
-def containers(stack, rows):
+def stack_services(stack, env):
+    """The services whose container is one of the stack's own, from the compose config, or None.
+
+    Membership comes from each service's `container_name`, so a missing tunnel or bridge container
+    is never counted, and a missing container of the stack's own counts as stopped.
+    """
+    text = run([stack, "config", "--format", "json"], env=env)
+    try:
+        services = json.loads(text)["services"]
+    except (TypeError, ValueError, KeyError):
+        return None
+    if not isinstance(services, dict):
+        return None
+    return sorted(
+        name for name, service in services.items()
+        if isinstance(service, dict) and str(service.get("container_name", "")).startswith(STACK_PREFIX)
+    )
+
+
+def containers(services, rows):
     """The stack's own containers. The tunnel and the bridges have rows of their own on the board."""
-    services = run([stack, "config", "--services"])
     if services is None or rows is None:
         return None
-    by_service = {}
-    for row in rows:
-        by_service.setdefault(row.get("Service"), []).append(row)
-    found = []
-    for service in sorted(services.split()):
-        mine = by_service.get(service, [])
-        if mine and not any(row.get("Name", "").startswith(STACK_PREFIX) for row in mine):
-            continue
-        running = any(row.get("State") == "running" for row in mine)
-        found.append({"name": service.replace("-", "_"), "running": running})
-    return found
+    running = {row.get("Service") for row in rows if row.get("State") == "running"}
+    return [{"name": service.replace("-", "_"), "running": service in running} for service in services]
 
 
-def tunnel(rows):
-    running = any(row.get("Service") == "tunnel" and row.get("State") == "running" for row in rows or [])
+def tunnel_connections():
     status, body = http(TUNNEL_READY_URL)
-    connections = None
-    if body:
-        try:
-            connections = int(json.loads(body).get("readyConnections"))
-        except (ValueError, TypeError, AttributeError):
-            connections = None
+    if not body:
+        return None
+    try:
+        return int(json.loads(body).get("readyConnections"))
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
+def tunnel(rows, connections):
+    """With the container list unreadable, a readiness answer is the sign the connector runs."""
+    if rows is None:
+        running = connections is not None
+    else:
+        running = any(row.get("Service") == "tunnel" and row.get("State") == "running" for row in rows)
     return {"running": running, "readyConnections": connections}
 
 
@@ -167,6 +191,42 @@ def ollama():
     return {"version": version, "loaded": loaded or 0}
 
 
+def changes_stack(argv):
+    """Whether a process's arguments are the wrapper's `up` or `stop`, or compose changing this project."""
+    names = [os.path.basename(arg) for arg in argv]
+    if "stack.sh" in names:
+        at = names.index("stack.sh") + 1
+        return at < len(argv) and argv[at] in ("up", "stop")
+    start = next((i for i, name in enumerate(names) if name in ("docker", "docker-compose")), None)
+    if start is None:
+        return False
+    words = argv[start + 1:]
+    if words and words[0] == "compose":
+        words = words[1:]
+    elif names[start] == "docker":
+        return False
+    project = None
+    index = 0
+    while index < len(words):
+        word = words[index]
+        if word in ("-p", "--project-name"):
+            project = words[index + 1] if index + 1 < len(words) else None
+            index += 2
+        elif word.startswith("--project-name="):
+            project = word.split("=", 1)[1]
+            index += 1
+        elif word.startswith("-p") and not word.startswith("--"):
+            project = word[2:]
+            index += 1
+        elif word in COMPOSE_VALUE_OPTIONS:
+            index += 2
+        elif word.startswith("-"):
+            index += 1
+        else:
+            return project == PROJECT and word in CHANGING_ACTIONS
+    return False
+
+
 def changing():
     own = str(os.getpid())
     for pid in os.listdir("/proc"):
@@ -174,10 +234,10 @@ def changing():
             continue
         try:
             with open(f"/proc/{pid}/cmdline", "rb") as handle:
-                command = handle.read().replace(b"\0", b" ").decode("utf-8", "replace").strip()
+                argv = handle.read().decode("utf-8", "replace").split("\0")
         except OSError:
             continue
-        if any(pattern.search(command) for pattern in CHANGING):
+        if changes_stack([arg for arg in argv if arg]):
             return True
     return False
 
@@ -192,30 +252,39 @@ def size(text):
     return int(float(match.group(1)) * UNITS[match.group(2).lower()])
 
 
-def stats(home):
-    memory = None
-    text = run(["docker", "stats", "--no-stream", "--format", "{{json .}}"], timeout=20)
+def memory():
+    text = run(["docker", "stats", "--no-stream", "--format", "{{json .}}"])
     try:
         rows = [json.loads(line) for line in (text or "").splitlines() if line.strip()]
     except ValueError:
-        rows = []
+        return None
     used = [size(row.get("MemUsage", "").split("/")[0]) for row in rows if row.get("Name", "").startswith(STACK_PREFIX)]
-    if used and None not in used:
-        memory = sum(used)
-    uptime = None
-    started = run(["docker", "inspect", "--format", "{{.State.StartedAt}}", STACK_PREFIX + "nginx"], timeout=10)
-    if started:
-        stamp = re.sub(r"\.[0-9]+", "", started.strip()).replace("Z", "+00:00")
-        try:
-            uptime = max(0, int(time.time() - datetime.fromisoformat(stamp).timestamp()))
-        except ValueError:
-            uptime = None
+    return sum(used) if used and None not in used else None
+
+
+def uptime_from_inspect(text, now):
+    """Seconds since nginx started, from `{{.State.Running}} {{.State.StartedAt}}`. None while it is stopped."""
+    running, _, started = (text or "").strip().partition(" ")
+    if running != "true" or not started:
+        return None
+    stamp = re.sub(r"\.[0-9]+", "", started).replace("Z", "+00:00")
+    try:
+        return max(0, int(now - datetime.fromisoformat(stamp).timestamp()))
+    except ValueError:
+        return None
+
+
+def uptime():
+    text = run(["docker", "inspect", "--format", "{{.State.Running}} {{.State.StartedAt}}", STACK_PREFIX + "nginx"])
+    return uptime_from_inspect(text, time.time())
+
+
+def disk_free(home):
     try:
         disk = os.statvfs(home)
-        free = disk.f_bavail * disk.f_frsize
     except OSError:
-        free = None
-    return {"memoryBytes": memory, "uptimeSeconds": uptime, "diskFreeBytes": free}
+        return None
+    return disk.f_bavail * disk.f_frsize
 
 
 def main(arguments):
@@ -223,18 +292,44 @@ def main(arguments):
     if "--home" in arguments and arguments.index("--home") + 1 < len(arguments):
         home = arguments[arguments.index("--home") + 1]
     stack = os.path.join(home, "source/deploy/linux-host/stack.sh")
-    rows = compose_rows(stack)
-    origin, _ = http(ORIGIN_URL)
-    report = {
-        "containers": containers(stack, rows),
-        "tunnel": tunnel(rows),
-        "bridges": bridges(os.path.join(home, "state/app.env")),
-        "ollama": ollama(),
-        "originStatus": origin,
-        "busy": changing(),
-        "stats": stats(home) if "--stats" in arguments else None,
+    env = dict(os.environ, MOTHERSHIP_HOME=home)
+    pool = ThreadPoolExecutor(max_workers=9)
+    jobs = {
+        "rows": pool.submit(compose_rows, stack, env),
+        "services": pool.submit(stack_services, stack, env),
+        "connections": pool.submit(tunnel_connections),
+        "bridges": pool.submit(bridges, os.path.join(home, "state/app.env")),
+        "ollama": pool.submit(ollama),
+        "origin": pool.submit(lambda: http(ORIGIN_URL)[0]),
+        "busy": pool.submit(changing),
     }
-    print(json.dumps(report, separators=(",", ":")))
+    if "--stats" in arguments:
+        jobs["memory"] = pool.submit(memory)
+        jobs["uptime"] = pool.submit(uptime)
+    finish_by = time.monotonic() + DEADLINE
+
+    def result(name, fallback=None):
+        try:
+            return jobs[name].result(timeout=max(0.0, finish_by - time.monotonic()))
+        except Exception:
+            return fallback
+
+    rows = result("rows")
+    report = {
+        "containers": containers(result("services"), rows),
+        "tunnel": tunnel(rows, result("connections")),
+        "bridges": result("bridges"),
+        "ollama": result("ollama", {"version": None, "loaded": 0}),
+        "originStatus": result("origin"),
+        "busy": result("busy", False),
+        "stats": {
+            "memoryBytes": result("memory"), "uptimeSeconds": result("uptime"), "diskFreeBytes": disk_free(home),
+        } if "--stats" in arguments else None,
+    }
+    sys.stdout.write(json.dumps(report, separators=(",", ":")) + "\n")
+    sys.stdout.flush()
+    # A read still hanging past the deadline must not hold the answer back.
+    os._exit(0)
 
 
 if __name__ == "__main__":

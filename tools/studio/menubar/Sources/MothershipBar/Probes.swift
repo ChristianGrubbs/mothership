@@ -119,7 +119,8 @@ struct Probes: Sendable {
 
     /// Reads the stack on the Linux host in one SSH call: containers, tunnel, bridges, Ollama and the origin, as
     /// seen on that host. Runs `linux-host-status.py` from the app bundle there, which changes nothing.
-    /// Nil means the host could not be read.
+    /// Nil means the host could not be read. The script answers within its own 18-second deadline, leaving
+    /// the rest of the 30 seconds for reaching the host through the jump host.
     func linuxHost(includeStats: Bool) async -> LinuxHostReading? {
         guard let host = config.linuxHost, let arguments = host.sshArguments(includeStats: includeStats),
               let script = Bundle.main.url(forResource: "linux-host-status", withExtension: "py") else { return nil }

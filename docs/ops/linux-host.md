@@ -105,10 +105,11 @@ zsh tools/studio/menubar/scripts/install.sh --site-url https://<host>/up --linux
   the jump host. Every later connection requires the same key.
 - The site row probes the public `/up` from the Mac. Every other row comes from
   one SSH call that runs `Resources/linux-host-status.py` here with
-  `python3 -`. That script reads `stack.sh ps` and `stack.sh config --services`,
-  the tunnel's readiness endpoint, each bridge's `/health`, and Ollama at the
-  default gateway. From `app.env` it reads only the three bridge address keys.
-  It prints one JSON object and changes nothing.
+  `python3 -`. That script reads `stack.sh ps` and each service's
+  `container_name` from `stack.sh config`, the tunnel's readiness endpoint, each
+  bridge's `/health`, and Ollama at the default gateway. From `app.env` it reads
+  only the three bridge address keys. It runs these reads side by side, prints
+  one JSON object within 18 seconds even if Docker hangs, and changes nothing.
 - The panel counts the 13 `mothership-private-*` containers, as on the Mac. The
   tunnel and the bridges have rows of their own.
 - While `stack.sh up` or `stop`, or `docker compose` for this project, runs
