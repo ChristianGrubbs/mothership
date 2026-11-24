@@ -104,15 +104,16 @@ class LinuxHostStatusTest(unittest.TestCase):
         for argv in quiet:
             self.assertFalse(status.changes_stack(argv), argv)
 
-    def test_a_hanging_wrapper_still_gets_a_whole_report_in_time(self) -> None:
+    def test_a_hanging_wrapper_and_disk_still_get_a_whole_report_in_time(self) -> None:
         home, stack = self.fake_stack()
         stack.write_text("#!/bin/sh\nsleep 5\n", encoding="utf-8")
         child = (
-            "import importlib.util, sys\n"
+            "import importlib.util, sys, time\n"
             f"spec = importlib.util.spec_from_file_location('status', {str(STATUS_PATH)!r})\n"
             "status = importlib.util.module_from_spec(spec)\n"
             "spec.loader.exec_module(status)\n"
             "status.DEADLINE = 0.5\n"
+            "status.os.statvfs = lambda path: time.sleep(5)\n"
             f"status.main(['--home', {str(home)!r}, '--stats'])\n"
         )
         started = time.monotonic()
@@ -122,6 +123,7 @@ class LinuxHostStatusTest(unittest.TestCase):
         report = json.loads(done.stdout)
         self.assertIsNone(report["containers"])
         self.assertEqual(set(report["stats"]), {"memoryBytes", "uptimeSeconds", "diskFreeBytes"})
+        self.assertIsNone(report["stats"]["diskFreeBytes"])
 
     def test_uptime_only_while_nginx_runs(self) -> None:
         now = 1_800_000_000.0
