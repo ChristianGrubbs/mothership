@@ -7,8 +7,10 @@ import json
 import os
 import pathlib
 import stat
+import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 STATUS_PATH = pathlib.Path(__file__).parents[1] / "menubar" / "Resources" / "linux-host-status.py"
@@ -85,6 +87,8 @@ class LinuxHostStatusTest(unittest.TestCase):
              "up", "--detach", "--remove-orphans"],
             ["/usr/libexec/docker/cli-plugins/docker-compose", "compose", "--project-name=mothership", "down"],
             ["docker-compose", "-pmothership", "restart", "fpm"],
+            ["docker", "--context", "default", "compose", "-p", "mothership", "up", "-d"],
+            ["docker", "-H", "unix:///run/docker.sock", "--debug", "compose", "--project-name", "mothership", "stop"],
         ]
         for argv in changing:
             self.assertTrue(status.changes_stack(argv), argv)
@@ -94,10 +98,30 @@ class LinuxHostStatusTest(unittest.TestCase):
             ["docker", "compose", "-p", "other", "up", "-d"],
             ["docker", "compose", "up", "-d"],
             ["docker", "stop", "mothership-private-fpm"],
+            ["docker", "--context", "default", "stop", "mothership-private-fpm"],
             ["python3", "-", "--home", "/srv/mothership", "--stats"],
         ]
         for argv in quiet:
             self.assertFalse(status.changes_stack(argv), argv)
+
+    def test_a_hanging_wrapper_still_gets_a_whole_report_in_time(self) -> None:
+        home, stack = self.fake_stack()
+        stack.write_text("#!/bin/sh\nsleep 5\n", encoding="utf-8")
+        child = (
+            "import importlib.util, sys\n"
+            f"spec = importlib.util.spec_from_file_location('status', {str(STATUS_PATH)!r})\n"
+            "status = importlib.util.module_from_spec(spec)\n"
+            "spec.loader.exec_module(status)\n"
+            "status.DEADLINE = 0.5\n"
+            f"status.main(['--home', {str(home)!r}, '--stats'])\n"
+        )
+        started = time.monotonic()
+        done = subprocess.run([sys.executable, "-c", child], capture_output=True, text=True, timeout=30, check=False)
+        self.assertLess(time.monotonic() - started, 4)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        report = json.loads(done.stdout)
+        self.assertIsNone(report["containers"])
+        self.assertEqual(set(report["stats"]), {"memoryBytes", "uptimeSeconds", "diskFreeBytes"})
 
     def test_uptime_only_while_nginx_runs(self) -> None:
         now = 1_800_000_000.0

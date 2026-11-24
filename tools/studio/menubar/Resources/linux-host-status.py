@@ -37,6 +37,8 @@ COMMAND_TIMEOUT = 15
 PROJECT = "mothership"
 # Compose commands that change the stack's containers.
 CHANGING_ACTIONS = {"up", "down", "stop", "start", "restart", "rm", "kill", "create"}
+# Docker's global options that take a value as the next word, which can come before `compose`.
+DOCKER_VALUE_OPTIONS = {"-c", "--context", "-H", "--host", "--config", "-l", "--log-level", "--tlscacert", "--tlscert", "--tlskey"}
 # Compose's global options that take a value as the next word.
 COMPOSE_VALUE_OPTIONS = {
     "-f", "--file", "--env-file", "--profile", "--project-directory", "--ansi", "--progress", "--parallel",
@@ -59,7 +61,9 @@ def http(url, timeout=4):
 def run(arguments, timeout=COMMAND_TIMEOUT, env=None):
     """Returns standard output, or None when the command failed."""
     try:
-        done = subprocess.run(arguments, capture_output=True, text=True, timeout=timeout, check=False, env=env)
+        done = subprocess.run(
+            arguments, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=timeout, check=False, env=env
+        )
     except Exception:
         return None
     return done.stdout if done.returncode == 0 else None
@@ -201,10 +205,15 @@ def changes_stack(argv):
     if start is None:
         return False
     words = argv[start + 1:]
-    if words and words[0] == "compose":
+    if names[start] == "docker":
+        index = 0
+        while index < len(words) and words[index].startswith("-"):
+            index += 2 if words[index] in DOCKER_VALUE_OPTIONS else 1
+        if index >= len(words) or words[index] != "compose":
+            return False
+        words = words[index + 1:]
+    elif words and words[0] == "compose":
         words = words[1:]
-    elif names[start] == "docker":
-        return False
     project = None
     index = 0
     while index < len(words):
@@ -293,7 +302,7 @@ def main(arguments):
         home = arguments[arguments.index("--home") + 1]
     stack = os.path.join(home, "source/deploy/linux-host/stack.sh")
     env = dict(os.environ, MOTHERSHIP_HOME=home)
-    pool = ThreadPoolExecutor(max_workers=9)
+    pool = ThreadPoolExecutor(max_workers=10)
     jobs = {
         "rows": pool.submit(compose_rows, stack, env),
         "services": pool.submit(stack_services, stack, env),
@@ -306,6 +315,7 @@ def main(arguments):
     if "--stats" in arguments:
         jobs["memory"] = pool.submit(memory)
         jobs["uptime"] = pool.submit(uptime)
+        jobs["disk"] = pool.submit(disk_free, home)
     finish_by = time.monotonic() + DEADLINE
 
     def result(name, fallback=None):
@@ -323,7 +333,7 @@ def main(arguments):
         "originStatus": result("origin"),
         "busy": result("busy", False),
         "stats": {
-            "memoryBytes": result("memory"), "uptimeSeconds": result("uptime"), "diskFreeBytes": disk_free(home),
+            "memoryBytes": result("memory"), "uptimeSeconds": result("uptime"), "diskFreeBytes": result("disk"),
         } if "--stats" in arguments else None,
     }
     sys.stdout.write(json.dumps(report, separators=(",", ":")) + "\n")
