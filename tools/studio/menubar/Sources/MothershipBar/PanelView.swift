@@ -19,6 +19,9 @@ struct PanelState {
     var siteResult: String?
     var checkedText: String
     var startAtLogin: Bool
+    /// What the panel calls the machine that runs the stack, when it isn't this Mac. The panel then reads that
+    /// machine and offers no Start, Stop or Restart, because changes to it are made there.
+    var remoteHost: String?
     /// Nil when this Mac has no ArtCraft update tool.
     var craft: CraftPanel?
 }
@@ -255,7 +258,12 @@ struct PanelView: View {
     }
 
     private var macSpaceLine: String {
-        guard let free = state.snapshot.stats?.diskFreeBytes else { return "This Mac: free space can't be read" }
+        let free = state.snapshot.stats?.diskFreeBytes
+        if let host = state.remoteHost {
+            guard let free else { return "\(host): free space can't be read" }
+            return "\(host): \(Format.bytes(free)) free for the stack"
+        }
+        guard let free else { return "This Mac: free space can't be read" }
         return "This Mac: \(Format.bytes(free)) free for drafts and staging"
     }
 
@@ -298,7 +306,7 @@ struct PanelView: View {
             )
         } else if let failure = state.failure {
             FailureBlock(failure: failure, actions: actions)
-        } else {
+        } else if state.remoteHost == nil {
             normalControls
         }
     }
@@ -330,18 +338,28 @@ struct PanelView: View {
         }
     }
 
-    private var footer: some View {
-        Toggle(isOn: Binding(get: { state.startAtLogin }, set: actions.setStartAtLogin)) {
-            Text("Start site at login")
+    @ViewBuilder private var footer: some View {
+        if let host = state.remoteHost {
+            Text("Runs on the \(host). Start, stop and deploy it there.")
                 .font(BrandFont.sans(13))
                 .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+        } else {
+            Toggle(isOn: Binding(get: { state.startAtLogin }, set: actions.setStartAtLogin)) {
+                Text("Start site at login")
+                    .font(BrandFont.sans(13))
+                    .foregroundStyle(Theme.textMuted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .toggleStyle(.switch)
+            .controlSize(.mini)
+            .tint(Theme.act)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
         }
-        .toggleStyle(.switch)
-        .controlSize(.mini)
-        .tint(Theme.act)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
     }
 }
 

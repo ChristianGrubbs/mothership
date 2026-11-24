@@ -20,6 +20,11 @@ public struct HealthRow: Sendable, Equatable, Identifiable {
 public func healthRows(snapshot: HealthSnapshot, overall: Overall) -> [HealthRow] {
     let quiet = overall == .offline || overall.isChanging
     func problem(_ value: String) -> HealthRow.Parts { (value, quiet ? .off : .failing) }
+    // Only the site is read from here when the stack runs on another host. The rest can't be known without it.
+    if snapshot.unreadable.contains(.host) {
+        return [siteRow(snapshot.site, quiet: quiet, problem: problem)]
+            + ["Containers", "Tunnel", "Bridges", "Ollama"].map { HealthRow($0, problem("Can't read")) }
+    }
     return [
         siteRow(snapshot.site, quiet: quiet, problem: problem),
         containersRow(snapshot.containers, unreadable: snapshot.unreadable.contains(.containers), problem: problem),

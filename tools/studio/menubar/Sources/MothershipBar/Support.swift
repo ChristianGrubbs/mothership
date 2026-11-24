@@ -2,18 +2,31 @@ import Foundation
 import MothershipBarCore
 
 /// Host-specific settings. The installer writes this file; nothing host-specific lives in the source tree.
+/// With `linuxHost` set the app reads the stack on that host and changes nothing. The fields marked "this Mac"
+/// are then unset, and the app offers no Start, Stop or Restart.
 struct BarConfig: Codable, Sendable {
-    var wrapperPath: String
-    var appEnvPath: String
     var siteURL: String
-    var originURL: String
-    var containerBinary: String
-    var tunnelLabel: String
-    var tunnelReadyURL: String
-    var ollamaURL: String
-    var diskPath: String
-    var containerPrefix: String
-    var uptimeService: String
+    var linuxHost: LinuxHostSource?
+    /// This Mac's stack wrapper.
+    var wrapperPath: String?
+    /// This Mac's stack settings.
+    var appEnvPath: String?
+    /// This Mac's origin.
+    var originURL: String?
+    /// This Mac's container runtime.
+    var containerBinary: String?
+    /// This Mac's tunnel job.
+    var tunnelLabel: String?
+    /// This Mac's tunnel.
+    var tunnelReadyURL: String?
+    /// This Mac's Ollama.
+    var ollamaURL: String?
+    /// The volume that holds this Mac's stack.
+    var diskPath: String?
+    /// This Mac's container names.
+    var containerPrefix: String?
+    /// This Mac's container whose age is the stack's uptime.
+    var uptimeService: String?
     var umbrelStore: UmbrelStoreSource?
     /// Where the web app reads the Umbrel's free space. Nil leaves the file unwritten.
     var umbrelCapacityFile: String?
@@ -21,6 +34,9 @@ struct BarConfig: Codable, Sendable {
     var deployGuard: DeployGuardConfig?
     /// How to restart a stopped bridge. Nil leaves the watcher off.
     var bridgeWatch: BridgeWatchConfig?
+
+    /// Whether this app may start, stop and restart the stack: only a stack on this Mac.
+    var controlsStack: Bool { linuxHost == nil && wrapperPath != nil }
 }
 
 /// What each bridge's own manager needs. The app only ever runs that manager's `up`.

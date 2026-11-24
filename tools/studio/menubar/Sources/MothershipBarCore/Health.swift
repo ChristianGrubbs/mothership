@@ -39,6 +39,14 @@ public enum ActionKind: String, Sendable, Equatable, Codable {
         }
     }
 
+    /// Whether the action stops or starts the stack. An engine update takes the site down while it builds.
+    public var changesStack: Bool {
+        switch self {
+        case .craftApps, .craftMCP, .craftMCPForce: false
+        case .start, .stop, .restart, .recover, .login, .craftEngines: true
+        }
+    }
+
     public var overall: Overall {
         switch self {
         case .start, .login: .starting
@@ -131,6 +139,8 @@ public struct StatsReading: Sendable, Equatable {
 /// A part of the stack whose probe has been failing for too long to trust its last reading.
 public enum ReadablePart: String, Sendable, Equatable {
     case containers, bridges
+    /// The Linux host that runs the stack. Every part read on it is unknown.
+    case host
 }
 
 /// Seconds a probe may keep failing before its last good reading is dropped, so one slow poll
@@ -206,7 +216,7 @@ public func problems(in snapshot: HealthSnapshot) -> [String] {
     var found: [String] = []
     if let site = snapshot.site, !site.publicOK {
         if site.originOK {
-            found.append("The site answers here but not through the tunnel")
+            found.append("The site answers on its server but not through the tunnel")
         } else if let status = site.publicStatus {
             found.append("The site returns \(status)")
         } else {
@@ -214,7 +224,7 @@ public func problems(in snapshot: HealthSnapshot) -> [String] {
         }
     }
     for part in snapshot.unreadable {
-        found.append("Can't read the \(part.rawValue)")
+        found.append(part == .host ? "Can't reach the server that runs the stack" : "Can't read the \(part.rawValue)")
     }
     if let containers = snapshot.containers, !containers.allRunning {
         found.append("\(containers.running) of \(containers.total) containers running")

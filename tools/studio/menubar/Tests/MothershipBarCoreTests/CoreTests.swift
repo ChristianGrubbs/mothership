@@ -32,7 +32,7 @@ private let healthy = HealthSnapshot(
 @Test func siteUpThroughOriginOnlyBlamesTheTunnel() {
     var snapshot = healthy
     snapshot.site = SiteReading(publicStatus: 530, publicMs: 90, originStatus: 200)
-    #expect(problems(in: snapshot).first == "The site answers here but not through the tunnel")
+    #expect(problems(in: snapshot).first == "The site answers on its server but not through the tunnel")
 }
 
 @Test func panelFaultsKeepTheDiagnosisAndNameEveryStoppedContainer() {
@@ -40,7 +40,7 @@ private let healthy = HealthSnapshot(
     snapshot.site = SiteReading(publicStatus: 530, publicMs: 90, originStatus: 200)
     snapshot.containers = ContainerReading(running: 11, total: 13, notRunning: ["vectorization_queue", "nginx"])
     #expect(detailedProblems(in: snapshot) == [
-        "The site answers here but not through the tunnel",
+        "The site answers on its server but not through the tunnel",
         "11 of 13 containers running. Stopped: vectorization queue, nginx",
     ])
 }

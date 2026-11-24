@@ -45,6 +45,7 @@ final class AppModel {
     @ObservationIgnored private var tunnelJobRunning = false
     @ObservationIgnored private var heldContainers = HeldReading<ContainerReading>()
     @ObservationIgnored private var heldBridges = HeldReading<[BridgeReading]>()
+    @ObservationIgnored private var heldHost = HeldReading<LinuxHostReading>()
     @ObservationIgnored private var storeState = StoreState.checking
     @ObservationIgnored private var lastStoreRead: Date?
     @ObservationIgnored private var storeReadRunning = false
@@ -67,7 +68,8 @@ final class AppModel {
         craftStatus = (try? String(contentsOf: BarPaths.craftStatus, encoding: .utf8)).flatMap(parseCraftStatus)
         let storedDrop = (try? String(contentsOf: BarPaths.driveDrop, encoding: .utf8))
             .flatMap { ISO8601DateFormatter().date(from: $0.trimmingCharacters(in: .whitespacesAndNewlines)) }
-        driveRecovery = DriveRecovery(droppedAt: storedDrop)
+        // A drop recorded for a stack on this Mac means nothing once the app watches another host.
+        driveRecovery = DriveRecovery(droppedAt: config?.controlsStack == true ? storedDrop : nil)
     }
 
     var verdict: Verdict {
@@ -89,6 +91,7 @@ final class AppModel {
             siteResult: siteResult.flatMap { now.timeIntervalSince($0.finished) < siteResultShownFor ? $0.message : nil },
             checkedText: checkedText,
             startAtLogin: startAtLogin,
+            remoteHost: config?.linuxHost?.displayName,
             craft: config?.craftTool == nil ? nil : CraftPanel(
                 status: craftStatus, isChecking: craftChecking, checkFailed: craftCheckFailed,
                 checkedText: craftCheckedText, isOpen: showingCraft
@@ -159,6 +162,10 @@ final class AppModel {
     // MARK: Actions
 
     private func request(_ kind: ActionKind) {
+        if kind.changesStack, config?.controlsStack == false {
+            BarLog.write("warn", "action.refused_remote_stack", loc: "AppModel.request", ctx: ["kind": kind.rawValue])
+            return
+        }
         failure = nil
         siteResult = nil
         // The operator has taken over, so a drop the app was waiting to recover from is theirs now.
@@ -269,7 +276,7 @@ final class AppModel {
     /// One of two automatic starts; the other is the recovery after a drive drop. The app never restarts the
     /// stack because it looks down: a planned deploy keeps it down on purpose.
     private func startForLoginIfNeeded() {
-        guard startAtLogin, config != nil else { return }
+        guard startAtLogin, config?.controlsStack == true else { return }
         let previous = try? String(contentsOf: BarPaths.loginMarker, encoding: .utf8)
         guard previous != LoginSession.current() else {
             BarLog.write("info", "login.already_handled", loc: "AppModel.startForLoginIfNeeded")
@@ -493,6 +500,10 @@ final class AppModel {
         guard let probes else { return }
         refreshStoreIfDue()
         checkCraft(force: false)
+        if config?.linuxHost != nil {
+            await pollLinuxHost(probes)
+            return
+        }
         let pollStarted = Date()
         async let siteResult = probes.site()
         async let tunnel = probes.tunnel(lastKnownJobRunning: tunnelJobRunning)
@@ -560,6 +571,65 @@ final class AppModel {
         now = Date()
         trackAction()
         recoverFromDriveDropIfDue()
+    }
+
+    /// The stack on a Linux host. The site is read from here on every poll. Everything else comes from one SSH
+    /// read on that host, which launches a process, so it keeps the cadence of the process reads above. Stats
+    /// ride along on that read while the panel is open. Nothing here changes the host.
+    private func pollLinuxHost(_ probes: Probes) async {
+        let pollStarted = Date()
+        let site = await probes.site()
+        let readStats = panelIsOpen && pollStarted.timeIntervalSince(lastStatsRead) >= statsReadInterval
+        let readHost = readStats || processReadsAreDue(ProcessReadCheck(
+            lastRead: lastProcessRead, lastSucceeded: lastProcessReadSucceeded,
+            looksHealthy: verdict.overall == .online,
+            siteChanged: siteOKAtProcessRead.map { $0 != site.publicOK } ?? false,
+            panelIsOpen: panelIsOpen, actionRunning: activeAction != nil
+        ), now: pollStarted)
+
+        var next = snapshot
+        next.site = SiteReading(publicStatus: site.publicStatus, publicMs: site.publicMs, originStatus: snapshot.site?.originStatus)
+        if readHost {
+            let reading = await probes.linuxHost(includeStats: readStats)
+            let held = heldHost.update(reading, at: Date())
+            if let host = held.value {
+                next.containers = host.containers
+                next.tunnel = host.tunnel
+                next.bridges = host.bridges
+                next.ollama = host.ollama
+                next.site?.originStatus = host.originStatus
+                next.unreadable = (host.containers == nil ? [.containers] : []) + (host.bridges == nil ? [.bridges] : [])
+                externalBusy = host.busy
+            } else {
+                next.containers = nil
+                next.tunnel = nil
+                next.bridges = nil
+                next.ollama = nil
+                next.site?.originStatus = nil
+                // Uptime, memory and the host's free space came from the host too, so they go with it.
+                next.stats = nil
+                next.unreadable = held.unreadable ? [.host] : []
+                externalBusy = false
+            }
+            if let stats = reading?.stats {
+                next.stats = stats
+                lastStatsRead = Date()
+            }
+            if (reading == nil) != !lastProcessReadSucceeded {
+                BarLog.write(
+                    reading == nil ? "warn" : "info", "probe.linux_host_changed", loc: "AppModel.pollLinuxHost",
+                    ctx: ["readable": "\(reading != nil)"]
+                )
+            }
+            lastProcessRead = pollStarted
+            lastProcessReadSucceeded = reading != nil
+            siteOKAtProcessRead = site.publicOK
+        }
+        next.store = storeState
+        snapshot = next
+        lastChecked = Date()
+        now = Date()
+        trackAction()
     }
 }
 

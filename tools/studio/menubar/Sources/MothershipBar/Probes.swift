@@ -23,13 +23,14 @@ struct Probes: Sendable {
 
     func site() async -> SiteReading {
         async let publicResult = URL(string: config.siteURL).asyncMap(get)
-        async let originResult = URL(string: config.originURL).asyncMap(get)
+        async let originResult = config.originURL.flatMap { URL(string: $0) }.asyncMap(get)
         let (publicReading, origin) = await (publicResult, originResult)
         return SiteReading(publicStatus: publicReading?.status, publicMs: publicReading?.ms, originStatus: origin?.status)
     }
 
     func containers() async -> ContainerReading? {
-        let result = await runCommand(config.wrapperPath, ["status"], timeout: 25)
+        guard let wrapperPath = config.wrapperPath else { return nil }
+        let result = await runCommand(wrapperPath, ["status"], timeout: 25)
         guard result.succeeded else {
             BarLog.write("warn", "probe.status_failed", loc: "Probes.containers", ctx: ["exit": "\(result.exitCode)"])
             return nil
@@ -39,13 +40,14 @@ struct Probes: Sendable {
 
     /// Asks launchd about the tunnel's job. This launches a process, so it runs on the slower cadence.
     func tunnelJobRunning() async -> Bool {
-        let job = await runCommand("/bin/launchctl", ["print", "gui/\(getuid())/\(config.tunnelLabel)"], timeout: 5)
+        guard let tunnelLabel = config.tunnelLabel else { return false }
+        let job = await runCommand("/bin/launchctl", ["print", "gui/\(getuid())/\(tunnelLabel)"], timeout: 5)
         return job.succeeded && job.text.contains("state = running")
     }
 
     /// An answer from the tunnel's ready endpoint proves its job is running. Without one, launchd's last word stands.
     func tunnel(lastKnownJobRunning: Bool) async -> TunnelReading {
-        guard let url = URL(string: config.tunnelReadyURL), let ready = await get(url),
+        guard let url = config.tunnelReadyURL.flatMap({ URL(string: $0) }), let ready = await get(url),
               let body = try? JSONSerialization.jsonObject(with: ready.data) as? [String: Any] else {
             return TunnelReading(jobRunning: lastKnownJobRunning, readyConnections: nil)
         }
@@ -53,7 +55,8 @@ struct Probes: Sendable {
     }
 
     func bridges() async -> (readings: [BridgeReading]?, targets: [BridgeTarget], driveBlocked: Bool) {
-        switch await readFile(config.appEnvPath, timeout: 5) {
+        guard let appEnvPath = config.appEnvPath else { return (nil, [], false) }
+        return switch await readFile(appEnvPath, timeout: 5) {
         case .blocked: (nil, [], true)
         case .unavailable: (nil, [], false)
         case .text(let text): (await bridgeReadings(appEnv: text), parseBridgeTargets(text), false)
@@ -78,7 +81,7 @@ struct Probes: Sendable {
     }
 
     func ollama() async -> OllamaReading {
-        guard let base = URL(string: config.ollamaURL) else { return OllamaReading(version: nil, loadedModels: 0) }
+        guard let base = config.ollamaURL.flatMap({ URL(string: $0) }) else { return OllamaReading(version: nil, loadedModels: 0) }
         async let versionResult = get(base.appending(path: "api/version"))
         async let loadedResult = get(base.appending(path: "api/ps"))
         let (version, loaded) = await (versionResult, loadedResult)
@@ -94,21 +97,48 @@ struct Probes: Sendable {
         var reading = StatsReading(
             memoryBytes: previous?.memoryBytes, uptimeSeconds: previous?.uptimeSeconds, diskFreeBytes: nil
         )
-        let attributes = try? FileManager.default.attributesOfFileSystem(forPath: config.diskPath)
+        let attributes = config.diskPath.flatMap { try? FileManager.default.attributesOfFileSystem(forPath: $0) }
         reading.diskFreeBytes = (attributes?[.systemFreeSize] as? NSNumber)?.int64Value
-        guard includeContainers else { return reading }
-        let usage = await runCommand(config.containerBinary, ["stats", "--no-stream", "--format", "json"], timeout: 15)
-        reading.memoryBytes = usage.succeeded ? parseStatsMemory(usage.output, containerPrefix: config.containerPrefix) : nil
+        guard includeContainers, let containerBinary = config.containerBinary, let prefix = config.containerPrefix else {
+            return reading
+        }
+        let usage = await runCommand(containerBinary, ["stats", "--no-stream", "--format", "json"], timeout: 15)
+        reading.memoryBytes = usage.succeeded ? parseStatsMemory(usage.output, containerPrefix: prefix) : nil
         reading.uptimeSeconds = await uptime()
         return reading
     }
 
     private func uptime() async -> Int? {
-        let service = await runCommand("/bin/launchctl", ["print", "gui/\(getuid())/\(config.uptimeService)"], timeout: 5)
+        guard let uptimeService = config.uptimeService else { return nil }
+        let service = await runCommand("/bin/launchctl", ["print", "gui/\(getuid())/\(uptimeService)"], timeout: 5)
         guard service.succeeded,
               let line = service.text.split(separator: "\n").first(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("pid = ") }),
               let pid = line.split(separator: "=").last?.trimmingCharacters(in: .whitespaces) else { return nil }
         return parseElapsed(await runCommand("/bin/ps", ["-o", "etime=", "-p", pid], timeout: 5).text)
+    }
+
+    /// Reads the stack on the Linux host in one SSH call: containers, tunnel, bridges, Ollama and the origin, as
+    /// seen on that host. Runs `linux-host-status.py` from the app bundle there, which changes nothing.
+    /// Nil means the host could not be read.
+    func linuxHost(includeStats: Bool) async -> LinuxHostReading? {
+        guard let host = config.linuxHost, let arguments = host.sshArguments(includeStats: includeStats),
+              let script = Bundle.main.url(forResource: "linux-host-status", withExtension: "py") else { return nil }
+        let result = await runCommand("/usr/bin/ssh", arguments, timeout: 30, standardInput: script.path)
+        guard result.succeeded, let reading = parseLinuxHostReport(result.output) else {
+            BarLog.write(
+                "warn", "probe.linux_host_failed", loc: "Probes.linuxHost",
+                ctx: ["exit": "\(result.exitCode)", "timed_out": "\(result.timedOut)"]
+            )
+            return nil
+        }
+        BarLog.write(
+            "debug", "probe.linux_host_read", loc: "Probes.linuxHost",
+            ctx: [
+                "running": "\(reading.containers?.running ?? -1)", "total": "\(reading.containers?.total ?? -1)",
+                "busy": "\(reading.busy)", "stats": "\(reading.stats != nil)",
+            ]
+        )
+        return reading
     }
 
     /// Reads the asset drive and bucket on the Umbrel. Nil means the Umbrel could not be read.
