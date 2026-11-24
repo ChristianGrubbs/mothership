@@ -43,8 +43,8 @@ private let report = #"""
 }
 
 private let source = LinuxHostSource(
-    sshTarget: "mothership@vm.example", jumpHost: "jump-host", keyPath: "/Users/me/.ssh/key",
-    knownHostsPath: "/Users/me/Library/Application Support/The Mothership Menu Bar/linux-host-known-hosts",
+    sshTarget: "mothership@vm.example", jumpHost: "jump-host", keyPath: "/keys/vm-key",
+    knownHostsPath: "/app support/The Mothership Menu Bar/linux-host-known-hosts",
     home: "/srv/mothership", displayName: "Windows PC"
 )
 
