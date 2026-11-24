@@ -125,15 +125,37 @@ enum RenderStates {
         func panel(
             _ snapshot: HealthSnapshot, action: ActionKind? = nil, busy: Bool = false, step: String? = nil,
             elapsed: Int? = nil, failure: PanelState.Failure? = nil, confirming: ActionKind? = nil,
-            queues: QueueCheck? = nil, siteResult: String? = nil, craft: CraftPanel? = craftPanel(craftUpdates)
+            queues: QueueCheck? = nil, siteResult: String? = nil, craft: CraftPanel? = craftPanel(craftUpdates),
+            remoteHost: String? = nil
         ) -> PanelState {
             PanelState(
                 verdict: verdict(for: snapshot, action: action, externalBusy: busy),
                 snapshot: snapshot, stepTitle: step, elapsedSeconds: elapsed, failure: failure,
                 confirming: confirming, queueCheck: queues, siteResult: siteResult,
-                checkedText: "Checked 8 s ago", startAtLogin: true, craft: craft
+                checkedText: "Checked 8 s ago", startAtLogin: true, remoteHost: remoteHost, craft: craft
             )
         }
+
+        // The stack on the Windows PC: two bridges, no optimizer, and no Start, Stop or Restart here.
+        let host = "Windows PC"
+        var remote = healthy
+        remote.bridges = [BridgeReading(name: "AI", ok: true), BridgeReading(name: "Video", ok: true)]
+        remote.stats = StatsReading(memoryBytes: 1_920_000_000, uptimeSeconds: 26_524, diskFreeBytes: 186_800_000_000)
+
+        var remoteDegraded = remote
+        remoteDegraded.containers = ContainerReading(running: 12, total: 13, notRunning: ["ai_index_queue"])
+
+        var remoteOffline = remote
+        remoteOffline.site = SiteReading(publicStatus: 530, publicMs: 90, originStatus: nil)
+        remoteOffline.containers = ContainerReading(running: 0, total: 13, notRunning: [])
+
+        var remoteUnreachable = remote
+        remoteUnreachable.containers = nil
+        remoteUnreachable.tunnel = nil
+        remoteUnreachable.bridges = nil
+        remoteUnreachable.ollama = nil
+        remoteUnreachable.unreadable = [.host]
+        remoteUnreachable.stats = nil
 
         var craftBusy = craftUpdates
         craftBusy.mcp = CraftMCPStatus(servers: 35, stale: 2, openSessions: 2, keyRender: true)
@@ -198,6 +220,11 @@ enum RenderStates {
                 status: craftBusy, isChecking: false, checkFailed: true, checkedText: "Checked 7 h ago", isOpen: true
             ))),
             ("34-craft-row-current", panel(healthy, craft: craftPanel(craftCurrent))),
+            ("35-remote-online", panel(remote, craft: nil, remoteHost: host)),
+            ("36-remote-degraded", panel(remoteDegraded, craft: nil, remoteHost: host)),
+            ("37-remote-offline", panel(remoteOffline, craft: nil, remoteHost: host)),
+            ("38-remote-unreachable", panel(remoteUnreachable, craft: nil, remoteHost: host)),
+            ("39-remote-deploying", panel(remoteOffline, busy: true, craft: nil, remoteHost: host)),
         ]
     }
 
@@ -235,6 +262,11 @@ enum RenderStates {
     static func runLive(directory: URL) async throws {
         let config = try JSONDecoder().decode(BarConfig.self, from: Data(contentsOf: BarPaths.config))
         let probes = Probes(config: config)
+        if let host = config.linuxHost {
+            let live = await liveLinuxHostSnapshot(probes)
+            try renderLive(snapshot: live.snapshot, busy: live.busy, remoteHost: host.displayName, to: directory)
+            return
+        }
         async let site = probes.site()
         async let containers = probes.containers()
         async let tunnel = probes.tunnel(lastKnownJobRunning: probes.tunnelJobRunning())
@@ -246,9 +278,36 @@ enum RenderStates {
             site: site, containers: containers, tunnel: tunnel, bridges: bridges.readings, ollama: ollama, stats: stats,
             store: store.map(StoreState.ready) ?? .unreachable
         )
+        try renderLive(snapshot: snapshot, remoteHost: nil, to: directory)
+    }
+
+    private static func liveLinuxHostSnapshot(_ probes: Probes) async -> (snapshot: HealthSnapshot, busy: Bool) {
+        async let site = probes.site()
+        async let host = probes.linuxHost(includeStats: true)
+        async let store = probes.umbrelStore()
+        let (siteReading, hostReading, storeReading) = await (site, host, store)
+        var snapshot = HealthSnapshot(store: storeReading.map(StoreState.ready) ?? .unreachable)
+        snapshot.site = SiteReading(
+            publicStatus: siteReading.publicStatus, publicMs: siteReading.publicMs, originStatus: hostReading?.originStatus
+        )
+        guard let hostReading else {
+            snapshot.unreadable = [.host]
+            return (snapshot, false)
+        }
+        snapshot.containers = hostReading.containers
+        snapshot.tunnel = hostReading.tunnel
+        snapshot.bridges = hostReading.bridges
+        snapshot.ollama = hostReading.ollama
+        snapshot.stats = hostReading.stats
+        snapshot.unreadable = (hostReading.containers == nil ? [.containers] : []) + (hostReading.bridges == nil ? [.bridges] : [])
+        return (snapshot, hostReading.busy)
+    }
+
+    private static func renderLive(snapshot: HealthSnapshot, busy: Bool = false, remoteHost: String?, to directory: URL) throws {
         let state = PanelState(
-            verdict: verdict(for: snapshot, action: nil, externalBusy: false), snapshot: snapshot, stepTitle: nil,
-            elapsedSeconds: nil, failure: nil, confirming: nil, checkedText: "Checked just now", startAtLogin: true
+            verdict: verdict(for: snapshot, action: nil, externalBusy: busy), snapshot: snapshot, stepTitle: nil,
+            elapsedSeconds: nil, failure: nil, confirming: nil, checkedText: "Checked just now", startAtLogin: true,
+            remoteHost: remoteHost
         )
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         for (suffix, scheme, appearance) in [

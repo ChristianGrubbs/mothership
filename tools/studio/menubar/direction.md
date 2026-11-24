@@ -23,7 +23,7 @@ The source is the accepted redesign, `redesign/v2-bridge/`.
 ## Surface
 
 - macOS 27 menu bar item with a 400 pt wide panel. Pointer and keyboard.
-- Job: read the site's health and start, stop or restart it.
+- Job: read the site's health and start, stop or restart it. When the stack runs on another host, only read it.
 - Mode: one-off. Reference intent: the product's own design system.
 
 ## Glyph states
@@ -99,6 +99,24 @@ Two themes, named as on the site: Graphite (default) and White. A segment in the
 | Not set up | Not set up | None | Open log |
 
 The yellow deck's Review button is blue too. It sits apart from the stack's controls and only opens a page.
+
+### Stack on another host
+
+Since 2026-11-23 production runs in a VM on the Windows PC. With `linuxHost` in the config, the panel reads that
+host over SSH and changes nothing on it. It keeps the same anatomy (rule H3): the same board, rows, figures and
+storage card. Only the controls go, because starting, stopping and deploying happen on that host.
+
+| State | Headline | Strongest control | Controls area | Footer |
+|---|---|---|---|---|
+| Online | Online | None, nothing is needed | Empty | "Runs on the Windows PC. Start, stop and deploy it there." |
+| Needs attention | Needs attention | None, the fix is on the host | Empty | Same line |
+| Offline | Offline | None | Empty | Same line |
+| Host unreachable | Needs attention | None | Empty | Same line. Every row read on the host says "Can't read"; uptime, memory and the host's space show "–" |
+| Busy (a deploy on the host) | Busy | None | Progress modules, "Waiting for the other session" | Same line |
+
+- The footer line takes the place of the "Start site at login" switch, in the same slot, size and colour.
+- The storage card's last sentence names the host: "Windows PC: 187 GB free for the stack".
+- The fault sentence for a lost host is "Can't reach the server that runs the stack": one fault, not four.
 
 ## Storage block
 

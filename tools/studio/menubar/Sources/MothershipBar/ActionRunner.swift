@@ -20,12 +20,18 @@ struct ActionRunner: Sendable {
         guard let script = Bundle.main.url(forResource: "stack-action", withExtension: "sh") else {
             throw CocoaError(.fileNoSuchFile)
         }
+        // A stack on another host is never changed from here, whatever asked.
+        guard config.controlsStack || !kind.changesStack else {
+            BarLog.write("warn", "action.refused_remote_stack", loc: "ActionRunner.launch", ctx: ["kind": kind.rawValue])
+            throw CocoaError(.featureUnsupported)
+        }
         try FileManager.default.createDirectory(at: BarPaths.actions, withIntermediateDirectories: true)
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "")
         let id = "\(stamp)-\(UUID().uuidString.prefix(8).lowercased())"
         try "\(id)\n\(kind.rawValue)\n".write(to: Self.currentFile, atomically: true, encoding: .utf8)
         try spawnDetached(arguments: [
-            "/bin/zsh", script.path, id, kind.rawValue, config.wrapperPath, BarPaths.actions.path, config.containerBinary,
+            "/bin/zsh", script.path, id, kind.rawValue, config.wrapperPath ?? "", BarPaths.actions.path,
+            config.containerBinary ?? "",
             config.craftTool?.python ?? "", config.craftTool?.script ?? "",
             config.deployGuard?.coordinator ?? "", config.deployGuard?.lease ?? "", config.siteURL,
         ])
@@ -36,14 +42,15 @@ struct ActionRunner: Sendable {
     /// Restarts one bridge through its own manager. It is not recorded as the panel's current action,
     /// so the Start, Stop and Restart controls stay as they are while it runs.
     func launchBridgeRestart(_ target: BridgeTarget, watch: BridgeWatchConfig) throws -> String {
-        guard let script = Bundle.main.url(forResource: "stack-action", withExtension: "sh") else {
+        guard let script = Bundle.main.url(forResource: "stack-action", withExtension: "sh"),
+              config.controlsStack, let wrapperPath = config.wrapperPath, let containerBinary = config.containerBinary else {
             throw CocoaError(.fileNoSuchFile)
         }
         try FileManager.default.createDirectory(at: BarPaths.actions, withIntermediateDirectories: true)
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "")
         let id = "\(stamp)-bridge-\(target.label)-\(UUID().uuidString.prefix(8).lowercased())"
         try spawnDetached(arguments: [
-            "/bin/zsh", script.path, id, "bridge-restart", config.wrapperPath, BarPaths.actions.path, config.containerBinary,
+            "/bin/zsh", script.path, id, "bridge-restart", wrapperPath, BarPaths.actions.path, containerBinary,
             config.craftTool?.python ?? "", config.craftTool?.script ?? "",
             config.deployGuard?.coordinator ?? "", config.deployGuard?.lease ?? "", config.siteURL,
             watch.python, watch.source, watch.nativeServices, target.label, target.host, String(target.port),
@@ -54,10 +61,11 @@ struct ActionRunner: Sendable {
 
     /// Reads how much work the site still has. Nil means it could not be read.
     func queueReading() async -> QueueReading? {
-        guard let script = Bundle.main.url(forResource: "stack-action", withExtension: "sh") else { return nil }
+        guard let script = Bundle.main.url(forResource: "stack-action", withExtension: "sh"),
+              let wrapperPath = config.wrapperPath, let containerBinary = config.containerBinary else { return nil }
         let result = await runCommand(
             "/bin/zsh",
-            [script.path, "queue-read", "queue-read", config.wrapperPath, BarPaths.actions.path, config.containerBinary],
+            [script.path, "queue-read", "queue-read", wrapperPath, BarPaths.actions.path, containerBinary],
             timeout: 45
         )
         guard result.succeeded, let reading = parseQueueReading(result.text) else {

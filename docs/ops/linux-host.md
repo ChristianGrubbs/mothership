@@ -86,6 +86,38 @@ source/deploy/linux-host/stack.sh stop     # containers, volumes and state stay
 
 `STUDIO_LOG=1` appends JSONL events to `state/events.jsonl`.
 
+## Menu bar app
+
+The Mac menu bar app (`tools/studio/menubar`, see `studio-runtime.md`) can watch
+this host instead of a stack on the Mac. It then only reads: it has no Start,
+Stop or Restart, does not start anything at login, and never restarts a bridge.
+Install it on the Mac with the host's SSH login, the key, and the SSH alias of
+the jump host, if there is one:
+
+```bash
+zsh tools/studio/menubar/scripts/install.sh --site-url https://<host>/up --linux-host <user>@<vm-host> --linux-key <private-key> --linux-jump <jump-alias> --umbrel-ssh <user@umbrel-host> --umbrel-key <umbrel-key>
+```
+
+- `--linux-home` (default `/srv/mothership`) is this host's `MOTHERSHIP_HOME`.
+  `--linux-name` (default `Windows PC`) is what the panel calls the host.
+- The installer connects once before it replaces anything. That first
+  connection records the host's key in the app's own known-hosts file, through
+  the jump host. Every later connection requires the same key.
+- The site row probes the public `/up` from the Mac. Every other row comes from
+  one SSH call that runs `Resources/linux-host-status.py` here with
+  `python3 -`. That script reads `stack.sh ps` and each service's
+  `container_name` from `stack.sh config`, the tunnel's readiness endpoint, each
+  bridge's `/health`, and Ollama at the default gateway. From `app.env` it reads
+  only the three bridge address keys. It runs these reads side by side, prints
+  one JSON object within 18 seconds even if Docker hangs, and changes nothing.
+- The panel counts the 13 `mothership-private-*` containers, as on the Mac. The
+  tunnel and the bridges have rows of their own.
+- While `stack.sh up` or `stop`, or `docker compose` for this project, runs
+  here, the panel shows **Busy** instead of an outage.
+- The call runs at the cadence of the Mac's process reads: every 5 minutes while
+  everything is healthy and the panel is closed, and every minute otherwise. If
+  it fails for longer than 90 seconds, the panel says it can't reach the server.
+
 ## First install and data migration
 
 1. Install Docker Engine and the Compose plugin. Add the operating user to the

@@ -18,7 +18,7 @@ rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$binary" "$app/Contents/MacOS/MothershipBar"
 cp Resources/Info.plist "$app/Contents/Info.plist"
-cp Resources/stack-action.sh Resources/lockup-compact-colour-dark.svg Resources/lockup-compact-colour-light.svg "$app/Contents/Resources/"
+cp Resources/stack-action.sh Resources/linux-host-status.py Resources/lockup-compact-colour-dark.svg Resources/lockup-compact-colour-light.svg "$app/Contents/Resources/"
 cp -R Resources/fonts "$app/Contents/Resources/fonts"
 
 iconset=$(mktemp -d "$output/iconset.XXXXXX")/AppIcon.iconset

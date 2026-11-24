@@ -105,22 +105,27 @@ public let maxRetainedOutput = 4 << 20
 
 /// Runs a read-only command in its own process group. Always returns within
 /// `timeout` plus a few seconds, even if the command ignores SIGTERM or a child keeps stdout open.
-public func runCommand(_ path: String, _ arguments: [String], timeout: TimeInterval) async -> CommandResult {
+/// `standardInput` is a file the command reads as its input. Without one it reads nothing.
+public func runCommand(
+    _ path: String, _ arguments: [String], timeout: TimeInterval, standardInput: String? = nil
+) async -> CommandResult {
     await withCheckedContinuation { continuation in
         DispatchQueue.global(qos: .utility).async {
-            continuation.resume(returning: runBounded(path: path, arguments: arguments, timeout: timeout))
+            continuation.resume(returning: runBounded(
+                path: path, arguments: arguments, timeout: timeout, standardInput: standardInput ?? "/dev/null"
+            ))
         }
     }
 }
 
-private func runBounded(path: String, arguments: [String], timeout: TimeInterval) -> CommandResult {
+private func runBounded(path: String, arguments: [String], timeout: TimeInterval, standardInput: String) -> CommandResult {
     let notStarted = CommandResult(exitCode: -1, output: Data(), timedOut: false)
     var descriptors: [Int32] = [0, 0]
     guard pipe(&descriptors) == 0 else { return notStarted }
     let (readEnd, writeEnd) = (descriptors[0], descriptors[1])
     defer { close(readEnd) }
     _ = fcntl(readEnd, F_SETFL, O_NONBLOCK)
-    let spawned = spawnInOwnGroup(path: path, arguments: arguments, stdout: writeEnd)
+    let spawned = spawnInOwnGroup(path: path, arguments: arguments, stdin: standardInput, stdout: writeEnd)
     close(writeEnd)
     guard let pid = spawned else { return notStarted }
 
@@ -192,7 +197,7 @@ private func decodedExit(_ status: Int32) -> Int32 {
     return signal == 0 ? (status >> 8) & 0xFF : 128 + signal
 }
 
-private func spawnInOwnGroup(path: String, arguments: [String], stdout: Int32) -> pid_t? {
+private func spawnInOwnGroup(path: String, arguments: [String], stdin: String, stdout: Int32) -> pid_t? {
     var attributes: posix_spawnattr_t?
     posix_spawnattr_init(&attributes)
     defer { posix_spawnattr_destroy(&attributes) }
@@ -202,7 +207,7 @@ private func spawnInOwnGroup(path: String, arguments: [String], stdout: Int32) -
     var files: posix_spawn_file_actions_t?
     posix_spawn_file_actions_init(&files)
     defer { posix_spawn_file_actions_destroy(&files) }
-    posix_spawn_file_actions_addopen(&files, 0, "/dev/null", O_RDONLY, 0)
+    posix_spawn_file_actions_addopen(&files, 0, stdin, O_RDONLY, 0)
     posix_spawn_file_actions_adddup2(&files, stdout, 1)
     posix_spawn_file_actions_addopen(&files, 2, "/dev/null", O_WRONLY, 0)
 

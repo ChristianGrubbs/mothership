@@ -265,6 +265,10 @@ in-flight attempt instead of retrying it.
 starts, stops and restarts it. It drives the stack only through the wrapper's
 `up`, `down` and `status`, and reads health with read-only checks.
 
+Production has run on a Linux host since 2026-11-23. To watch that host instead,
+install the app with `--linux-host`, as `linux-host.md` describes. It then only
+reads the host, and the controls below for a stack on this Mac are not shown.
+
 Install or update it from Terminal on the host. Installing never starts, stops
 or restarts the stack, and a failed update puts the previous version back:
 
