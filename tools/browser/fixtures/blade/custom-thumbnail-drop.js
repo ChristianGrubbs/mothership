@@ -1,7 +1,8 @@
 
 const customThumbnailDropStates = new WeakMap();
 const thumbnailMimeTypes = new Set(['image/jpeg', 'image/png', 'image/gif']);
-const unknownThumbnailMime = type => !type || type === 'application/octet-stream';
+const isThumbnailFile = ({ type, name }) => thumbnailMimeTypes.has(type)
+    || ((!type || type === 'application/octet-stream') && /\.(jpe?g|png|gif)$/i.test(name || ''));
 app.directive('dam-custom-thumbnail-drop', {
     mounted(el, binding) {
         const state = { binding, busy: false, hint: null, handlers: {} };
@@ -30,9 +31,17 @@ app.directive('dam-custom-thumbnail-drop', {
         const flash = (type, message) => state.binding.instance.$emitter.emit('add-flash', { type, message });
         state.handlers.dragover = event => {
             if (!external(event)) return;
-            // Some browsers do not expose the file type or items until drop.
-            const items = fileItems(event.dataTransfer);
-            if (items.length > 1 || (items[0] && !thumbnailMimeTypes.has(items[0].type) && !unknownThumbnailMime(items[0].type))) return;
+            const { dataTransfer } = event;
+            const items = fileItems(dataTransfer);
+            const item = items[0];
+            const files = dataTransfer.files;
+            const file = files?.[0] || item?.getAsFile?.();
+            // Keep the upload hint if the browser hides the metadata needed to identify the image.
+            if (items.length > 1 || files?.length > 1 || item?.webkitGetAsEntry?.()?.isDirectory
+                || !isThumbnailFile({ type: file?.type || item?.type, name: file?.name })) {
+                clearDragHint();
+                return;
+            }
             event.preventDefault();
             // Tells the upload wrapper to hide its overlay while this card is the target.
             event.damCustomThumbnailTargeted = true;
@@ -51,8 +60,7 @@ app.directive('dam-custom-thumbnail-drop', {
             const file = files?.length === 1 ? files[0] : null;
             const item = fileItems(event.dataTransfer)[0];
             // Directories, other file types and batches still belong to the folder uploader.
-            if (!file || item?.webkitGetAsEntry?.()?.isDirectory
-                || !(thumbnailMimeTypes.has(file.type) || (unknownThumbnailMime(file.type) && /\.(jpe?g|png|gif)$/i.test(file.name)))) {
+            if (!file || item?.webkitGetAsEntry?.()?.isDirectory || !isThumbnailFile(file)) {
                 clearDragHint();
                 return;
             }

@@ -80,29 +80,45 @@ const gif = {name: 'cover.gif', type: 'image/gif', bytes: gifBytes};
 const png = {name: 'cover.png', type: 'image/png'};
 const fallbackBytes = Array.from(Buffer.from('test image bytes'));
 
-async function drop(page, selector, files, internal = false) {
-    return page.locator(selector).first().evaluate((element, {files, internal, fallbackBytes}) => {
-        const transfer = new DataTransfer();
-        for (const file of files) {
-            transfer.items.add(new File([new Uint8Array(file.bytes || fallbackBytes)], file.name, {type: file.type}));
+async function drop(page, selector, files, {internal = false, hideFileNames = false} = {}) {
+    return page.locator(selector).first().evaluate((element, {files, internal, hideFileNames, fallbackBytes}) => {
+        const makeTransfer = hidden => {
+            const transfer = new DataTransfer();
+            const items = [];
+            for (const file of files) {
+                const item = transfer.items.add(new File([new Uint8Array(file.bytes || fallbackBytes)], file.name, {type: file.type}));
+                if (file.directory) item.webkitGetAsEntry = () => ({isDirectory: true});
+                if (hidden) item.getAsFile = () => null;
+                items.push(item);
+            }
+            // Chrome returns new item wrappers on access. Keep the simulated OS entries and protected metadata attached.
+            if (hidden || files.some(file => file.directory)) Object.defineProperty(transfer, 'items', {value: items});
+            if (hidden) Object.defineProperty(transfer, 'files', {value: []});
+            if (internal) transfer.setData('application/json', JSON.stringify({type: 'dam-asset', id: 12}));
+            return transfer;
+        };
+        const transfer = makeTransfer(false);
+        const hover = hideFileNames ? makeTransfer(true) : transfer;
+        for (const type of ['dragenter', 'dragover']) {
+            element.dispatchEvent(new DragEvent(type, {bubbles: true, cancelable: true, dataTransfer: hover}));
         }
-        if (internal) transfer.setData('application/json', JSON.stringify({type: 'dam-asset', id: 12}));
-        for (const type of ['dragenter', 'dragover', 'drop']) {
-            element.dispatchEvent(new DragEvent(type, {bubbles: true, cancelable: true, dataTransfer: transfer}));
-        }
+        element.dispatchEvent(new DragEvent('drop', {bubbles: true, cancelable: true, dataTransfer: transfer}));
         return {targeted: dropResult.targeted, handled: dropResult.handled};
-    }, {files, internal, fallbackBytes});
+    }, {files, internal, hideFileNames, fallbackBytes});
 }
 
 browserTest('one immediate external image drop replaces the correct Library grid or list thumbnail', async () => {
     const browser = await launchBrowser({playwrightPath: process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH});
     try {
-        for (const [view, file] of [['explorer-asset-card', gif], ['explorer-list', png], ['explorer-list', {name: 'cover.jpg', type: ''}]]) {
+        const jpeg = {name: 'cover.jpg', type: ''};
+        for (const [view, file, hideFileNames = false] of [
+            ['explorer-asset-card', gif], ['explorer-list', png], ['explorer-list', jpeg], ['explorer-list', jpeg, true],
+        ]) {
             const page = await browser.newPage();
             await mount(page, view);
             const target = '[data-dam-asset-id="7"]';
             assert.match(await page.locator(`${target} img`).first().getAttribute('src'), /#generated$/);
-            assert.deepEqual(await drop(page, `${target} img`, [file]), {targeted: true, handled: true}, view);
+            assert.deepEqual(await drop(page, `${target} img`, [file], {hideFileNames}), {targeted: !hideFileNames, handled: true}, view);
             const replacement = page.locator(`${target} img${file === gif ? '[src^="blob:"]' : '[src$="#replacement"]'}`);
             await replacement.waitFor();
             if (file === gif) await replacement.evaluate(image => image.decode());
@@ -130,8 +146,13 @@ browserTest('the thumbnail directive leaves folder uploads and internal drags al
         assert.deepEqual(await drop(page, '[data-dam-asset-id="9"]', [gif]), inactive);
         assert.deepEqual(await drop(page, target, [gif, png]), inactive);
         assert.deepEqual(await drop(page, target, [{name: 'notes.pdf', type: 'application/pdf'}]), inactive);
-        assert.deepEqual(await drop(page, target, [], true), inactive);
-        assert.deepEqual(await page.evaluate(() => dropResult.uploads), [[gif.name], [gif.name], [gif.name, png.name], ['notes.pdf']]);
+        assert.deepEqual(await drop(page, target, [{name: 'model.blend', type: ''}]), inactive);
+        assert.deepEqual(await drop(page, target, [{name: 'model.blend', type: 'application/octet-stream'}], {hideFileNames: true}), inactive);
+        assert.deepEqual(await drop(page, target, [{name: 'folder.jpg', type: '', directory: true}]), inactive);
+        assert.deepEqual(await drop(page, target, [], {internal: true}), inactive);
+        assert.deepEqual(await page.evaluate(() => dropResult.uploads), [
+            [gif.name], [gif.name], [gif.name, png.name], ['notes.pdf'], ['model.blend'], ['model.blend'], ['folder.jpg'],
+        ]);
         assert.deepEqual(await page.evaluate(() => dropResult.posts), []);
         await page.close();
 
