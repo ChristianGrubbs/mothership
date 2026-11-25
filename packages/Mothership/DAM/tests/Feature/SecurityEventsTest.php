@@ -35,7 +35,7 @@ beforeEach(function () {
 });
 
 it('records a successful login with the actor, hashed identifier, session hash and request id', function () {
-    $this->withHeader('X-Request-Id', 'login-trace-0001')
+    $response = $this->withHeader('X-Request-Id', 'login-trace-0001')
         ->post(route('admin.session.store'), ['email' => 'staff.member@example.test', 'password' => 'right-password', 'remember' => '1'])
         ->assertRedirect();
 
@@ -49,6 +49,15 @@ it('records a successful login with the actor, hashed identifier, session hash a
         ->and($row->ip)->toBe('127.0.0.1')
         ->and($row->ip_truncated)->toBe('127.0.0.0')
         ->and(json_decode($row->ctx, true))->toBe(['method' => 'password', 'remember' => true]);
+
+    $recaller = auth('admin')->getRecallerName();
+    $cookie = $response->getCookie($recaller, decrypt: false);
+    auth()->forgetGuards();
+    session()->invalidate();
+    $this->withCredentials()->withUnencryptedCookie($recaller, $cookie->getValue())
+        ->getJson(route('admin.session.token'))->assertOk();
+    expect(json_decode(securityEvents(SecurityEvent::LOGIN_SUCCEEDED)->last()->ctx, true))
+        ->toBe(['method' => 'remember', 'remember' => true]);
 });
 
 it('records a failed login by HMAC alone: the typed email appears nowhere in the row', function () {

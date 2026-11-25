@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mothership\DAM\Listeners;
 
+use Illuminate\Auth\Events\CurrentDeviceLogout;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Auth\Events\Login;
@@ -32,12 +33,16 @@ class RecordSecurityEvent
     public function login(Login $event): void
     {
         $provider = request()->attributes->get(self::SSO_PROVIDER);
+        $method = $provider === null ? 'password' : 'sso';
+        if ($event->guard === 'admin' && auth('admin')->viaRemember()) {
+            $method = 'remember';
+        }
         $row = new SecurityEvent(
             name: SecurityEvent::LOGIN_SUCCEEDED,
             guard: $event->guard,
             actorAdminId: $this->actorId(user: $event->user),
             identifier: $this->loginOf(user: $event->user),
-            ctx: ['method' => $provider === null ? 'password' : 'sso', 'provider' => $provider, 'remember' => (bool) $event->remember],
+            ctx: ['method' => $method, 'provider' => $provider, 'remember' => (bool) $event->remember],
         );
 
         // SsoAuthenticator regenerates the session again after login(): recorded now, this row would carry a
@@ -85,7 +90,7 @@ class RecordSecurityEvent
         ));
     }
 
-    public function logout(Logout $event): void
+    public function logout(Logout|CurrentDeviceLogout $event): void
     {
         $this->recorder->record(new SecurityEvent(
             name: SecurityEvent::LOGOUT_SUCCEEDED,

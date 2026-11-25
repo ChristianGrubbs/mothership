@@ -2,6 +2,7 @@
 
 namespace Mothership\DAM\Providers;
 
+use Illuminate\Auth\Events\CurrentDeviceLogout;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Auth\Events\Login;
@@ -98,7 +99,7 @@ class EventServiceProvider extends ServiceProvider
         Event::listen(Login::class, [RecordSecurityEvent::class, 'login']);
         Event::listen(Failed::class, [RecordSecurityEvent::class, 'failed']);
         Event::listen(Lockout::class, [RecordSecurityEvent::class, 'lockout']);
-        Event::listen(Logout::class, [RecordSecurityEvent::class, 'logout']);
+        Event::listen([Logout::class, CurrentDeviceLogout::class], [RecordSecurityEvent::class, 'logout']);
         Event::listen(PasswordReset::class, [RecordSecurityEvent::class, 'passwordReset']);
         Event::listen('mothership.admin.sso.login.before', [RecordSecurityEvent::class, 'ssoLoginStarting']);
         Event::listen('mothership.admin.sso.login.after', [RecordSecurityEvent::class, 'ssoLoginCompleted']);

@@ -77,6 +77,13 @@ it('restores a Google sign-in after the browser session ends only when the devic
         $cookie = $response->getCookie($recaller, decrypt: false);
         expect($cookie)->not->toBeNull()
             ->and($cookie->getExpiresTime())->toBeGreaterThan(now()->timestamp);
+        // A second browser that opted out can sign out without revoking the first browser's cookie.
+        $this->app['auth']->forgetGuards();
+        $this->app['cookie']->flushQueuedCookies();
+        session()->invalidate();
+        $this->get(route('admin.session.sso.redirect', ['provider' => 'google']))->assertRedirect();
+        googleCallback($this)->assertCookieMissing($recaller);
+        $this->delete(route('admin.session.destroy'))->assertRedirect(route('admin.session.create'));
         $this->withUnencryptedCookie($recaller, $cookie->getValue());
     } else {
         $response->assertCookieMissing($recaller);

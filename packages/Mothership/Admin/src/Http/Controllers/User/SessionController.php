@@ -147,7 +147,13 @@ class SessionController extends Controller
      */
     public function destroy(Request $request): RedirectResponse
     {
-        auth()->guard('admin')->logout();
+        $guard = auth()->guard('admin');
+        if ($request->cookies->has($guard->getRecallerName())) {
+            $guard->logout();
+        } else {
+            // This device holds no persistent credential to revoke. Leave the user's remembered devices signed in.
+            $guard->logoutCurrentDevice();
+        }
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
