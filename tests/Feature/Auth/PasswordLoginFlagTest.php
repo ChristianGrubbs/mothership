@@ -1,5 +1,6 @@
 <?php
 
+use Dom\HTMLDocument;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
 use Mothership\Admin\Sso\SsoManager;
@@ -33,11 +34,15 @@ it('hides the password form and its routes when password sign-in is off', functi
 
     Admin::factory()->create(['email' => 'pw@example.test', 'password' => Hash::make('password-123'), 'status' => 1]);
 
-    $this->get(route('admin.session.create'))
+    $page = $this->get(route('admin.session.create'))
         ->assertOk()
         ->assertDontSee('name="password"', false)
         ->assertDontSee(route('admin.forget_password.create'), false)
         ->assertSee(route('admin.session.sso.redirect', ['provider' => 'google']), false);
+
+    $document = HTMLDocument::createFromString($page->getContent(), LIBXML_NOERROR);
+    expect($document->querySelector('input[name="remember"][checked][form="provider-signin"]'))->not->toBeNull()
+        ->and($document->querySelector('form#provider-signin button[type="submit"]'))->not->toBeNull();
 
     $this->post(route('admin.session.store'), ['email' => 'pw@example.test', 'password' => 'password-123'])->assertNotFound();
     $this->assertGuest('admin');

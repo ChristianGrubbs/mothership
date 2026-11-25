@@ -27,7 +27,7 @@ class SsoAuthenticator
      *
      * @throws SsoAuthenticationException
      */
-    public function authenticate(SsoIdentity $identity, SsoProvider $provider, Request $request): Admin
+    public function authenticate(SsoIdentity $identity, SsoProvider $provider, Request $request, bool $remember = false): Admin
     {
         Event::dispatch('mothership.admin.sso.identity.resolved', [$identity, $provider]);
 
@@ -54,7 +54,7 @@ class SsoAuthenticator
 
         Event::dispatch('mothership.admin.sso.login.before', [$admin, $provider]);
 
-        auth()->guard('admin')->login($admin);
+        auth()->guard('admin')->login($admin, remember: $remember);
 
         $request->session()->regenerate();
         $request->session()->regenerateToken();

@@ -67,7 +67,7 @@ class SessionController extends Controller
 
         $wantsJson = request()->wantsJson();
 
-        $remember = request('remember');
+        $remember = request()->boolean('remember');
 
         if (! auth()->guard('admin')->attempt(request(['email', 'password']), $remember)) {
             $message = trans('admin::app.settings.users.login-error');

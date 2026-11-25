@@ -514,6 +514,15 @@ class Admin extends Authenticatable implements AdminContract, HistoryAuditable, 
     }
 
     /**
+     * The session guard hashes this string for its remember cookie, even for SSO-only accounts.
+     * An empty hash still fails password sign-in and leaves the stored password nullable.
+     */
+    public function getAuthPassword(): string
+    {
+        return (string) parent::getAuthPassword();
+    }
+
+    /**
      * Scope to interactive human admins only, excluding API robots.
      */
     public function scopeHumans(Builder $query): Builder

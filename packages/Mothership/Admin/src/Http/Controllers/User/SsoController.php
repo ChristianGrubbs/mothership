@@ -34,6 +34,8 @@ class SsoController extends Controller
             return redirect()->route('admin.session.create');
         }
 
+        $request->session()->put("sso_remember.{$provider}", $request->boolean('remember'));
+
         return $driver->redirect($request);
     }
 
@@ -48,6 +50,7 @@ class SsoController extends Controller
             return redirect()->route('admin.session.create');
         }
 
+        $remember = $request->session()->pull("sso_remember.{$provider}", false);
         $identity = $driver->resolveIdentity($request);
 
         if (! $identity) {
@@ -59,7 +62,7 @@ class SsoController extends Controller
         }
 
         try {
-            $this->authenticator->authenticate($identity, $driver, $request);
+            $this->authenticator->authenticate(identity: $identity, provider: $driver, request: $request, remember: $remember);
         } catch (SsoAccessPendingException $exception) {
             Event::dispatch('mothership.admin.sso.login.failed', [$exception->email, $driver, 'pending']);
 
