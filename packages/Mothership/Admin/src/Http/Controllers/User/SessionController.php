@@ -2,6 +2,7 @@
 
 namespace Mothership\Admin\Http\Controllers\User;
 
+use Illuminate\Auth\Recaller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -148,10 +149,13 @@ class SessionController extends Controller
     public function destroy(Request $request): RedirectResponse
     {
         $guard = auth()->guard('admin');
-        if ($request->cookies->has($guard->getRecallerName())) {
+        $admin = $guard->user();
+        $recaller = new Recaller((string) $request->cookie($guard->getRecallerName()));
+        if ($recaller->valid() && $recaller->id() === (string) $admin->getAuthIdentifier()
+            && hash_equals((string) $admin->getRememberToken(), $recaller->token())) {
             $guard->logout();
         } else {
-            // This device holds no persistent credential to revoke. Leave the user's remembered devices signed in.
+            // An absent or retired cookie has no persistent access to revoke.
             $guard->logoutCurrentDevice();
         }
 
