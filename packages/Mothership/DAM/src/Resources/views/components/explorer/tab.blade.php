@@ -63,7 +63,19 @@
             />
             @endif
 
-            <v-dam-explorer-view-toggle :model-value="viewMode" @update:model-value="setView($event)"></v-dam-explorer-view-toggle>
+            <div class="ml-auto flex items-center gap-2">
+                <label v-if="viewMode === 'grid'">
+                    <span class="sr-only">@lang('dam::app.admin.explorer.view.tile-size')</span>
+                    <select :value="tileSize" v-on:change="setTileSize($event.target.value)"
+                        class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-cherry-600 dark:bg-cherry-900 max-[639px]:min-h-11"
+                        data-explorer-tile-size>
+                        <option value="small">@lang('dam::app.admin.explorer.view.small-tiles')</option>
+                        <option value="medium">@lang('dam::app.admin.explorer.view.medium-tiles')</option>
+                        <option value="large">@lang('dam::app.admin.explorer.view.large-tiles')</option>
+                    </select>
+                </label>
+                <v-dam-explorer-view-toggle :model-value="viewMode" @update:model-value="setView($event)"></v-dam-explorer-view-toggle>
+            </div>
 
             {{-- Occasional actions wait here, so the row keeps to where you are and what you can add. --}}
             <div class="shrink-0" data-explorer-more>
@@ -301,6 +313,7 @@
                     :class="{ 'flex-1': ! block.grouped }"
                     :directories="block.dirs"
                     :assets="block.assets"
+                    :tile-size="tileSize"
                     :result-total="block.grouped ? null : (meta?.total_assets ?? null)"
                     :result-offset="block.grouped ? 0 : ((meta?.current_page ?? 1) - 1) * (meta?.per_page ?? perPage)"
                     :search-smart="search && ! similarTo ? smartSearch : null"
@@ -428,6 +441,7 @@ app.component('v-dam-tab', {
         initialScope:       { type: String, default: 'directory' },
         initialMediaType:   { type: String, default: 'all' },
         clearSavedFilters:  { type: Boolean, default: false },
+        initialRecent:      { type: Boolean, default: false },
         initialViewMode:    { type: String, default: 'grid' },
         initialPage:        { type: Number, default: 1 },
         // null = the tab never chose a size, so the remembered global preference applies; a saved 50 is a choice.
@@ -454,7 +468,10 @@ app.component('v-dam-tab', {
             const remembered = Number(localStorage.getItem('dam_explorer_per_page'));
             if ([50, 100, 150, 200, 250].includes(remembered)) storedPerPage = remembered;
         } catch {}
-        const [initialSortBy, initialSortOrder] = window.MothershipLibraryNavigation.resolveSort(storedSort).split(':');
+        let storedTileSize;
+        try { storedTileSize = localStorage.getItem('dam_explorer_tile_size'); } catch {}
+        const sort = this.initialRecent ? 'created_at:desc' : window.MothershipLibraryNavigation.resolveSort(storedSort);
+        const [initialSortBy, initialSortOrder] = sort.split(':');
         return {
             // P4a (D9): every active typed field, for the bulk "Edit fields" action (editors only).
             fieldDefinitions: @json(bouncer()->hasPermission('dam.asset.update') ? app(\Mothership\DAM\Services\MetadataFields\FieldValues::class)->activeFields()->map->toDefinition()->values()->all() : []),
@@ -479,6 +496,7 @@ app.component('v-dam-tab', {
             searchInput:  this.initialSearch,
             search:       this.initialSearch,
             viewMode:     storedView || this.initialViewMode,
+            tileSize:     ['small', 'large'].includes(storedTileSize) ? storedTileSize : 'medium',
             groupBy:      storedGroupBy === 'stack' ? 'stack' : '',
             // VIS-11: on a phone the media chips and the sort/filter row sit behind one "Filter & sort" button.
             phoneFiltersOpen: false,
@@ -2084,6 +2102,11 @@ app.component('v-dam-tab', {
             this.viewMode = mode;
             try { localStorage.setItem('dam_explorer_view_mode', mode); } catch {}
             this.sync();
+        },
+
+        setTileSize(size) {
+            this.tileSize = size;
+            try { localStorage.setItem('dam_explorer_tile_size', size); } catch {}
         },
 
         findAppliedColumn(columnIndex) {

@@ -139,7 +139,7 @@
             if (lead.state === 'new') {
                 const files = lead.files, label = files === 1 ? 'new file came aboard' : 'new files came aboard';
                 const sentence = state.deckSentence({rows: summary.board.rows, files, size: size(lead.bytes)});
-                deck.innerHTML = `<div class="hm-fig" aria-hidden="true">${files.toLocaleString()}</div><div><h2><span class="hm-sr">${files.toLocaleString()} </span>${label}</h2><p>${esc(sentence)}</p></div><a class="hm-btn hm-act" href="${esc(`${data.library}?scope=all`)}">Review ${plural(files, 'new file')}${icon('arrow')}</a>`;
+                deck.innerHTML = `<div class="hm-fig" aria-hidden="true">${files.toLocaleString()}</div><div><h2><span class="hm-sr">${files.toLocaleString()} </span>${label}</h2><p>${esc(sentence)}</p></div><a class="hm-btn hm-act" href="${esc(state.recentLibraryUrl(data.library))}">Review ${plural(files, 'new file')}${icon('arrow')}</a>`;
                 return;
             }
             if (lead.state === 'first-run') {
@@ -148,7 +148,7 @@
             }
             const newest = summary.board.rows.find(row => row.at);
             const quiet = newest ? `Your craft have been quiet since ${esc(dayAndTime(newest.at, new Date(summary.generated_at)))}.` : 'Your craft have been quiet.';
-            deck.innerHTML = `<div class="hm-fig" aria-hidden="true">0</div><div><h2>nothing new came aboard</h2><p>${quiet}</p></div><a class="hm-btn" href="${esc(data.library)}">Open the Library${icon('arrow')}</a>`;
+            deck.innerHTML = `<div class="hm-fig" aria-hidden="true">0</div><div><h2>nothing new came aboard</h2><p>${quiet}</p></div><a class="hm-btn" href="${esc(state.recentLibraryUrl(data.library))}">Open the Library${icon('arrow')}</a>`;
         }
 
         function paintNeeds() {
@@ -181,7 +181,7 @@
             const size = shelfSize(seen);
             const plan = state.shelfPlan({files: row.files, previews: previews.length, ...state.shelfFit(size)});
             const pictures = previews.slice(0, plan.pictures).map(picture => `<a class="hm-pic" href="${esc(picture.url)}" title="${esc(picture.name)}"><img src="${esc(picture.thumbnail)}" alt="${esc(picture.name)}" loading="lazy" data-kind="${esc(picture.extension || '')}"></a>`).join('');
-            const tile = plan.more > 0 ? `<a class="hm-pic hm-pic-more" href="${esc(data.library)}" aria-label="${esc(`${plural(plan.more, 'more file')} in this landing. Open the Library`)}"><span>+${plan.more.toLocaleString()}</span></a>` : '';
+            const tile = plan.more > 0 ? `<a class="hm-pic hm-pic-more" href="${esc(state.recentLibraryUrl(data.library, row.directory_id))}" aria-label="${esc(`${plural(plan.more, 'more file')} in this landing. Open the Library`)}"><span>+${plan.more.toLocaleString()}</span></a>` : '';
             const room = state.shelfFit(size).withMore;
             const width = Math.floor(Math.min(size.tile, (size.room - size.moreTile - size.gap * room) / room));
             const columns = `--tile:${width}px${plan.more > 0 ? `;--pics:${plan.pictures};--more-tile:${size.moreTile}px` : ''}`;
@@ -358,9 +358,16 @@
 
         // Shelves size their tiles to the room they have, so any change of width redraws them.
         let lastFit = null;
+        let shelfFrame = null;
         const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => {
             const fit = [false, true].map(seen => Object.values(shelfSize(seen)).join('/')).join(':');
-            if (lastFit !== null && fit !== lastFit && summary?.board?.rows) paintCargo();
+            // Changing the observed list during resize delivery can trigger a browser resize loop.
+            if (lastFit !== null && fit !== lastFit && shelfFrame === null) {
+                shelfFrame = requestAnimationFrame(() => {
+                    shelfFrame = null;
+                    if (summary?.board?.rows) paintCargo();
+                });
+            }
             lastFit = fit;
         }) : null;
         observer?.observe($('[data-cargo]'));
@@ -369,7 +376,11 @@
             poller.tick().catch(() => { if (summary) paintStale(true); });
             signalCard.tick();
         }, TICK_MS);
-        signal.addEventListener('abort', () => { clearInterval(ticker); observer?.disconnect(); }, {once: true});
+        signal.addEventListener('abort', () => {
+            clearInterval(ticker);
+            observer?.disconnect();
+            if (shelfFrame !== null) cancelAnimationFrame(shelfFrame);
+        }, {once: true});
 
         return {
             start() {

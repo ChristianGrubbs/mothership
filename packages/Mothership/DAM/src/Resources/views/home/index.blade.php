@@ -47,7 +47,7 @@
                         <span class="hm-sec-acts">
                             <button type="button" class="hm-sec-link is-quiet" data-calendar-open hidden><svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4z M4 10h16 M8 3v5 M16 3v5"/></svg>Calendar</button>
                             @if (bouncer()->hasPermission('dam.assets'))
-                                <a class="hm-sec-link" href="{{ route('admin.dam.assets.index') }}">Open in Library <svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v10M7 17 17 7"/></svg></a>
+                                <a class="hm-sec-link" href="{{ route('admin.dam.assets.index', ['scope' => 'all', 'recent' => 1]) }}">Open in Library <svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v10M7 17 17 7"/></svg></a>
                             @endif
                         </span>
                     </div>

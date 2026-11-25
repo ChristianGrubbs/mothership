@@ -9,8 +9,13 @@
      (hidden for this viewer only). --}}
 <script type="text/x-template" id="v-dam-stack-suggestions-template">
     <div class="flex flex-col gap-2" data-dam-stack-suggestions-list>
-        <p v-if="loading" class="text-xs text-gray-400 dark:text-gray-500 px-1 py-2">…</p>
-        <p v-else-if="failed" class="text-xs text-red-600 dark:text-red-400 px-1 py-2" role="alert">@lang('dam::app.admin.dam.suggestions.load-failed')</p>
+        <div v-if="loadState === 'idle' || loadState === 'failed'">
+            <p v-if="loadState === 'failed'" class="text-xs text-red-600 dark:text-red-400 px-1 py-2" role="alert">@lang('dam::app.admin.dam.suggestions.load-failed')</p>
+            <button type="button" class="secondary-button max-[639px]:!h-11" v-on:click="load">
+                @lang('dam::app.admin.dam.suggestions.show')
+            </button>
+        </div>
+        <p v-else-if="loadState === 'loading'" class="text-xs text-gray-400 dark:text-gray-500 px-1 py-2" role="status">@lang('dam::app.admin.dam.suggestions.loading')</p>
         <p v-else-if="! groups.length" class="text-xs text-gray-400 dark:text-gray-500 text-center px-2 py-3">@lang('dam::app.admin.dam.suggestions.empty')</p>
 
         <div v-else class="flex flex-col gap-2 max-h-[28rem] overflow-y-auto pr-1">
@@ -54,14 +59,12 @@ app.component('v-dam-stack-suggestions', {
     data() {
         return {
             groups: [],
-            loading: true,
-            failed: false,
+            loadState: 'idle',
             busy: false,
         };
     },
 
     mounted() {
-        this.load();
         // The review answers when it stacks the group: the suggestion is done, and the listings show the new stack.
         this._onMergeDone = ({ context, reviewId } = {}) => {
             if (context !== 'suggestions') return;
@@ -77,17 +80,30 @@ app.component('v-dam-stack-suggestions', {
     },
 
     beforeUnmount() {
+        this._suggestionsRequest?.abort();
         this.$emitter.off('dam:merge-done', this._onMergeDone);
         this.$emitter.off('dam:merge-dialog-closed', this._onMergeClosed);
     },
 
     methods: {
-        load() {
-            this.loading = true;
-            this.$axios.get(@js(route('admin.dam.stack-suggestions.index')))
-                .then(({ data }) => { this.groups = data.suggestions ?? []; this.failed = false; })
-                .catch(() => { this.groups = []; this.failed = true; })
-                .finally(() => { this.loading = false; });
+        async load() {
+            if (this.loadState === 'loading') return;
+
+            this.loadState = 'loading';
+            const controller = new AbortController();
+            this._suggestionsRequest = controller;
+            try {
+                const { data } = await this.$axios.get(@js(route('admin.dam.stack-suggestions.index')), { signal: controller.signal });
+                if (controller.signal.aborted) return;
+                this.groups = data.suggestions ?? [];
+                this.loadState = 'ready';
+            } catch {
+                if (controller.signal.aborted) return;
+                this.groups = [];
+                this.loadState = 'failed';
+            } finally {
+                this._suggestionsRequest = null;
+            }
         },
 
         openUrl(id) {

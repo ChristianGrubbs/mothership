@@ -1,6 +1,10 @@
 (() => {
     'use strict';
     window.MothershipHomeState = {
+        recentLibraryUrl(base, directoryId) {
+            const params = directoryId ? {directory_id: directoryId, recent: 1} : {scope: 'all', recent: 1};
+            return `${base}?${new URLSearchParams(params)}`;
+        },
         dimensions(widget) {
             const legacy = {small:{columns:2,rows:1},wide:{columns:4,rows:1},large:{columns:8,rows:2}};
             const fallback = legacy[widget?.size] || legacy.small;

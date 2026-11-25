@@ -1,7 +1,7 @@
 
 
     <div ref="space" class="relative pr-4 min-h-72" @dragover.prevent @drop.prevent="onSpaceDrop($event)" @pointerdown="onSpacePointerDown">
-        <div v-if="isLoading" class="grid grid-cols-1 min-[380px]:grid-cols-2 xl:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3 min-[640px]:gap-5 xl:gap-6 animate-pulse">
+        <div v-if="isLoading" class="grid grid-cols-1 min-[380px]:grid-cols-2 xl:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3 min-[640px]:gap-5 xl:gap-6 animate-pulse" :style="tileGridStyle">
             <div v-for="n in 10" :key="n" class="aspect-square bg-gray-100 dark:bg-cherry-800 rounded-lg"></div>
         </div>
 
@@ -33,7 +33,7 @@
             <template v-if="assets.length">
                 <p class="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">
                     Files                </p>
-                <div class="grid grid-cols-1 min-[380px]:grid-cols-2 xl:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3 min-[640px]:gap-5 xl:gap-6">
+                <div class="grid grid-cols-1 min-[380px]:grid-cols-2 xl:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3 min-[640px]:gap-5 xl:gap-6" :style="tileGridStyle">
                     <v-dam-explorer-asset-card
                         v-for="asset in assets"
                         :key="asset.id"

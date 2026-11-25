@@ -51,6 +51,8 @@ class SharedViewerController extends Controller
 {
     use StreamsZipDownload;
 
+    private const HAS_UPDATE_TIME = 'CASE WHEN updated_at IS NULL THEN 0 ELSE 1 END';
+
     public function __construct(
         protected ShareRepository $shareRepository,
         protected SharedFiles $sharedFiles,
@@ -93,11 +95,11 @@ class SharedViewerController extends Controller
         }
 
         $directory = $share->directory;
-        if (! $directory) {
+        if (! $directory instanceof Directory) {
             return $this->renderNotFound();
         }
 
-        $assets = $this->subtreeAssetQuery($directory)->visibleCaptures()->withDisplayName()->orderByDesc('updated_at')->paginate(24);
+        $assets = $this->directoryListing($directory)->withDisplayName()->paginate(24);
 
         return view('dam::share.public.directory', [
             'share'      => $share,
@@ -128,7 +130,7 @@ class SharedViewerController extends Controller
         // P4 D2: a collection lists its servable members in position order; a folder its subtree, newest first.
         $listing = $share->share_type === Share::TYPE_COLLECTION
             ? $this->collectionMembers($share)
-            : ($share->directory ? $this->subtreeAssetQuery($share->directory)->visibleCaptures()->withDisplayName()->orderByDesc('updated_at') : null);
+            : ($share->directory instanceof Directory ? $this->directoryListing($share->directory)->withDisplayName() : null);
 
         if ($listing === null) {
             return response()->json(['error' => 'not_found'], 404);
@@ -140,26 +142,29 @@ class SharedViewerController extends Controller
         $paginator = $listing->simplePaginate($perPage, ['*'], 'page', $page);
         $fileCounts = $this->sharedFiles->counts($paginator->getCollection());
 
-        $data = $paginator->getCollection()->map(fn (Asset $asset) => [
-            'id'                  => $asset->id,
-            'file_name'           => $asset->file_name,
-            'display_name'        => $asset->display_name,
-            'file_type'           => $asset->file_type,
-            'extension'           => strtolower((string) $asset->extension),
-            'file_size_formatted' => $asset->file_size
-                ? Number::fileSize((int) $asset->file_size, precision: 1)
-                : '',
-            'file_count'          => $fileCounts[(int) $asset->id] ?? 0,
-            'thumbnail_url'       => route('dam.share.thumbnail', ['token' => $token, 'assetId' => $asset->id]),
-            'view_url'            => route('dam.share.asset_view', ['token' => $token, 'assetId' => $asset->id]),
-            'placeholder_svg'     => asset('storage/dam/grid/'.match ($asset->file_type) {
-                'image'    => 'image.svg',
-                'video'    => 'video.svg',
-                'audio'    => 'audio.svg',
-                'document' => 'file.svg',
-                default    => 'unspecified.svg',
-            }),
-        ])->values();
+        $data = [];
+        foreach ($paginator as $asset) {
+            $data[] = [
+                'id'                  => $asset->id,
+                'file_name'           => $asset->file_name,
+                'display_name'        => $asset->display_name,
+                'file_type'           => $asset->file_type,
+                'extension'           => strtolower((string) $asset->extension),
+                'file_size_formatted' => $asset->file_size
+                    ? Number::fileSize((int) $asset->file_size, precision: 1)
+                    : '',
+                'file_count'          => $fileCounts[(int) $asset->id] ?? 0,
+                'thumbnail_url'       => route('dam.share.thumbnail', ['token' => $token, 'assetId' => $asset->id]),
+                'view_url'            => route('dam.share.asset_view', ['token' => $token, 'assetId' => $asset->id]),
+                'placeholder_svg'     => asset('storage/dam/grid/'.match ($asset->file_type) {
+                    'image'    => 'image.svg',
+                    'video'    => 'video.svg',
+                    'audio'    => 'audio.svg',
+                    'document' => 'file.svg',
+                    default    => 'unspecified.svg',
+                }),
+            ];
+        }
 
         return response()->json([
             'data' => $data,
@@ -306,7 +311,7 @@ class SharedViewerController extends Controller
         }
 
         $directory = $share->directory;
-        if (! $directory) {
+        if (! $directory instanceof Directory) {
             return $this->renderNotFound();
         }
 
@@ -315,27 +320,11 @@ class SharedViewerController extends Controller
             return $this->renderNotFound();
         }
 
-        $prevAssetId = $this->subtreeAssetQuery($directory)->visibleCaptures()
-            ->where(fn ($q) => $q
-                ->where('updated_at', '<', $asset->updated_at)
-                ->orWhere(fn ($q) => $q->where('updated_at', $asset->updated_at)->where('id', '<', $asset->id))
-            )
-            ->orderByDesc('updated_at')->orderByDesc('id')
-            ->value('id');
-
-        $nextAssetId = $this->subtreeAssetQuery($directory)->visibleCaptures()
-            ->where(fn ($q) => $q
-                ->where('updated_at', '>', $asset->updated_at)
-                ->orWhere(fn ($q) => $q->where('updated_at', $asset->updated_at)->where('id', '>', $asset->id))
-            )
-            ->orderBy('updated_at')->orderBy('id')
-            ->value('id');
-
         return view('dam::share.public.asset', [
             'share'            => $share,
             'asset'            => $asset,
-            'prevAssetId'      => $prevAssetId,
-            'nextAssetId'      => $nextAssetId,
+            'prevAssetId'      => $this->directoryNeighbour(directory: $directory, asset: $asset, forward: false),
+            'nextAssetId'      => $this->directoryNeighbour(directory: $directory, asset: $asset, forward: true),
             'sharedFiles'      => $this->sharedFiles->present(share: $share, asset: $asset, token: $token, memberAssetId: (int) $asset->id),
         ]);
     }
@@ -724,7 +713,39 @@ class SharedViewerController extends Controller
         $this->shareRepository->recordDownload(share: $share, request: $request, subjectId: (int) $asset->id, subjectType: Share::TYPE_ASSET, via: $via, attachmentId: $attachmentId);
     }
 
-    /** A folder link's files: only those out for use now (P2 S3), so an unavailable file is simply not in it. */
+    /**
+     * Newest first, undated last, with id breaking ties in both groups.
+     *
+     * @return Builder<Asset>
+     */
+    private function directoryListing(Directory $directory, bool $forward = true): Builder
+    {
+        $order = $forward ? 'desc' : 'asc';
+
+        return $this->subtreeAssetQuery($directory)->visibleCaptures()
+            ->orderByRaw(self::HAS_UPDATE_TIME.' '.$order)
+            ->orderBy('updated_at', $order)->orderBy('id', $order);
+    }
+
+    private function directoryNeighbour(Directory $directory, Asset $asset, bool $forward): ?int
+    {
+        $compare = $forward ? '<' : '>';
+        $updated = $asset->updated_at;
+
+        return $this->directoryListing(directory: $directory, forward: $forward)
+            ->where(fn ($q) => $q
+                ->whereRaw(self::HAS_UPDATE_TIME.' '.$compare.' ?', [(int) ($updated !== null)])
+                ->when($updated !== null, fn ($q) => $q->orWhere('updated_at', $compare, $updated))
+                ->orWhere(fn ($q) => $q->where('updated_at', $updated)->where('id', $compare, $asset->id))
+            )
+            ->value('id');
+    }
+
+    /**
+     * A folder link's files: only those out for use now (P2 S3), so an unavailable file is simply not in it.
+     *
+     * @return Builder<Asset>
+     */
     protected function subtreeAssetQuery(Directory $directory): Builder
     {
         return Asset::query()

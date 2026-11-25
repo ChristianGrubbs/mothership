@@ -528,13 +528,17 @@ class SimilarImages
             $members = [$low, $high];
             $candidates = array_diff_key(array_intersect_key($adjacent[$low], $adjacent[$high]), [$low => 1, $high => 1]);
 
+            // Each common neighbour carries its greatest distance to the clique so far.
+            // Adding one member only requires checking the edge to that new member.
+            foreach ($candidates as $candidate => $distance) {
+                $candidates[$candidate] = max($distance, $adjacent[$high][$candidate]);
+            }
+
             while ($candidates !== [] && count($members) < self::GROUP_MAX_MEMBERS) {
                 $best = null;
                 $bestDistance = 0;
 
-                foreach (array_keys($candidates) as $candidate) {
-                    $farthest = max(array_map(fn (int $member) => $adjacent[$candidate][$member], $members));
-
+                foreach ($candidates as $candidate => $farthest) {
                     if ($best === null || $farthest < $bestDistance || ($farthest === $bestDistance && $candidate < $best)) {
                         $best = $candidate;
                         $bestDistance = $farthest;
@@ -544,6 +548,9 @@ class SimilarImages
                 $members[] = $best;
                 unset($candidates[$best]);
                 $candidates = array_intersect_key($candidates, $adjacent[$best]);
+                foreach ($candidates as $candidate => $distance) {
+                    $candidates[$candidate] = max($distance, $adjacent[$best][$candidate]);
+                }
             }
 
             sort($members);

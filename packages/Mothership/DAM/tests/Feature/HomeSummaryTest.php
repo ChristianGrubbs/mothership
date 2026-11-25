@@ -147,6 +147,7 @@ it('reports new files whose lead and landing figures add up', function () {
         ->and($summary['lead']['files'])->toBe(2)
         ->and($summary['lead']['bytes'])->toBe(3000)
         ->and($landed)->toHaveCount(1)
+        ->and($landed->first()['directory_id'])->toBeNull()
         ->and($landed->sum('files'))->toBe($summary['lead']['files'])
         ->and($landed->sum('bytes'))->toBe($summary['lead']['bytes']);
 });
@@ -320,6 +321,7 @@ it('names a landing after the folder its files share and lists what it holds', f
     $row = $board['rows'][0];
 
     expect($row['title'])->toBe('Harbour set')
+        ->and($row['directory_id'])->toBe($folder->id)
         ->and(collect($row['kinds'])->pluck('count', 'extension')->all())->toEqual(['png' => 2, 'pcraft' => 1])
         ->and($row['previews'])->toHaveCount(3)
         ->and(array_keys($row['previews'][0]))->toEqual(['id', 'name', 'type', 'extension', 'url', 'thumbnail'])
@@ -343,7 +345,8 @@ it('never names a landing after a folder the person cannot see', function () {
 
     $row = $this->actingAs($this->homeAdmin->fresh(), 'admin')->getJson(route('admin.home.summary'))->assertOk()->json('board.rows.0');
 
-    expect($row['title'])->toBe('Harbour set');
+    expect($row['title'])->toBe('Harbour set')
+        ->and($row['directory_id'])->toBe($allowed->id);
 });
 
 it('names a single file after itself, whatever its extension', function () {

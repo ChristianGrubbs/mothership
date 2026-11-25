@@ -7,6 +7,7 @@ app.component('v-dam-explorer-grid', {
     props: {
         directories:          { type: Array, default: () => [] },
         assets:               { type: Array, default: () => [] },
+        tileSize:             { type: String, default: 'medium' },
         isLoading:            { type: Boolean, default: false },
         emptyState:           { type: Object, default: null },
         tabId:                { type: String, required: true },
@@ -31,6 +32,13 @@ app.component('v-dam-explorer-grid', {
             _springTimer: null,
             dropTargetId: null,
         };
+    },
+
+    computed: {
+        tileGridStyle() {
+            const width = {small: '8.5rem', large: '21rem'}[this.tileSize];
+            return width ? {gridTemplateColumns: `repeat(auto-fill, minmax(min(100%, ${width}), 1fr))`} : null;
+        },
     },
 
     methods: {

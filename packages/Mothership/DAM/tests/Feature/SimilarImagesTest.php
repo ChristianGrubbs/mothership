@@ -552,6 +552,26 @@ it('shows three mutually similar images as one group, in the page and the panel,
         ->and($pairs['data'][0]['assets'])->toHaveCount(2);
 });
 
+it('ranks common neighbours against every member already chosen, breaking ties by asset id', function () {
+    // These overlapping groups change if a tie picks the larger id or distances only consider the seed pair.
+    $pairs = [
+        [1, 2, 0], [1, 3, 0], [1, 4, 1], [1, 5, 1], [1, 6, 2], [1, 7, 0],
+        [2, 4, 2], [2, 5, 1], [2, 6, 1], [2, 7, 1], [3, 6, 0], [3, 7, 0],
+        [4, 5, 0], [4, 7, 2], [5, 6, 1], [6, 7, 1],
+    ];
+    $edges = [];
+    foreach ($pairs as $index => [$a, $b, $distance]) {
+        $edges[] = ['id' => $index + 1, 'key' => $a.':'.$b, 'a' => $a, 'b' => $b, 'distance' => $distance];
+    }
+
+    expect(SimilarImages::buildGroups($edges))->toBe([
+        ['ids' => [1, 2, 4, 5], 'distance' => 2],
+        ['ids' => [1, 2, 4, 7], 'distance' => 2],
+        ['ids' => [1, 2, 5, 6], 'distance' => 2],
+        ['ids' => [1, 3, 6, 7], 'distance' => 2],
+    ]);
+});
+
 it('keeps both pairs of a non-transitive chain reachable and never merges them into one group', function () {
     $a = simAsset($this->folder, 'chain-a.jpg');
     $b = simAsset($this->folder, 'chain-b.jpg');

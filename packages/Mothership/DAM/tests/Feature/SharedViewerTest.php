@@ -194,6 +194,49 @@ it('serves an asset that belongs to the shared directory', function () {
         ->assertSeeText($asset->file_name);
 });
 
+it('follows the displayed directory gallery order with its previous and next links', function () {
+    $directory = Directory::factory()->create();
+    $sameTime = now()->subDay();
+    $middle = Asset::factory()->create(['updated_at' => $sameTime]);
+    $oldest = Asset::factory()->create(['updated_at' => $sameTime->copy()->subDay()]);
+    $newest = Asset::factory()->create(['updated_at' => $sameTime]);
+    $ids = [$newest->id, $middle->id, $oldest->id];
+    $directory->assets()->attach($ids);
+
+    $token = Share::factory()->forDirectory($directory->id)->create()->urlToken();
+    $urls = array_map(fn ($id) => route('dam.share.asset_view', ['token' => $token, 'assetId' => $id]), $ids);
+    $this->get(route('dam.share.show', $token))->assertOk()->assertSeeInOrder($urls);
+    $listing = $this->getJson(route('dam.share.list_assets', $token))->assertOk();
+    expect(array_column($listing->json('data'), 'view_url'))->toBe($urls);
+
+    foreach ($urls as $index => $url) {
+        $view = $this->get($url)->assertOk();
+        expect($view->viewData('prevAssetId'))->toBe($ids[$index - 1] ?? null)
+            ->and($view->viewData('nextAssetId'))->toBe($ids[$index + 1] ?? null);
+    }
+});
+
+it('navigates across pages into and between undated assets in a shared gallery', function () {
+    $directory = Directory::factory()->create();
+    $dated = Asset::factory()->count(24)->create(['updated_at' => now()])->modelKeys();
+    [$last, $firstUndated] = Asset::factory()->count(2)->create()->modelKeys();
+    DB::table('dam_assets')->whereIn('id', [$last, $firstUndated])->update(['updated_at' => null]);
+    $ids = [...array_reverse($dated), $firstUndated, $last];
+    $directory->assets()->attach($ids);
+
+    $token = Share::factory()->forDirectory($directory->id)->create()->urlToken();
+    $page = $this->get(route('dam.share.show', $token))->assertOk();
+    expect($page->viewData('assets')->getCollection()->modelKeys())->toBe(array_slice($ids, 0, 24));
+    $more = $this->getJson(route('dam.share.list_assets', ['token' => $token, 'page' => 2]))->assertOk();
+    expect(array_column($more->json('data'), 'id'))->toBe([$firstUndated, $last]);
+
+    foreach ([23, 24, 25] as $index) {
+        $view = $this->get(route('dam.share.asset_view', ['token' => $token, 'assetId' => $ids[$index]]))->assertOk();
+        expect($view->viewData('prevAssetId'))->toBe($ids[$index - 1])
+            ->and($view->viewData('nextAssetId'))->toBe($ids[$index + 1] ?? null);
+    }
+});
+
 it('serves a sha-keyed thumbnail for a shared image, even with its Library-path file deleted', function () {
     $image = imagecreatetruecolor(6, 4);
     imagefill($image, 0, 0, imagecolorallocate($image, 10, 20, 30));
