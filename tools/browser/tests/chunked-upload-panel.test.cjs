@@ -121,6 +121,15 @@ test('a drop in the bottom quarter stacks 2+ loose files; the rest uploads norma
     assert.equal(await dropAt([item('solo.png')], 450), false, 'one file never offers a stack');
     assert.equal(enqueued.at(-1).stackContext, undefined);
 
+    const beforeThumbnail = enqueued.length;
+    const thumbnail = { dataTransfer: { types: ['Files'], items: [item('cover.gif')] }, clientY: 450 };
+    state.onDragEnter(thumbnail);
+    state.onDragOver({...thumbnail, damCustomThumbnailTargeted: true});
+    assert.equal(state.thumbnailTargeted, true);
+    await state.onDrop({...thumbnail, damCustomThumbnailHandled: true});
+    assert.equal(enqueued.length, beforeThumbnail, 'a thumbnail drop does not enqueue a duplicate upload');
+    assert.equal(state.thumbnailTargeted, false, 'a thumbnail drop clears the upload overlay');
+
     const before = enqueued.length;
     assert.equal(await dropAt([item('a.png'), item('Folder', true)], 450), true);
     assert.equal(enqueued.length, before, 'a folder in a stack drop uploads nothing');

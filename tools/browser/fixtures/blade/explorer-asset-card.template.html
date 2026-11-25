@@ -1,0 +1,239 @@
+
+    <div
+        class="relative group rounded-xl border border-gray-200 dark:border-cherry-700 bg-white dark:bg-cherry-900 overflow-hidden transition-colors cursor-pointer"
+        v-dam-custom-thumbnail-drop="asset"
+        :class="{ 'outline outline-[3px] -outline-offset-1 outline-primary-600 dark:outline-primary-400 !bg-primary-50 dark:!bg-primary-900/40': isSelected, 'ring-2 ring-inset ring-primary-400 bg-primary-200 dark:bg-primary-900/60': isDropTarget, 'ring-1 ring-inset ring-primary-300': dragHint && ! isDropTarget }"
+        :style="isStack ? 'box-shadow:0 1px 3px rgba(0,0,0,.08), 4px -4px 0 -1px rgb(var(--c-primary-100, 219 234 254)), 4px -4px 0 0 rgb(var(--c-primary-300, 147 197 253)), 8px -8px 0 -1px rgb(var(--c-primary-50, 239 246 255)), 8px -8px 0 0 rgb(var(--c-primary-200, 191 219 254));' : 'box-shadow:0 1px 3px rgba(0,0,0,.08);'"
+        data-dam-asset-open
+        :data-dam-asset-id="asset.id"
+        :data-dam-stack="isStack ? attachmentCount : null"
+        draggable="true"
+        @dragstart="onDragStart"
+        @dragend="onDragEnd"
+                    @dragover="onStackDragOver"
+            @dragleave="onStackDragLeave"
+            @drop="onStackDrop"
+                            @click="openAsset('preview')"
+                @contextmenu.prevent.stop="$emit('ctx', { event: $event, asset })"
+    >
+        <div class="image-card relative overflow-hidden">
+
+            <span
+                v-if="isStack && (isDropTarget || dragHint)"
+                class="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center px-2 py-1.5 text-center text-xs font-semibold"
+                :class="isDropTarget ? 'bg-primary-600 text-white' : 'bg-white/90 text-primary-700 dark:bg-cherry-900/90 dark:text-primary-200'"
+                style="z-index:3"
+                data-dam-stack-drop-hint
+            >Drop to add to stack</span>
+            <img
+                :key="thumbnailSrc"
+                v-dam-thumbnail="thumbnailSrc"
+                decoding="async"
+                :alt="(asset.file_name || asset.display_name)"
+                class="w-full h-full object-cover object-center"
+                draggable="false"
+                @error="onImgErr"
+            />
+
+            <!-- The keyboard's way in: one real button over the thumbnail, so Tab reaches the card and Enter or Space opens it like a click. A stack opens its main file here too; its count button below opens its files. -->
+                        <button
+                type="button"
+                class="absolute inset-0 h-full w-full cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-primary-600"
+                style="z-index:1"
+                :aria-label="previewLabel"
+                data-dam-asset-open-button
+            ></button>
+
+            <div
+                v-if="asset.extension || versionChips.length || asset.match?.page || asset.match?.ai"
+                class="absolute top-1.5 right-1.5 flex flex-col items-end gap-0.5 pointer-events-none"
+                style="z-index:2;"
+            >
+                <span
+                    v-if="asset.extension"
+                    class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase text-white shadow"
+                    :title="asset.adobe?.title || null"
+                    :class="{
+                        'inline-flex items-center gap-1 !pl-0.5': asset.adobe,
+                        'bg-primary-600': asset.file_type==='video'||asset.file_type==='audio',
+                        'bg-red-600':    (asset.extension||'').toLowerCase()==='pdf',
+                        'bg-teal-600':   ['glb','3mf','stl'].includes((asset.extension||'').toLowerCase()),
+                        'bg-gray-600':   asset.file_type!=='video'&&asset.file_type!=='audio'&&!['pdf','glb','3mf','stl'].includes((asset.extension||'').toLowerCase()),
+                    }"
+                ><img v-if="asset.adobe" :src="adobeIcon(asset.adobe)" alt="" class="h-3.5 w-3.5 rounded-[3px]" draggable="false">{{ (asset.extension||'').toUpperCase() }}<span v-if="asset.adobe" class="sr-only">{{ asset.adobe.app }}</span></span>
+                <span v-if="asset.match?.page" class="pointer-events-auto rounded bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:text-gray-300" :title="asset.match.snippet || ''" data-dam-match-page>{{ matchPageLabel(asset) }}</span>
+                <span v-else-if="asset.match?.ai" class="pointer-events-auto rounded bg-violet-100 dark:bg-violet-900/40 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:text-violet-200" title="Matched by meaning: no word in the name or details matches your search, but the AI found this file relevant." data-dam-match-ai>AI</span>
+                <!-- Other versions attached under Related files: OPT, SVG, then other formats (AvailableVersions). -->
+                <span
+                    v-for="chip in versionChips"
+                    :key="chip.kind + chip.label"
+                    class="px-1 rounded font-bold uppercase text-white shadow pointer-events-auto"
+                    style="font-size:9px;line-height:14px;"
+                    :style="{ background: chipColor(chip) }"
+                    :title="chipTitle(chip)"
+                    data-dam-version-chip
+                >{{ chip.label }}</span>
+            </div>
+
+            <span
+                v-if="asset.asset_kind === 'pano360'"
+                class="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full bg-primary-600 text-[10px] font-bold text-white shadow"
+                style="z-index:2;"
+            >360</span>
+
+            <button type="button" class="absolute top-1.5 left-1.5 w-7 h-7 rounded-full bg-black/60 text-white hover:bg-primary-600 max-[639px]:after:absolute max-[639px]:after:-inset-2.5 max-[639px]:after:content-['']" style="z-index:3" :aria-label="favorite ? 'Remove from favorites' : 'Add to favorites'" @click.stop="toggleFavorite">{{ favorite ? '★' : '☆' }}</button>
+
+            <!-- A stack opens into its files (D5) from its count. The card itself opens the main file, as every other card does. -->
+                        <button
+                v-if="isStack"
+                type="button"
+                class="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-black/70 px-2 py-0.5 text-[11px] font-semibold text-white shadow hover:bg-primary-600 max-[639px]:after:absolute max-[639px]:after:-inset-x-1 max-[639px]:after:-inset-y-3 max-[639px]:after:content-[''] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+                style="z-index:3"
+                :aria-label="stackOpenLabel"
+                :title="stackOpenLabel"
+                data-dam-stack-open
+                @click.stop="openStack"
+            >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="3" width="13" height="13" rx="2"></rect><path d="M16 21H5a2 2 0 0 1-2-2V8"></path></svg>
+                {{ attachmentCount }}
+            </button>
+
+            <div
+                v-if="asset.file_type==='video'||asset.file_type==='audio'"
+                class="absolute inset-0 flex items-center justify-center pointer-events-none"
+            >
+                <span
+                    class="flex items-center justify-center w-10 h-10 rounded-full bg-black/55 text-white text-xl shadow-lg"
+                    :class="asset.file_type==='video' ? 'icon-play' : 'icon-information'"
+                    aria-hidden="true"
+                ></span>
+            </div>
+
+
+        </div>
+
+        <div class="flex flex-wrap gap-x-2 gap-y-1 items-center py-2.5 pl-1.5 min-[640px]:flex-nowrap">
+
+            <span
+                class="z-10 -my-2.5 -ml-1.5 self-stretch transition-opacity max-[639px]:mb-0"
+                :class="{ '!opacity-100': anySelected || isSelected }"
+                @click.stop
+            >
+                <label :for="`sel-card-asset-${asset.id}`" class="flex h-full items-center py-2.5 pl-1.5 pr-1 cursor-pointer max-[639px]:pb-0">
+                    <input
+                        type="checkbox"
+                        class="peer sr-only"
+                        :aria-label="'Select :name'.replace(':name', () => asset.display_name || asset.file_name)"
+                        :id="`sel-card-asset-${asset.id}`"
+                        :checked="isSelected"
+                        @change="$emit('toggle-select')"
+                    >
+                    <span class="icon-checkbox-normal peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary-600 dark:peer-focus-visible:outline-primary-400 peer-checked:icon-checkbox-check peer-checked:text-primary-700 rounded-md text-2xl"></span>
+                </label>
+            </span>
+            <p class="flex-1 min-w-0 text-sm font-medium text-gray-800 dark:text-gray-100 min-[640px]:truncate max-[639px]:order-last max-[639px]:basis-full max-[639px]:pl-1.5 max-[639px]:pr-3 max-[639px]:line-clamp-2 max-[639px]:min-h-[2lh] max-[639px]:[overflow-wrap:anywhere]"><bdi>{{ (asset.display_name || asset.file_name) }}</bdi></p>
+            <span
+    v-if="asset.access_mode === 'private'"
+    class="inline-flex shrink-0 items-center text-gray-400 dark:text-slate-400"
+    role="img"
+    aria-label="Only you"
+    title="Only you"
+    data-dam-access-indicator="private"
+>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+</span>
+<span
+    v-else-if="asset.access_mode === 'people'"
+    class="inline-flex shrink-0 items-center text-primary-500 dark:text-primary-400"
+    role="img"
+    aria-label="Shared"
+    title="Shared"
+    data-dam-access-indicator="people"
+>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+</span>
+<span
+    v-else-if="asset.access_mode === 'everyone'"
+    class="inline-flex shrink-0 items-center text-primary-500 dark:text-primary-400"
+    role="img"
+    aria-label="Everyone"
+    title="Everyone"
+    data-dam-access-indicator="everyone"
+>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M2 12h20"></path><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+</span>
+
+            <button
+                type="button"
+                class="dam-ctx-trigger relative shrink-0 ltr:mr-1 rtl:ml-1 max-[639px]:ltr:ml-auto max-[639px]:rtl:mr-auto w-6 h-6 max-[639px]:after:absolute max-[639px]:after:-inset-2.5 max-[639px]:after:content-[''] flex items-center justify-center rounded-md text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-cherry-800 hover:text-primary-700 dark:hover:text-primary-400 transition-opacity"
+                :class="{ '!opacity-100': isSelected }"
+                :title="'Actions'"
+                :aria-label="actionsLabel"
+                aria-haspopup="menu"
+                @click.stop="$emit('ctx', { event: $event, asset })"
+            >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <circle cx="12" cy="5" r="2"></circle>
+                    <circle cx="12" cy="12" r="2"></circle>
+                    <circle cx="12" cy="19" r="2"></circle>
+                </svg>
+            </button>
+        </div>
+
+        <!-- A stack's basis and key, and how many files it holds (D5); a single plain file shows nothing. -->
+        <p
+            v-if="stackLine"
+            class="px-3 pb-1 -mt-1 text-xs leading-snug font-medium text-primary-700 dark:text-primary-300 truncate"
+            :title="stackLine"
+            data-dam-stack-line
+        >{{ stackLine }}</p>
+
+        <!-- P4a (D9): up to five custom fields chosen for cards, in priority order: label, then value. -->
+        <dl
+            v-if="asset.card_fields?.length"
+            class="px-2 pb-1.5 -mt-0.5 grid gap-y-0.5"
+            data-dam-card-fields
+        >
+            <div
+                v-for="field in asset.card_fields"
+                :key="field.code"
+                class="flex min-w-0 items-baseline gap-1 text-[11px] leading-tight"
+                :title="`${field.label}: ${field.value}`"
+                :data-dam-card-field="field.code"
+            >
+                <dt class="shrink-0 max-w-[45%] truncate text-gray-400 dark:text-gray-500">{{ field.label }}</dt>
+                <dd class="min-w-0 flex-1 truncate font-medium text-gray-700 dark:text-gray-200">{{ field.value }}</dd>
+            </div>
+        </dl>
+
+        <!-- P2 S3: why the file is not out for use, shown only to those who still see it. -->
+        <p
+            v-if="asset.unavailable_label"
+            class="px-2 pb-1 -mt-0.5"
+        >
+            <span
+                class="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold leading-4 bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
+                :data-dam-availability-badge="asset.unavailable"
+            >{{ asset.unavailable_label }}</span>
+        </p>
+
+        <!-- P6 D26: a video whose 1080p playback copy is queued, being made or failed. -->
+        <p
+            v-if="asset.proxy_status_label"
+            class="px-2 pb-1 -mt-0.5"
+        >
+            <span
+                class="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold leading-4"
+                :class="asset.proxy_status === 'failed' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200'"
+                :data-dam-proxy-badge="asset.proxy_status"
+            >{{ asset.proxy_status_label }}</span>
+        </p>
+
+        <!-- The uploader, from created_by; a file with no owner shows nothing. -->
+        <p
+            v-if="asset.owner_name"
+            class="px-3 pb-3 -mt-1 text-xs leading-snug text-gray-500 dark:text-gray-400 truncate"
+            :title="`Uploaded by ${asset.owner_name}`"
+            data-dam-asset-owner
+        >{{ asset.owner_name }}</p>
+    </div>

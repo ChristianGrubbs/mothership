@@ -101,6 +101,16 @@ function bladeFixturesRender(): array
     expect($marquee)->toHaveCount(1, 'the Library renders the drag-select mixin once');
     $files['explorer-marquee.js'] = $marquee[0]->textContent;
 
+    $card = bladeFixturesComponent($library, 'v-dam-explorer-asset-card-template');
+    $files['explorer-asset-card.template.html'] = preg_replace('/^[ \t]+$/m', '', $card['template']);
+    $files['explorer-asset-card.js'] = $card['script'];
+
+    $thumbnailDrop = collect($library->querySelectorAll('script'))
+        ->filter(fn (Element $script) => str_contains($script->textContent, "app.directive('dam-custom-thumbnail-drop',"))
+        ->values();
+    expect($thumbnailDrop)->toHaveCount(1, 'the Library registers the thumbnail drop directive once');
+    $files['custom-thumbnail-drop.js'] = $thumbnailDrop[0]->textContent;
+
     // The header's avatar dropdown, as the browser receives it (the account menu is in its content slot).
     $accountMenu = collect($home->querySelectorAll('header v-dropdown'))
         ->map(fn (Element $element) => $home->saveHtml($element))
