@@ -111,15 +111,16 @@
     background: var(--ctl);
 }
 
-/* A touch screen gets 44 px targets (Apple's HIG), as the kit's buttons: the swatch and the hex that copies it. The
-   row keeps its padding, so it grows by the chip's 4 px. */
+/* A touch screen gets 44 px targets (Apple's HIG), as the kit's buttons: the swatch, the hex that copies it and the
+   sliders. The row keeps its padding, so it grows by the chip's 4 px. */
 @media (pointer: coarse) {
     .ps-chip {
         width: 44px;
         height: 44px;
     }
 
-    .ps-hex {
+    .ps-hex,
+    .ps-sliders input {
         min-height: 44px;
     }
 }
@@ -249,6 +250,7 @@
     grid-template-columns: 18px minmax(0, 1fr);
     align-items: center;
     gap: 8px;
+    container: ps-scale / inline-size;
 }
 
 .ps-scale > b {
@@ -291,6 +293,16 @@
 @container (max-width: 599px) {
     .ps-stop span {
         display: none;
+    }
+}
+
+/* On a touch screen each stop is a 44 px target. Ten need 440 px beside the number, so a narrower strip wraps to two
+   rows of five. */
+@media (pointer: coarse) {
+    @container ps-scale (max-width: 465px) {
+        .ps-stops {
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+        }
     }
 }
 
