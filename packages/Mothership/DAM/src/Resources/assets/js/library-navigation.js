@@ -42,6 +42,7 @@
         const similarity = Number.isSafeInteger(seed) && seed > 0 ? { assetId: seed, name: (params.get('similar_name') ?? '').slice(0, 255), priorView: null } : null;
         return {
             freshSearch: params.get('search_submit') === '1',
+            recent: params.get('recent') === '1',
             explicit: explicitSearch || params.has('scope') || directory > 0 || params.has('media_type') || !!similarity,
             similarity,
             scope: params.get('scope') === 'all' || (explicitSearch && !directory) ? 'all' : 'directory',

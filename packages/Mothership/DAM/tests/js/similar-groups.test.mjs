@@ -17,7 +17,7 @@ function loadComponent(relativePath, componentName) {
         script
             .replace(/@js\(route\('([^']+)'(?:, \[[^\]]*\])?\)\)/g, (_all, name) => JSON.stringify(`/route/${name}`))
             .replace(/@js\(trans\('([^']+)'\)\)/g, (_all, key) => JSON.stringify(key)),
-        { app: { component: (_name, definition) => { component = definition; } }, window: { history: { replaceState() {} } }, document: { activeElement: null }, URLSearchParams },
+        { app: { component: (_name, definition) => { component = definition; } }, window: { history: { replaceState() {} } }, document: { activeElement: null }, URLSearchParams, AbortController },
     );
     return component;
 }
@@ -235,6 +235,35 @@ test('names split into shared head, what tells the files apart, and shared tail,
     assert.deepEqual(plain(panel.methods.nameParts.call({}, panelGroup, entries[1])), { head: 'Set-', mid: '02', tail: '.jpg', fixed: true });
 });
 
+test('stack suggestions wait for a request, ignore duplicate clicks and allow retry after failure', async () => {
+    let requests = 0;
+    let finish;
+    const instance = {
+        ...panel.data(), ...panel.methods,
+        $emitter: { on() {}, off() {} },
+        $axios: { get() {
+            requests++;
+            return new Promise((resolve, reject) => { finish = { resolve, reject }; });
+        } },
+    };
+    panel.mounted.call(instance);
+    assert.equal(requests, 0);
+    assert.equal(instance.loadState, 'idle');
+
+    const first = instance.load();
+    await instance.load();
+    assert.equal(requests, 1);
+    finish.reject(new Error('server is busy'));
+    await first;
+    assert.equal(instance.loadState, 'failed');
+
+    const retry = instance.load();
+    finish.resolve({ data: { suggestions: [{ key: 'group' }] } });
+    await retry;
+    assert.equal(instance.loadState, 'ready');
+    assert.deepEqual(plain(instance.groups), [{ key: 'group' }]);
+});
+
 test('the Suggested stacks panel reloads when a near_group review closes without stacking, and not otherwise', () => {
     const handlers = {};
     let loads = 0;
@@ -246,9 +275,9 @@ test('the Suggested stacks panel reloads when a near_group review closes without
     panel.mounted.call(instance);
 
     handlers['dam:merge-dialog-closed']({ reviewId: 'near_group:grp:abc', merged: false });
-    assert.equal(loads, 2, 'mounted loads once, the cancelled or refused review once more');
+    assert.equal(loads, 1, 'only the cancelled or refused review reloads');
     handlers['dam:merge-dialog-closed']({ reviewId: 'near_group:grp:abc', merged: true });
     handlers['dam:merge-dialog-closed']({ reviewId: 'key:fall', merged: false });
     handlers['dam:merge-dialog-closed']({ reviewId: 'near_group:other', merged: false });
-    assert.equal(loads, 2);
+    assert.equal(loads, 1);
 });

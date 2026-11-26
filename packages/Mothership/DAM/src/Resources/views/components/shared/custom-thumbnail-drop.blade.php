@@ -2,12 +2,12 @@
 @push('scripts')
 <script type="module">
 const customThumbnailDropStates = new WeakMap();
-// A card only becomes a thumbnail target after one image file hovers over it this long; until then
-// the drop falls through to the folder upload, so a screen full of cards never swallows uploads.
-const CUSTOM_THUMBNAIL_ARM_MS = 800;
+const thumbnailMimeTypes = new Set(['image/jpeg', 'image/png', 'image/gif']);
+const isThumbnailFile = ({ type, name }) => thumbnailMimeTypes.has(type)
+    || ((!type || type === 'application/octet-stream') && /\.(jpe?g|png|gif)$/i.test(name || ''));
 app.directive('dam-custom-thumbnail-drop', {
     mounted(el, binding) {
-        const state = { binding, busy: false, depth: 0, hint: null, handlers: {}, armed: false, armTimer: null };
+        const state = { binding, busy: false, hint: null, handlers: {} };
         customThumbnailDropStates.set(el, state);
         const eligible = () => {
             const asset = state.binding.value;
@@ -15,14 +15,13 @@ app.directive('dam-custom-thumbnail-drop', {
                 && asset.file_type !== 'image' && !(asset.mime_type || '').toLowerCase().startsWith('image/');
         };
         const external = event => eligible() && Array.from(event.dataTransfer?.types || []).includes('Files');
-        // Item kinds and MIME types are readable during a drag. An empty type (a folder, or an unknown
-        // file) never arms, so it always reaches the folder upload.
-        const singleImage = event => {
-            const items = Array.from(event.dataTransfer?.items || []);
-            return items.length === 1 && items[0].kind === 'file' && ['image/jpeg', 'image/png', 'image/gif'].includes(items[0].type);
+        const fileItems = transfer => Array.from(transfer.items || []).filter(item => item.kind === 'file');
+        const clearHint = () => {
+            window.removeEventListener('pointermove', clearDragHint);
+            state.hint?.remove();
+            state.hint = null;
         };
-        const clearHint = () => { state.hint?.remove(); state.hint = null; };
-        const disarm = () => { clearTimeout(state.armTimer); state.armTimer = null; state.armed = false; };
+        const clearDragHint = () => { if (!state.busy) clearHint(); };
         const hint = text => {
             if (!state.hint) {
                 state.hint = document.createElement('div');
@@ -33,54 +32,46 @@ app.directive('dam-custom-thumbnail-drop', {
             state.hint.textContent = text;
         };
         const flash = (type, message) => state.binding.instance.$emitter.emit('add-flash', { type, message });
-        state.handlers.dragenter = event => {
-            if (!external(event) || !singleImage(event)) return;
-            state.depth++;
-            if (state.depth !== 1 || state.armed || state.armTimer) return;
-            state.armTimer = setTimeout(() => {
-                state.armTimer = null;
-                if (!state.depth) return;
-                state.armed = true;
-                hint(state.busy ? @json(trans('dam::app.admin.explorer.custom-thumbnail.saving')) : @json(trans('dam::app.admin.explorer.custom-thumbnail.drop')));
-            }, CUSTOM_THUMBNAIL_ARM_MS);
-        };
         state.handlers.dragover = event => {
-            if (!state.armed || !external(event)) return;
+            if (!external(event)) return;
+            const { dataTransfer } = event;
+            const items = fileItems(dataTransfer);
+            const item = items[0];
+            const files = dataTransfer.files;
+            const file = files?.[0] || item?.getAsFile?.();
+            // Keep the upload hint if the browser hides the metadata needed to identify the image.
+            if (items.length > 1 || files?.length > 1 || item?.webkitGetAsEntry?.()?.isDirectory
+                || !isThumbnailFile({ type: file?.type || item?.type, name: file?.name })) {
+                clearDragHint();
+                return;
+            }
             event.preventDefault();
             // Tells the upload wrapper to hide its overlay while this card is the target.
-            event.damCustomThumbnailArmed = true;
+            event.damCustomThumbnailTargeted = true;
             event.dataTransfer.dropEffect = state.busy ? 'none' : 'copy';
+            if (!state.busy) {
+                hint(@json(trans('dam::app.admin.explorer.custom-thumbnail.drop')));
+                window.addEventListener('pointermove', clearDragHint, { once: true });
+            }
         };
         state.handlers.dragleave = event => {
-            if (!external(event) || !state.depth) return;
-            state.depth = Math.max(0, state.depth - 1);
-            if (state.depth) return;
-            disarm();
-            if (!state.busy) clearHint();
+            if (!(event.relatedTarget instanceof Node) || !el.contains(event.relatedTarget)) clearDragHint();
         };
         state.handlers.drop = async event => {
             if (!external(event)) return;
-            const armed = state.armed;
-            disarm();
-            if (!armed) {
-                // Not an intentional thumbnail drop: leave it to the folder upload.
-                state.depth = 0;
-                if (!state.busy) clearHint();
+            const files = event.dataTransfer.files;
+            const file = files?.length === 1 ? files[0] : null;
+            const item = fileItems(event.dataTransfer)[0];
+            // Directories, other file types and batches still belong to the folder uploader.
+            if (!file || item?.webkitGetAsEntry?.()?.isDirectory || !isThumbnailFile(file)) {
+                clearDragHint();
                 return;
             }
             event.preventDefault();
-            // Let the upload wrapper clear its overlay, but never import this image as another asset.
+            // Let the upload wrapper clear its overlay without importing this image as another asset.
             event.damCustomThumbnailHandled = true;
-            state.depth = 0;
             if (state.busy) return;
-            const files = Array.from(event.dataTransfer.files || []);
-            if (files.length !== 1 || !/\.(jpe?g|png|gif)$/i.test(files[0].name)
-                || (files[0].type && !['image/jpeg', 'image/png', 'image/gif'].includes(files[0].type))) {
-                clearHint();
-                flash('error', @json(trans('dam::app.admin.explorer.custom-thumbnail.invalid')));
-                return;
-            }
-            if (files[0].size > 32 * 1024 * 1024) {
+            if (file.size > 32 * 1024 * 1024) {
                 clearHint();
                 flash('error', @json(trans('dam::app.admin.explorer.custom-thumbnail.too-large')));
                 return;
@@ -89,15 +80,15 @@ app.directive('dam-custom-thumbnail-drop', {
             el.setAttribute('aria-busy', 'true');
             hint(@json(trans('dam::app.admin.explorer.custom-thumbnail.saving')));
             const form = new FormData();
-            form.append('thumbnail', files[0]);
-            const asset = state.binding.value;
+            form.append('thumbnail', file);
+            const { value: asset, instance } = state.binding;
             try {
-                const url = @json(route('admin.dam.assets.custom_thumbnail.store', ['id' => '__ASSET__'])).replace('__ASSET__', asset.id);
-                const response = await state.binding.instance.$axios.post(url, form);
-                asset.path = response.data.thumbnail_url;
+                const endpoint = @js(route('admin.dam.assets.custom_thumbnail.store', ['id' => '__ASSET__'])).replace('__ASSET__', asset.id);
+                const { data: { thumbnail_url: url } } = await instance.$axios.post(endpoint, form);
+                asset.path = url;
                 asset.has_custom_thumbnail = true;
+                instance.$emitter.emit('dam:thumbnail-updated', { id: asset.id, url });
                 flash('success', @json(trans('dam::app.admin.explorer.custom-thumbnail.saved')));
-                state.binding.instance.$emit('refresh');
             } catch (error) {
                 flash('error', error.response?.data?.errors?.thumbnail?.[0] || error.response?.data?.message
                     || @json(trans('dam::app.admin.explorer.custom-thumbnail.failed')));
@@ -107,6 +98,7 @@ app.directive('dam-custom-thumbnail-drop', {
                 clearHint();
             }
         };
+        state.clearHint = clearHint;
         for (const [name, handler] of Object.entries(state.handlers)) el.addEventListener(name, handler);
         if (eligible()) el.setAttribute('data-dam-custom-thumbnail', '');
     },
@@ -118,8 +110,7 @@ app.directive('dam-custom-thumbnail-drop', {
         const state = customThumbnailDropStates.get(el);
         if (!state) return;
         for (const [name, handler] of Object.entries(state.handlers)) el.removeEventListener(name, handler);
-        clearTimeout(state.armTimer);
-        state.hint?.remove();
+        state.clearHint();
         customThumbnailDropStates.delete(el);
     },
 });

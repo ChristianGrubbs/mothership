@@ -76,10 +76,12 @@ it('serves the real StylePress catalog thumbnails through the Home route and rep
 
     $catalog = app(StylePressCatalog::class)->data();
     $slugs = collect($catalog['presets'] ?? [])
+        // A preset without a thumbnail has no thumbnail request in the grid.
+        ->filter(fn (array $preset) => is_string($preset['image'] ?? null) && $preset['image'] !== '')
         ->pluck('slug')
         ->filter(fn ($slug) => is_string($slug) && $slug !== '')
         ->values();
-    expect($slugs->count())->toBeGreaterThan(0, 'the real StylePress catalog must carry at least one preset to benchmark');
+    expect($slugs->count())->toBeGreaterThan(0, 'the real StylePress catalog must carry at least one thumbnail to benchmark');
 
     $version = (string) ($catalog['version'] ?? 'unknown');
 

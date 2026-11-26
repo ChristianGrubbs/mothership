@@ -2,6 +2,7 @@
 
 namespace Mothership\Admin\Http\Controllers\User;
 
+use Illuminate\Auth\Recaller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -67,7 +68,7 @@ class SessionController extends Controller
 
         $wantsJson = request()->wantsJson();
 
-        $remember = request('remember');
+        $remember = request()->boolean('remember');
 
         if (! auth()->guard('admin')->attempt(request(['email', 'password']), $remember)) {
             $message = trans('admin::app.settings.users.login-error');
@@ -147,7 +148,16 @@ class SessionController extends Controller
      */
     public function destroy(Request $request): RedirectResponse
     {
-        auth()->guard('admin')->logout();
+        $guard = auth()->guard('admin');
+        $admin = $guard->user();
+        $recaller = new Recaller((string) $request->cookie($guard->getRecallerName()));
+        if ($recaller->valid() && $recaller->id() === (string) $admin->getAuthIdentifier()
+            && hash_equals((string) $admin->getRememberToken(), $recaller->token())) {
+            $guard->logout();
+        } else {
+            // An absent or retired cookie has no persistent access to revoke.
+            $guard->logoutCurrentDevice();
+        }
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();

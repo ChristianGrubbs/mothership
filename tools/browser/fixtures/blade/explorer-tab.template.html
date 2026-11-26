@@ -54,7 +54,19 @@
                 @change="onFolderChange"
             />
             
-            <v-dam-explorer-view-toggle :model-value="viewMode" @update:model-value="setView($event)"></v-dam-explorer-view-toggle>
+            <div class="ml-auto flex items-center gap-2">
+                <label v-if="viewMode === 'grid'">
+                    <span class="sr-only">Tile size</span>
+                    <select :value="tileSize" v-on:change="setTileSize($event.target.value)"
+                        class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-cherry-600 dark:bg-cherry-900 max-[639px]:min-h-11"
+                        data-explorer-tile-size>
+                        <option value="small">Small tiles</option>
+                        <option value="medium">Medium tiles</option>
+                        <option value="large">Large tiles</option>
+                    </select>
+                </label>
+                <v-dam-explorer-view-toggle :model-value="viewMode" @update:model-value="setView($event)"></v-dam-explorer-view-toggle>
+            </div>
 
             
             <div class="shrink-0" data-explorer-more>
@@ -1021,6 +1033,7 @@
                     :class="{ 'flex-1': ! block.grouped }"
                     :directories="block.dirs"
                     :assets="block.assets"
+                    :tile-size="tileSize"
                     :result-total="block.grouped ? null : (meta?.total_assets ?? null)"
                     :result-offset="block.grouped ? 0 : ((meta?.current_page ?? 1) - 1) * (meta?.per_page ?? perPage)"
                     :search-smart="search && ! similarTo ? smartSearch : null"

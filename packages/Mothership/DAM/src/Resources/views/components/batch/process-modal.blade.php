@@ -8,7 +8,7 @@
 --}}
 @pushOnce('scripts')
     <script type="text/x-template" id="v-dam-batch-process-template">
-        <x-admin::modal ref="batchModal" @close="onClosed" @toggle="onToggled">
+        <x-admin::modal ref="batchModal" :viewport-fit="true" v-on:close="onClosed" v-on:toggle="onToggled">
             <x-slot:header>
                 <p class="text-lg font-bold text-gray-800 dark:text-white" data-dam-batch-title>
                     @{{ title }}
@@ -79,7 +79,7 @@
                                     :min="field.min"
                                     :max="field.max"
                                     :step="field.integer ? 1 : 'any'"
-                                    :placeholder="field.default !== undefined ? String(field.default) : ''"
+                                    :placeholder="field.placeholder ?? (field.default !== undefined ? String(field.default) : '')"
                                     class="w-full rounded-md border border-gray-300 bg-white py-2 pl-2.5 pr-9 text-sm text-gray-700 dark:border-cherry-700 dark:bg-cherry-900 dark:text-gray-200"
                                     :aria-describedby="errors['params.' + field.name] ? 'dam-batch-error-' + field.name : null"
                                 >

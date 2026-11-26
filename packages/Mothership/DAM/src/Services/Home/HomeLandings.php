@@ -148,7 +148,9 @@ class HomeLandings
         $assets = collect($row['asset_ids'] ?? [])->map(fn (int $assetId): ?Asset => $details->get($assetId))->filter()->values();
         unset($row['asset_ids']);
         $row['at'] = $row['at']->toIso8601String();
-        $row['title'] = $this->landingTitle(assets: $assets);
+        $folder = $assets->count() > 1 ? $this->sharedFolder($assets) : null;
+        $row['directory_id'] = $folder?->id;
+        $row['title'] = $folder?->parent_id !== null ? (string) $folder->name : $assets->first()?->display_name;
         $row['kinds'] = $assets
             ->countBy(fn (Asset $asset): string => strtolower((string) $asset->extension))
             // PHP turns an all-digit extension such as "123" into an integer array key.
@@ -171,12 +173,11 @@ class HomeLandings
     }
 
     /**
-     * One file is called by its own name. Several are called by the folder they share, when they share one that is not
-     * the library's top folder.
+     * A viewable folder that contains the whole landing. Prefer a specific folder over the library root.
      *
      * @param  Collection<int, Asset>  $assets  newest first
      */
-    private function landingTitle(Collection $assets): ?string
+    private function sharedFolder(Collection $assets): ?Directory
     {
         $newest = $assets->first();
         if ($newest === null) {
@@ -187,13 +188,10 @@ class HomeLandings
         $permissions = app(DirectoryPermissionService::class);
         /** @var Collection<int, Directory> $directories */
         $directories = $newest->directories;
-        $folder = $assets->count() > 1
-            ? $directories->first(fn (Directory $directory): bool => $directory->parent_id !== null
-                && $permissions->canView(directoryId: (int) $directory->id)
-                && $assets->every(fn (Asset $asset): bool => $asset->directories->contains('id', $directory->id)))
-            : null;
 
-        return $folder !== null ? (string) $folder->name : $newest->display_name;
+        return $directories->sortBy(fn (Directory $directory): bool => $directory->parent_id === null)
+            ->first(fn (Directory $directory): bool => $permissions->canView(directoryId: (int) $directory->id)
+            && $assets->every(fn (Asset $asset): bool => $asset->directories->contains('id', $directory->id)));
     }
 
     /**

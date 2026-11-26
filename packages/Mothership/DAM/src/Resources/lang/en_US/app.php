@@ -60,6 +60,8 @@ return [
             'suggestions' => [
                 'title'        => 'Suggested stacks',
                 'description'  => 'Files that look like they belong together. Nothing changes until you choose.',
+                'show'         => 'Find suggested stacks',
+                'loading'      => 'Finding suggested stacks…',
                 'empty'        => 'No suggestions right now.',
                 'load-failed'  => 'Suggestions could not be loaded.',
                 'titles'       => [
@@ -2162,6 +2164,7 @@ return [
                 'start'            => 'Start (seconds)',
                 'end'              => 'End (seconds)',
                 'duration'         => 'Duration (seconds)',
+                'video-end'        => 'Until video ends',
                 'fps'              => 'Frames per second',
                 'time'             => 'Time (seconds)',
                 'color'            => 'Color',
@@ -2207,6 +2210,7 @@ return [
                 'resize-width'   => 'Resized :width wide',
                 'resize-height'  => 'Resized :height high',
                 'gif'            => 'GIF :start–:end',
+                'gif-to-end'     => 'GIF :start to end',
                 'still'          => 'Still at :time',
                 'audio'          => 'Audio (:format)',
                 'waveform'       => 'Waveform :width×:height',
@@ -3867,8 +3871,12 @@ return [
                 'cancel' => 'Cancel',
             ],
             'view' => [
-                'grid' => 'Grid View',
-                'list' => 'List View',
+                'grid'         => 'Grid View',
+                'list'         => 'List View',
+                'tile-size'    => 'Tile size',
+                'small-tiles'  => 'Small tiles',
+                'medium-tiles' => 'Medium tiles',
+                'large-tiles'  => 'Large tiles',
             ],
             'ai-rename' => [
                 'action'           => 'Rename with AI',

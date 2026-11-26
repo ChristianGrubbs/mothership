@@ -53,7 +53,7 @@ function harness({ moduleOutcome = 'evaluates' } = {}) {
         Function: function (body) { return () => ran.push('classic:' + body); },
     });
     vm.runInContext(`
-        let navToken = 0; let moduleSeq = 0; const MODULE_TIMEOUT_MS = 200;
+        let navToken = 0; let moduleSeq = 0; const SCRIPT_TIMEOUT_MS = 200;
         function isExecutableType(type) { return type === '' || type === 'text/javascript' || type === 'application/javascript' || type === 'module'; }
         ${pick('injectScripts')}
         ${pick('runInlineModule')}
@@ -90,4 +90,64 @@ test('a module whose imports fail settles the visit; one that never finishes for
     );
     assert.ok(Date.now() - started < 1000, 'the timeout must fire');
     assert.equal(Object.keys(hanging.window).filter((k) => k.startsWith('__ajaxNavModule_')).length, 0, 'the completion hook must be cleaned up');
+});
+
+for (const stall of ['headers', 'body']) {
+    test(`a stalled page's ${stall} release navigation to the full-page fallback`, async () => {
+        const fallbacks = [];
+        const deadlines = new Set();
+        const window = { location: { assign: url => fallbacks.push(url) } };
+        const context = vm.createContext({
+            window, HEADERS: { AJAX_NAV: 'X-Ajax-Nav' }, NAV_EVENTS: {}, AbortController,
+            setTimeout(fn) { deadlines.add(fn); return fn; },
+            clearTimeout(fn) { deadlines.delete(fn); },
+            fetch: async (url, { signal }) => {
+                const stuck = () => new Promise((resolve, reject) => {
+                    signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+                });
+                return stall === 'headers' ? stuck() : { ok: true, url, text: stuck };
+            },
+        });
+        vm.runInContext(`
+            const PAGE_TIMEOUT_MS = 30000;
+            let navigating = false;
+            const guardsAllow = async () => true;
+            const dispatch = () => ({});
+            const toggleProgress = () => {};
+            ${pick('readPage')}
+            ${pick('performVisit')}
+            ${pick('visit')}
+            this.visit = visit;
+        `, context);
+
+        for (const url of ['/admin/library', '/admin/home']) {
+            const visit = context.visit(url, true);
+            await new Promise(resolve => setImmediate(resolve));
+            assert.equal(deadlines.size, 1, 'the new visit starts a bounded fetch');
+            [...deadlines][0]();
+            await visit;
+            assert.equal(fallbacks.at(-1), url);
+            assert.equal(deadlines.size, 0);
+        }
+    });
+}
+
+test('a stalled external script releases the swap, and a completed one releases its handlers', async () => {
+    const { context, appended } = harness();
+    const external = { ...pageScript(), src: '/page.js' };
+    const stalled = context.injectScripts([external]);
+    const script = appended[0];
+    let removed = false;
+    script.remove = () => { removed = true; };
+    await assert.rejects(stalled, /did not finish/);
+    assert.equal(removed, true);
+    assert.equal(script.onload, null);
+    assert.equal(script.onerror, null);
+
+    const completed = context.injectScripts([external]);
+    const loaded = appended[1];
+    loaded.onload();
+    await completed;
+    assert.equal(loaded.onload, null);
+    assert.equal(loaded.onerror, null);
 });

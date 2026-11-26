@@ -162,7 +162,7 @@
             const folderName=item=>(item.path_names||[item.name]).join(' / ');
             const head='<div class="agh-dialog-head"><h2 id="agh-upload-title">Upload files</h2><button type="button" class="agh-button" data-upload-close aria-label="Close upload">✕</button></div>';
             if(upload.done){
-                uploadDialog.innerHTML=`${head}<div class="agh-empty-note" role="status"><strong>${upload.done.count} ${upload.done.count===1?'file is':'files are'} in “${esc(upload.done.folder)}”.</strong><p>They also appear on the arrivals board.</p><div class="agh-actions"><button type="button" class="agh-button" data-upload-again>Upload more</button><a class="agh-button agh-primary" href="${esc(root.dataset.library)}">See them in the Library</a></div></div>`;
+                uploadDialog.innerHTML=`${head}<div class="agh-empty-note" role="status"><strong>${upload.done.count} ${upload.done.count===1?'file is':'files are'} in “${esc(upload.done.folder)}”.</strong><p>They also appear on the arrivals board.</p><div class="agh-actions"><button type="button" class="agh-button" data-upload-again>Upload more</button><a class="agh-button agh-primary" href="${esc(api.recentLibraryUrl(root.dataset.library, upload.done.directoryId))}">See them in the Library</a></div></div>`;
             }else{
                 uploadDialog.innerHTML=`${head}<ol class="agh-steps">
                     <li><strong>1. Choose the folder they go in</strong>${picking
@@ -188,7 +188,7 @@
                 const data=await response.json().catch(()=>({}));
                 if([401,419].includes(response.status))globalThis.mothership?.sessionExpired?.();
                 if(!response.ok||!data.success)throw new Error(data.message||`The upload did not finish (${response.status}). Nothing was added. Try again.`);
-                upload.busy='';upload.done={count:(data.files||[]).length||files.length,folder:folder.name};paintUpload();
+                upload.busy='';upload.done={count:(data.files||[]).length||files.length,folder:folder.name,directoryId:folder.id};paintUpload();
                 // The new files belong on the board.
                 bridge.refresh();
             }catch(error){upload.busy='';upload.error=error.message;paintUpload();}

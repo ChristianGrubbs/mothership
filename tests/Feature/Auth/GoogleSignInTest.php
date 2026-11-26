@@ -61,6 +61,47 @@ it('logs in the admin whose Google account is linked', function () {
         ->and(AdminAccessRequest::query()->count())->toBe(0);
 });
 
+it('restores a Google sign-in after the browser session ends only when the device is remembered', function (bool $remember) {
+    fakeGoogleAccount(subject: 'g-return', email: 'return@example.test');
+    $admin = Admin::factory()->create(['status' => 1, 'password' => null]);
+    expect(auth('admin')->validate(['email' => $admin->email, 'password' => 'arbitrary-password']))->toBeFalse();
+    AdminIdentity::query()->create(['admin_id' => $admin->id, 'provider' => 'google', 'subject' => 'g-return']);
+
+    $params = $remember ? ['remember' => '1'] : [];
+    $this->get(route('admin.session.sso.redirect', ['provider' => 'google'] + $params))->assertRedirect();
+    $response = googleCallback($this)->assertRedirect();
+    $this->assertAuthenticatedAs($admin, 'admin');
+
+    $recaller = auth('admin')->getRecallerName();
+    if ($remember) {
+        $cookie = $response->getCookie($recaller, decrypt: false);
+        expect($cookie)->not->toBeNull()
+            ->and($cookie->getExpiresTime())->toBeGreaterThan(now()->timestamp);
+        // A second browser that opted out can sign out without revoking the first browser's cookie.
+        $this->app['auth']->forgetGuards();
+        $this->app['cookie']->flushQueuedCookies();
+        session()->invalidate();
+        $this->get(route('admin.session.sso.redirect', ['provider' => 'google']))->assertRedirect();
+        googleCallback($this)->assertCookieMissing($recaller);
+        $this->delete(route('admin.session.destroy'))->assertRedirect(route('admin.session.create'));
+        $this->withUnencryptedCookie($recaller, $cookie->getValue());
+    } else {
+        $response->assertCookieMissing($recaller);
+    }
+
+    $this->app['auth']->forgetGuards();
+    session()->invalidate();
+    $reopened = $this->get(route('admin.session.token'), ['Accept' => 'application/json']);
+
+    if ($remember) {
+        $reopened->assertOk();
+        $this->assertAuthenticatedAs($admin, 'admin');
+        expect(auth('admin')->viaRemember())->toBeTrue();
+    } else {
+        $reopened->assertUnauthorized();
+    }
+})->with([true, false]);
+
 it('never links by email: an unlinked account matching an admin address waits for access', function () {
     fakeGoogleAccount(subject: 'g-stranger', email: 'existing@example.test');
 

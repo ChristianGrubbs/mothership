@@ -68,9 +68,21 @@
                     @endif
                 </p>
 
+                <div class="bridge-signin-remember">
+                    <input
+                        type="checkbox"
+                        id="remember"
+                        name="remember"
+                        value="1"
+                        form="{{ count($ssoProviders ?? []) ? 'provider-signin' : 'password-signin' }}"
+                        checked
+                    />
+                    <label for="remember">@lang('admin::app.users.sessions.remember-me')</label>
+                </div>
+
                 @if ($passwordLogin ?? true)
                     <div data-dock="rise">
-                    <x-admin::form :action="route('admin.session.store')" :track-dirty="false" ajax="true">
+                    <x-admin::form id="password-signin" :action="route('admin.session.store')" :track-dirty="false" ajax="true">
                         <x-admin::form.control-group>
                             <x-admin::form.control-group.label>
                                 @lang('admin::app.users.sessions.email')
@@ -122,20 +134,6 @@
                             <x-admin::form.control-group.error control-name="password" />
                         </x-admin::form.control-group>
 
-                        <x-admin::form.control-group class="bridge-signin-remember !mb-0">
-                            <x-admin::form.control-group.control
-                                type="checkbox"
-                                id="remember"
-                                name="remember"
-                                value="1"
-                                for="remember"
-                            />
-
-                            <label for="remember">
-                                @lang('admin::app.users.sessions.remember-me')
-                            </label>
-                        </x-admin::form.control-group>
-
                         <button
                             type="submit"
                             class="bridge-btn-act bridge-btn-wide"
@@ -177,6 +175,13 @@
                     (window.__mothershipNavGuardQueue ||= []).push(leaveWithFullLoad);
                 }
             })();
+
+            // When both sign-in methods are available, share the provider form's checkbox with the password POST.
+            document.addEventListener('formdata', (event) => {
+                if (event.target.id === 'password-signin') {
+                    event.formData.set('remember', document.getElementById('remember').checked ? '1' : '0');
+                }
+            });
 
             function switchVisibility() {
                 let passwordField = document.getElementById("password");

@@ -6,6 +6,8 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
+const {bladeComponent, bladeFixture} = require('../fixtures/blade.cjs');
+const {launchBrowser} = require('../launch-browser.cjs');
 const root=path.resolve(__dirname,'../../..');
 const source=file=>fs.readFileSync(path.join(root,file),'utf8');
 
@@ -108,6 +110,74 @@ test('the Library file grid keeps readable cards on an unfolded iPhone Duo and e
         for(const [width,panel,columns] of [[375,309,1],[382,316,2],[430,364,2],[669,603,2],[1024,640,2],[1280,800,3],[1440,1100,4]]){
             assert.equal((await measure(page,{width,panel})).columns,columns,`${width}px wide: ${columns} columns`);
         }
+    } finally {
+        await browser.close();
+    }
+});
+
+test('changing tile size resizes the Library cards, fits a narrow pane, and survives reopening', async () => {
+    const browser = await launchBrowser({playwrightPath: process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH});
+    try {
+        const page = await browser.newPage({viewport: {width: 1440, height: 800}});
+        const tab = bladeComponent('explorer-tab');
+        const grid = bladeComponent('explorer-grid');
+        await page.route('http://library.test/', route => route.fulfill({contentType: 'text/html', body: '<main id="app"></main>'}));
+
+        async function openLibrary() {
+            await page.goto('http://library.test/');
+            for (const file of builtStylesheets()) await page.addStyleTag({path: file});
+            await page.addScriptTag({path: process.env.MOTHERSHIP_VUE_RUNTIME_PATH});
+            await page.evaluate(() => {
+                window.definitions = {};
+                window.app = {component(name, definition) { definitions[name] = definition; }};
+                window.MothershipLibraryNavigation = {resolveSort: () => 'name:asc'};
+            });
+            for (const script of [bladeFixture('explorer-marquee.js'), tab.script, grid.script]) {
+                await page.addScriptTag({content: script});
+            }
+            await page.evaluate(({tabTemplate, gridTemplate}) => {
+                // Mount the rendered control and its actual grid binding, isolating the tab from its API requests.
+                const template = document.createElement('template');
+                template.innerHTML = tabTemplate;
+                const control = template.content.querySelector('[data-explorer-tile-size]').closest('label');
+                const [gridBinding] = tabTemplate.match(/<v-dam-explorer-grid\b[\s\S]*?<\/v-dam-explorer-grid>/);
+                const tab = definitions['v-dam-tab'];
+                const app = Vue.createApp({
+                    template: control.outerHTML + gridBinding,
+                    props: tab.props,
+                    methods: tab.methods,
+                    data() {
+                        return {...tab.data.call(this), blockIndex: 0, emptyState: null, canAccessCurrentDir: true,
+                            block: {dirs: [], assets: Array.from({length: 12}, (_, i) => ({id: i + 1}))}};
+                    },
+                }, {tabId: 'size-test'});
+                app.component('v-dam-explorer-grid', {...definitions['v-dam-explorer-grid'], template: gridTemplate});
+                app.component('v-dam-explorer-asset-card', {template: '<div data-card></div>'});
+                for (const name of ['v-dam-explorer-folder-card', 'v-dam-explorer-ctx']) {
+                    app.component(name, {template: '<div></div>'});
+                }
+                app.mount('#app');
+            }, {tabTemplate: tab.template, gridTemplate: grid.template});
+        }
+
+        const size = page.getByRole('combobox');
+        const card = page.locator('[data-card]').first();
+        const cardWidth = () => card.evaluate(el => el.getBoundingClientRect().width);
+        await openLibrary();
+        assert.equal(await size.inputValue(), 'medium');
+        const medium = await cardWidth();
+        await size.selectOption('small');
+        assert.ok(await cardWidth() < medium);
+        await size.selectOption('large');
+        assert.ok(await cardWidth() > medium);
+        await openLibrary();
+        assert.equal(await size.inputValue(), 'large');
+        await page.setViewportSize({width: 375, height: 667});
+        const largePhone = await cardWidth();
+        assert.ok(largePhone <= 375);
+        await size.selectOption('small');
+        assert.ok(await cardWidth() < largePhone);
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     } finally {
         await browser.close();
     }

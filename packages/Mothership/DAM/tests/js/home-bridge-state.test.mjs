@@ -4,10 +4,14 @@ import test from 'node:test';
 import vm from 'node:vm';
 
 // The words and sums Home's arrivals board, deck and Cargo shelves are drawn from.
-const context = { window: {} };
+const context = { window: {}, URLSearchParams };
 vm.runInNewContext(readFileSync(new URL('../../src/Resources/assets/js/home-state.js', import.meta.url), 'utf8'), context);
 const state = context.window.MothershipHomeState;
 const plain = value => JSON.parse(JSON.stringify(value));
+
+test('a landing without a shared folder opens recent assets across the Library', () => {
+    assert.equal(state.recentLibraryUrl('/admin/dam', null), '/admin/dam?scope=all&recent=1');
+});
 
 test('no stylesheet comment swallows the dialog rules Home still needs', () => {
     const css = readFileSync(new URL('../../src/Resources/assets/css/home.css', import.meta.url), 'utf8');

@@ -28,6 +28,7 @@
                     :initial-scope="tab.scope"
                     :initial-media-type="tab.mediaType"
                     :clear-saved-filters="tab.clearSavedFilters"
+                    :initial-recent="tab.recent === true"
                     :initial-view-mode="tab.viewMode"
                     :initial-page="tab.page"
                     :initial-per-page="tab.perPage"
@@ -239,12 +240,13 @@ app.component('v-dam-explorer', {
                 const active = saved[activeIdx];
                 const matches = active && ['scope', 'directoryId', 'search', 'mediaType'].every(key => active[key] === incoming[key]) && (active.similarity?.assetId ?? null) === (incoming.similarity?.assetId ?? null);
                 this.tabs = saved;
-                if (matches && !requested.freshSearch) {
+                if (matches && !requested.freshSearch && !requested.recent) {
                     // A Back link or bookmark that names a page wins over the remembered one.
                     if (requested.page) active.page = requested.page;
                     this.activeTabId = active.id;
                 } else {
                     incoming.clearSavedFilters = true;
+                    incoming.recent = requested.recent;
                     this.tabs.splice(activeIdx, this.tabs.length ? 1 : 0, incoming);
                     this.activeTabId = incoming.id;
                 }
@@ -308,6 +310,7 @@ app.component('v-dam-explorer', {
             const viewOf = u => `${u.searchParams.get('scope') ?? ''}|${u.searchParams.get('directory_id') ?? ''}|${u.searchParams.get('similar_to') ?? ''}`;
             const before = viewOf(url);
             url.searchParams.delete('search_submit');
+            url.searchParams.delete('recent');
             for (const key of [...url.searchParams.keys()]) if (key.startsWith('filters[')) url.searchParams.delete(key);
             url.searchParams.set('scope', tab.scope ?? 'all');
             url.searchParams.set('search', tab.search ?? '');

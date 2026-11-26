@@ -7,11 +7,11 @@
         <div class="bridge-or" aria-hidden="true"><span>@lang('admin::app.users.sessions.sso-divider')</span></div>
     @endif
 
-    <div @class(['flex flex-col gap-3', 'mt-6' => ! $divider])>
+    <form id="provider-signin" method="GET" @class(['flex flex-col gap-3', 'mt-6' => ! $divider])>
         @foreach ($providers as $provider)
             <x-admin::sso.button :provider="$provider" />
         @endforeach
-    </div>
+    </form>
 
     {!! view_render_event('mothership.admin.sessions.create.sso.after', ['providers' => $providers]) !!}
 @endif

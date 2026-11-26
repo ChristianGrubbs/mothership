@@ -139,7 +139,7 @@
                 if (this._organizeSortApplied) return;
                 this._organizeSortApplied = true;
                 const current = `${this.sortBy}:${this.sortOrder}`;
-                if (! state?.sort || state.sort === current || this.sortBy === 'relevance' || this.organization) return;
+                if (this.initialRecent || ! state?.sort || state.sort === current || this.sortBy === 'relevance' || this.organization) return;
                 [this.sortBy, this.sortOrder] = state.sort.split(':');
                 try { localStorage.setItem('dam_explorer_sort', state.sort); } catch {}
                 this.page = 1;

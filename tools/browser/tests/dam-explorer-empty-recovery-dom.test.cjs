@@ -42,7 +42,7 @@ async function mount(page, {mode, width}) {
         const app = Vue.createApp({
             template,
             data: () => ({
-                viewMode: mode, block: {dirs: [], assets: [], grouped: false}, blockIndex: 0,
+                viewMode: mode, tileSize: 'medium', block: {dirs: [], assets: [], grouped: false}, blockIndex: 0,
                 loading: false, meta: {can_access_current: true, total_assets: 0},
                 search: 'heic', searchInput: 'heic', scope: 'directory', currentDirId: 144, aclBypass: false,
                 similarTo: null, applied: {filters: {columns: []}}, dirs: [], smartSearch: false,

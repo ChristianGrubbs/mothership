@@ -16,8 +16,8 @@ export default function initAjaxNavigation() {
 
     let moduleSeq = 0;
 
-    /** How long a visit waits for one page module (its imports included) before mounting anyway. */
-    const MODULE_TIMEOUT_MS = 10000;
+    const PAGE_TIMEOUT_MS = 30000;
+    const SCRIPT_TIMEOUT_MS = 10000;
 
     window.mothership = window.mothership || {};
     window.mothership.visit = (url) => visit(url, true);
@@ -147,6 +147,29 @@ export default function initAjaxNavigation() {
         return true;
     }
 
+    // Include the response body in the deadline. The headers may arrive before a stalled transfer.
+    async function readPage(url) {
+        const controller = new AbortController();
+        const deadline = setTimeout(() => controller.abort(), PAGE_TIMEOUT_MS);
+
+        try {
+            const response = await fetch(url, {
+                headers: { [HEADERS.AJAX_NAV]: 'true' },
+                credentials: 'same-origin',
+                redirect: 'follow',
+                signal: controller.signal,
+            });
+
+            if (! response.ok) {
+                throw new Error('Request failed with status ' + response.status);
+            }
+
+            return { html: await response.text(), finalUrl: response.url || url };
+        } finally {
+            clearTimeout(deadline);
+        }
+    }
+
     /**
      * The history entry is pushed right after the #app swap — before the
      * page's scripts run and the app mounts — so anything reading
@@ -165,19 +188,7 @@ export default function initAjaxNavigation() {
         toggleProgress(true);
 
         try {
-            const response = await fetch(url, {
-                headers: { [HEADERS.AJAX_NAV]: 'true' },
-                credentials: 'same-origin',
-                redirect: 'follow',
-            });
-
-            if (! response.ok) {
-                throw new Error('Request failed with status ' + response.status);
-            }
-
-            const finalUrl = response.url || url;
-
-            const html = await response.text();
+            const { html, finalUrl } = await readPage(url);
 
             const doc = new DOMParser().parseFromString(html, 'text/html');
 
@@ -420,7 +431,7 @@ export default function initAjaxNavigation() {
                     return;
                 }
 
-                pending.push(new Promise((resolve) => {
+                pending.push(new Promise((resolve, reject) => {
                     const script = document.createElement('script');
                     script.src = original.src;
 
@@ -428,8 +439,21 @@ export default function initAjaxNavigation() {
                         script.type = type;
                     }
 
-                    script.onload = resolve;
-                    script.onerror = resolve;
+                    // A stalled dependency would otherwise leave the swapped page unmounted and
+                    // every later link blocked by the pending visit. Fall back to a full page load.
+                    const cleanup = () => {
+                        clearTimeout(deadline);
+                        script.onload = script.onerror = null;
+                    };
+                    const deadline = setTimeout(() => {
+                        cleanup();
+                        script.remove();
+                        reject(new Error('Ajax navigation: a page script did not finish'));
+                    }, SCRIPT_TIMEOUT_MS);
+                    script.onload = script.onerror = () => {
+                        cleanup();
+                        resolve();
+                    };
 
                     document.body.appendChild(script);
                 }));
@@ -495,7 +519,7 @@ export default function initAjaxNavigation() {
             };
             timer = setTimeout(() => {
                 finish(new Error('Ajax navigation: a page module did not finish'));
-            }, MODULE_TIMEOUT_MS);
+            }, SCRIPT_TIMEOUT_MS);
 
             document.body.appendChild(script);
         });

@@ -1556,10 +1556,9 @@
                     return this.stackZoneAvailable && !! r
                         && e.clientY >= r.top + r.height * 0.75 && e.clientY <= r.top + r.height;
                 },
-                // A card armed as a thumbnail target (v-dam-custom-thumbnail-drop) marks the event, so
-                // the upload overlay steps aside only while the drop would really set a thumbnail.
+                // A thumbnail target marks the event so the folder upload overlay steps aside.
                 onDragOver(e) {
-                    const targeted = !! e.damCustomThumbnailArmed;
+                    const targeted = !! e.damCustomThumbnailTargeted;
                     if (targeted !== this.thumbnailTargeted) { this.thumbnailTargeted = targeted; this.positionHint(); }
                     this.stackZoneHot = this.inStackZone(e);
                 },

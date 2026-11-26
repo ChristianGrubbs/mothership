@@ -58,7 +58,7 @@ browserTest('the board shows real characters, one cell each, and reads as one se
         assert.equal(await page.locator('.hm-act').count(),1);
         assert.equal((await page.locator('.hm-act').textContent()).trim(),'Review 5 new files');
         // An explicit scope stops the Library reopening a remembered folder or search.
-        assert.equal(new URL(await page.locator('.hm-act').getAttribute('href'),ORIGIN).search,'?scope=all');
+        assert.equal(new URL(await page.locator('.hm-act').getAttribute('href'),ORIGIN).search,'?scope=all&recent=1');
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
         assert.deepEqual(errors,[]);
         await page.close();
@@ -181,13 +181,25 @@ browserTest('shelf tiles follow a small change of width',async()=>{
     try{
         const {page,errors}=await mount(browser,{width:390,summary:()=>{
             const picture=id=>({id,name:`Study ${id}`,type:'image',extension:'png',url:`/admin/dam/${id}`,thumbnail:`/thumbnail-${id}`});
-            const row={key:'asset:1',status:'landed',source:'craft',producer:'claude-code',title:'Harbour study',files:6,bytes:2048,failed_files:0,at:new Date().toISOString(),kinds:[{extension:'png',count:6}],previews:[picture(1),picture(2),picture(3)]};
+            const row={key:'asset:1',status:'landed',source:'craft',producer:'claude-code',title:'Harbour study',directory_id:12,files:6,bytes:2048,failed_files:0,at:new Date().toISOString(),kinds:[{extension:'png',count:6}],previews:[picture(1),picture(2),picture(3)]};
             return window.__homeSummary({lead:{available:true,state:'new',files:6,bytes:2048,since:null},board:{rows:[row],moving:[],cargo:[row],more:0,truncated:false,docked:[]}});
         }});
         await page.locator('.hm-shelf').first().waitFor();
+        await page.evaluate(() => {
+            window.shelfResizeErrors = [];
+            window.addEventListener('error', event => {
+                if (event.message?.includes('ResizeObserver')) window.shelfResizeErrors.push(event.message);
+            });
+        });
+        assert.equal(new URL(await page.locator('.hm-pic-more').getAttribute('href'),ORIGIN).search,'?directory_id=12&recent=1');
         const before=await page.locator('.hm-shelf').first().evaluate(node=>node.style.getPropertyValue('--tile'));
         await page.setViewportSize({width:380,height:900});
         await page.waitForFunction(value=>document.querySelector('.hm-shelf')?.style.getPropertyValue('--tile')!==value,before);
+        for (const width of [750, 360, 850, 390]) {
+            await page.setViewportSize({width,height:900});
+            await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        }
+        assert.deepEqual(await page.evaluate(() => window.shelfResizeErrors), []);
         // A shelf at rest must not keep redrawing, or its pictures never get the chance to load.
         const redraws=await page.evaluate(()=>new Promise(resolve=>{let count=0;const watcher=new MutationObserver(()=>{count++;});watcher.observe(document.querySelector('[data-cargo]'),{childList:true});setTimeout(()=>{watcher.disconnect();resolve(count);},800);}));
         assert.equal(redraws,0);

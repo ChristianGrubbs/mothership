@@ -10,6 +10,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { launchBrowser } = require('../launch-browser.cjs');
 
 const root = path.resolve(__dirname, '../../..');
 const confirmFile = 'packages/Mothership/Admin/src/Resources/views/components/modal/confirm.blade.php';
@@ -105,8 +106,7 @@ const settle = (page) => page.waitForTimeout(100);
 const vueTest = process.env.MOTHERSHIP_VUE_RUNTIME_PATH && process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH ? test : test.skip;
 
 async function withPage(fn) {
-    const { chromium } = require(process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH);
-    const browser = await chromium.launch({ headless: true, channel: process.env.MOTHERSHIP_BROWSER_CHANNEL || 'chrome' });
+    const browser = await launchBrowser({playwrightPath: process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH});
 
     try {
         const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
@@ -143,14 +143,14 @@ vueTest('opening the confirm dialog from the keyboard moves focus inside and kee
 vueTest('Escape cancels and hands focus back to the control that opened the dialog', () => withPage(async (page) => {
     await page.focus('#trigger');
     await page.keyboard.press('Space');
-    await settle(page);
+    await dialog(page).waitFor({state: 'visible'});
+    await page.waitForFunction(() => document.activeElement.closest('[role="alertdialog"]') !== null);
 
     await page.keyboard.press('Escape');
-    await settle(page);
+    await dialog(page).waitFor({state: 'detached'});
+    await page.waitForFunction(() => document.activeElement.id === 'trigger');
 
-    assert.equal(await dialog(page).count(), 0);
     assert.deepEqual(await answers(page), ['disagree']);
-    assert.equal(await active(page), 'trigger');
 }));
 
 vueTest('either answer hands focus back to the control that opened the dialog', () => withPage(async (page) => {

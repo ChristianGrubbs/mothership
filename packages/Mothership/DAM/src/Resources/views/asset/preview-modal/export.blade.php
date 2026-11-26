@@ -1,6 +1,6 @@
 @once
 {{-- P6a (D28, D17, D27): the viewer's Export menu. Each entry opens the shared Process dialog on this one file with
-     its recipe chosen (a still and a GIF start at the player's current time), or, for a video, the Clip & watermark
+     its recipe chosen (a still uses the player's current time), or, for a video, the Clip & watermark
      panel; either way the work runs as a one-item batch and shows in the same progress panel. A menu of <li>
      wrapping buttons, so the dropdown's keyboard menu pattern (PR #147) applies. Teleported: the header cluster
      sits at the card's right edge, and a teleported panel is clamped to the viewport. --}}
@@ -45,7 +45,7 @@ app.component('v-dam-asset-export', {
 
             if (this.fileType === 'video') {
                 return [
-                    recipe('gif', { at: 'start' }),
+                    recipe('gif'),
                     { key: 'still', recipe: 'still', label: this.t.viewer['still-now'] + '…', at: 'time' },
                     recipe('audio'),
                     { key: 'audio_mp3', recipe: 'audio', label: this.t.viewer['export-mp3'] + '…', params: { format: 'mp3' } },

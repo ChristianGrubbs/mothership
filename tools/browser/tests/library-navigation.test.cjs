@@ -466,6 +466,32 @@ test('another account never restores the previous account tabs, folder or search
 
 const tabProps={initialDirectoryId:null,initialScope:'all',initialSearch:'',initialMediaType:'all',clearSavedFilters:false,initialPage:1,initialViewMode:'grid',accessibleIds:[]};
 
+test('recent uploads open the requested Library scope on page one with the newest files first', () => {
+    for (const directoryId of [null, 12]) {
+        const scope = directoryId ? 'directory' : 'all';
+        const storage = {
+            [userKey('dam_explorer_tabs')]: JSON.stringify({tabs: [{scope, directoryId, page: 4}]}),
+            [userKey('dam_explorer_filter_state')]: JSON.stringify([{index: 'extension', value: ['pdf']}]),
+            dam_explorer_sort: 'name:asc',
+        };
+        const {definition, context} = component(explorerFile, 'v-dam-explorer', storage);
+        context.location.search = directoryId ? '?directory_id=12&recent=1' : '?scope=all&recent=1';
+        const explorer = {...definition.methods};
+        explorer.restore();
+        const [target] = explorer.tabs;
+        assert.equal(target.page, 1);
+        assert.equal(target.scope, scope);
+        assert.equal(target.directoryId, directoryId);
+        const {definition: tab} = component(tabFile, 'v-dam-tab', storage);
+        const data = tab.data.call({...tab.methods, ...tabProps, initialRecent: target.recent,
+            initialScope: target.scope, initialDirectoryId: target.directoryId, clearSavedFilters: target.clearSavedFilters});
+        assert.equal(data.sortBy, 'created_at');
+        assert.equal(data.sortOrder, 'desc');
+        assert.equal(data.applied.filters.columns.length, 0);
+        assert.equal(storage.dam_explorer_sort, 'name:asc');
+    }
+});
+
 test('Back and Forward restore the full view: folder, search, media type and page',()=>{
     // Folder A with a search, a media filter and page 2, then folder B: A's url keeps all of it.
     const atA=nav.locationState('?scope=directory&directory_id=10&search=logo&media_type=images&page=2');

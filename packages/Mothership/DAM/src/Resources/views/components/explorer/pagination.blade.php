@@ -3,7 +3,7 @@
 <script type="text/x-template" id="v-dam-explorer-pager-template">
     <div class="flex flex-wrap items-center justify-end gap-x-2 gap-y-2">
         <div class="relative z-20">
-        <x-admin::dropdown>
+        <x-admin::dropdown position="top-left" :teleport="true">
             <x-slot:toggle>
                 <button
                     type="button"
