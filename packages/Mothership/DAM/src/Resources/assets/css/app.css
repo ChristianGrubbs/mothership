@@ -6,6 +6,24 @@
     @apply aspect-square;
 }
 
+.dam-file-grid {
+    /* Keep the default at two readable cards in a narrow pane, then scale from that same baseline. */
+    --dam-tile-base: max(9.375rem, calc(50% - 1rem));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--dam-tile-base) * var(--dam-tile-scale, 1))), 1fr));
+}
+
+@media (min-width: 1280px) {
+    .dam-file-grid {
+        --dam-tile-base: 15rem;
+    }
+}
+
+@media (pointer: coarse) {
+    .dam-tile-size-slider {
+        min-height: 44px;
+    }
+}
+
 @font-face {
     font-family: "Mothership-DAM";
     src: url("../fonts/Mothership-DAM.woff?9ynohi") format("woff");

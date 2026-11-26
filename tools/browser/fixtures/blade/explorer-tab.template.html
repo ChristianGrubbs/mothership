@@ -54,17 +54,15 @@
                 @change="onFolderChange"
             />
             
-            <div class="ml-auto flex items-center gap-2">
-                <label v-if="viewMode === 'grid'">
-                    <span class="sr-only">Tile size</span>
-                    <select :value="tileSize" v-on:change="setTileSize($event.target.value)"
-                        class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-cherry-600 dark:bg-cherry-900 max-[639px]:min-h-11"
-                        data-explorer-tile-size>
-                        <option value="small">Small tiles</option>
-                        <option value="medium">Medium tiles</option>
-                        <option value="large">Large tiles</option>
-                    </select>
-                </label>
+            <label v-if="viewMode === 'grid'" class="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-gray-600 dark:text-gray-300">
+                <span>Preview size</span>
+                <input type="range" min="50" max="150" step="5"
+                    :value="tileSize" :aria-valuetext="`${tileSize}%`"
+                    v-on:input="tileSize = $event.target.valueAsNumber" v-on:change="saveTileSize"
+                    class="dam-tile-size-slider h-8 w-20 cursor-ew-resize accent-primary-600 focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-600 dark:accent-primary-400 min-[1024px]:w-28"
+                    data-explorer-tile-size>
+            </label>
+            <div class="shrink-0" :class="viewMode === 'list' ? 'ml-auto' : ''">
                 <v-dam-explorer-view-toggle :model-value="viewMode" @update:model-value="setView($event)"></v-dam-explorer-view-toggle>
             </div>
 

@@ -3867,10 +3867,7 @@ return [
             'view' => [
                 'grid'         => 'Grid View',
                 'list'         => 'List View',
-                'tile-size'    => 'Tile size',
-                'small-tiles'  => 'Small tiles',
-                'medium-tiles' => 'Medium tiles',
-                'large-tiles'  => 'Large tiles',
+                'tile-size'    => 'Preview size',
             ],
             'ai-rename' => [
                 'action'           => 'Rename with AI',
