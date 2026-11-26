@@ -48,6 +48,7 @@ function p6FixturePath(string $name): string
         'clip.mp4'   => [...$lavfi, 'testsrc=size=160x120:rate=10', ...$lavfi, 'sine=frequency=440:sample_rate=22050', '-t', '4',
             '-c:v', 'libx264', '-g', '10', '-keyint_min', '10', '-sc_threshold', '0', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '64k', '-shortest'],
         'silent.mp4' => [...$lavfi, 'testsrc=size=160x120:rate=10', '-t', '2', '-c:v', 'libx264', '-g', '10', '-pix_fmt', 'yuv420p'],
+        'long.mp4'   => [...$lavfi, 'testsrc=size=96x64:rate=24', '-t', '34', '-c:v', 'libx264', '-pix_fmt', 'yuv420p'],
         'photo.png'  => [...$lavfi, 'testsrc=size=320x200', '-frames:v', '1'],
         'small.png'  => [...$lavfi, 'testsrc=size=100x100', '-frames:v', '1'],
         'logo.png'   => [...$lavfi, 'color=c=red:size=40x40', '-frames:v', '1'],
@@ -98,9 +99,9 @@ function p6OutputPath(AssetFile $file): string
 }
 
 /** ffprobe's streams and format for a file. */
-function p6Probe(string $path): array
+function p6Probe(string $path, bool $countFrames = false): array
 {
-    $process = new Process(['ffprobe', '-v', 'error', '-show_format', '-show_streams', '-of', 'json', $path]);
+    $process = new Process(['ffprobe', '-v', 'error', ...($countFrames ? ['-count_frames'] : []), '-show_format', '-show_streams', '-of', 'json', $path]);
     $process->setTimeout(30)->mustRun();
 
     return json_decode($process->getOutput(), true);
@@ -212,10 +213,22 @@ it('runs each recipe on a tiny fixture: a valid output, lineage to the source re
         expect([$video['width'], $video['height']])->toBe([80, 60]);
     }],
     'gif' => ['clip.mp4', 'gif', ['start' => 1, 'duration' => 1.5, 'fps' => 10, 'width' => 80], function (string $path) {
-        $probe = p6Probe($path);
+        $probe = p6Probe(path: $path, countFrames: true);
         expect(file_get_contents($path, length: 6))->toBe('GIF89a')
             ->and(p6Stream($probe, 'video')['width'])->toBe(80)
-            ->and((float) $probe['format']['duration'])->toEqualWithDelta(1.5, 0.15);
+            ->and((float) $probe['format']['duration'])->toEqualWithDelta(1.5, 0.15)
+            ->and((int) p6Stream($probe, 'video')['nb_read_frames'])->toBe(15);
+    }],
+    'gif defaults to the full video at 24 fps' => ['long.mp4', 'gif', [], function (string $path) {
+        $probe = p6Probe(path: $path, countFrames: true);
+        // GIF delays have centisecond precision, so check both the duration and the exact frame count.
+        expect((float) $probe['format']['duration'])->toEqualWithDelta(34.0, 0.08)
+            ->and((int) p6Stream($probe, 'video')['nb_read_frames'])->toBe(34 * 24);
+    }],
+    'gif with a start and blank duration runs to the end' => ['clip.mp4', 'gif', ['start' => 1, 'duration' => ''], function (string $path) {
+        $probe = p6Probe(path: $path, countFrames: true);
+        expect((float) $probe['format']['duration'])->toEqualWithDelta(3.0, 0.08)
+            ->and((int) p6Stream($probe, 'video')['nb_read_frames'])->toBe(3 * 24);
     }],
     'still' => ['clip.mp4', 'still', ['time' => 2, 'format' => 'png'], function (string $path) {
         expect(getimagesize($path))->toMatchArray([0 => 160, 1 => 120, 'mime' => 'image/png']);

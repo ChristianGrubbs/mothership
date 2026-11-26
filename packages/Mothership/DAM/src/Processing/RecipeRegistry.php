@@ -106,16 +106,17 @@ class RecipeRegistry
             'label'      => trans('dam::app.admin.batch.recipes.'.$recipe->key()),
             'file_types' => $recipe->fileTypes(),
             'parameters' => collect($recipe->parameters())->map(fn (array $spec, string $name) => array_filter([
-                'name'     => $name,
-                'label'    => trans('dam::app.admin.batch.params.'.$name),
-                'type'     => $spec['type'],
-                'required' => (bool) ($spec['required'] ?? false),
-                'min'      => $spec['min'] ?? null,
-                'max'      => $spec['max'] ?? null,
-                'integer'  => isset($spec['integer']) ? (bool) $spec['integer'] : null,
-                'unit'     => $spec['unit'] ?? null,
-                'default'  => $spec['default'] ?? null,
-                'options'  => isset($spec['options'])
+                'name'        => $name,
+                'label'       => trans('dam::app.admin.batch.params.'.$name),
+                'type'        => $spec['type'],
+                'required'    => (bool) ($spec['required'] ?? false),
+                'min'         => $spec['min'] ?? null,
+                'max'         => $spec['max'] ?? null,
+                'integer'     => isset($spec['integer']) ? (bool) $spec['integer'] : null,
+                'unit'        => $spec['unit'] ?? null,
+                'default'     => $spec['default'] ?? null,
+                'placeholder' => isset($spec['placeholder']) ? trans($spec['placeholder']) : null,
+                'options'     => isset($spec['options'])
                     ? array_map(fn ($option) => ['value' => $option, 'label' => trans('dam::app.admin.batch.options.'.$option)], $spec['options'])
                     : null,
             ], fn ($value) => $value !== null))->values()->all(),
