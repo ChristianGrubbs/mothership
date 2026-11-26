@@ -63,17 +63,15 @@
             />
             @endif
 
-            <div class="ml-auto flex items-center gap-2">
-                <label v-if="viewMode === 'grid'">
-                    <span class="sr-only">@lang('dam::app.admin.explorer.view.tile-size')</span>
-                    <select :value="tileSize" v-on:change="setTileSize($event.target.value)"
-                        class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-cherry-600 dark:bg-cherry-900 max-[639px]:min-h-11"
-                        data-explorer-tile-size>
-                        <option value="small">@lang('dam::app.admin.explorer.view.small-tiles')</option>
-                        <option value="medium">@lang('dam::app.admin.explorer.view.medium-tiles')</option>
-                        <option value="large">@lang('dam::app.admin.explorer.view.large-tiles')</option>
-                    </select>
-                </label>
+            <label v-if="viewMode === 'grid'" class="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-gray-600 dark:text-gray-300">
+                <span>@lang('dam::app.admin.explorer.view.tile-size')</span>
+                <input type="range" min="50" max="150" step="5"
+                    :value="tileSize" :aria-valuetext="`${tileSize}%`"
+                    v-on:input="tileSize = $event.target.valueAsNumber" v-on:change="saveTileSize"
+                    class="dam-tile-size-slider h-8 w-20 cursor-ew-resize accent-primary-600 focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-600 dark:accent-primary-400 min-[1024px]:w-28"
+                    data-explorer-tile-size>
+            </label>
+            <div class="shrink-0" :class="viewMode === 'list' ? 'ml-auto' : ''">
                 <v-dam-explorer-view-toggle :model-value="viewMode" @update:model-value="setView($event)"></v-dam-explorer-view-toggle>
             </div>
 
@@ -470,6 +468,7 @@ app.component('v-dam-tab', {
         } catch {}
         let storedTileSize;
         try { storedTileSize = localStorage.getItem('dam_explorer_tile_size'); } catch {}
+        const rememberedTileSize = {small: 55, medium: 100, large: 140}[storedTileSize] ?? Number(storedTileSize);
         const sort = this.initialRecent ? 'created_at:desc' : window.MothershipLibraryNavigation.resolveSort(storedSort);
         const [initialSortBy, initialSortOrder] = sort.split(':');
         return {
@@ -496,7 +495,7 @@ app.component('v-dam-tab', {
             searchInput:  this.initialSearch,
             search:       this.initialSearch,
             viewMode:     storedView || this.initialViewMode,
-            tileSize:     ['small', 'large'].includes(storedTileSize) ? storedTileSize : 'medium',
+            tileSize:     rememberedTileSize >= 50 && rememberedTileSize <= 150 && rememberedTileSize % 5 === 0 ? rememberedTileSize : 100,
             groupBy:      storedGroupBy === 'stack' ? 'stack' : '',
             // VIS-11: on a phone the media chips and the sort/filter row sit behind one "Filter & sort" button.
             phoneFiltersOpen: false,
@@ -2104,9 +2103,8 @@ app.component('v-dam-tab', {
             this.sync();
         },
 
-        setTileSize(size) {
-            this.tileSize = size;
-            try { localStorage.setItem('dam_explorer_tile_size', size); } catch {}
+        saveTileSize() {
+            try { localStorage.setItem('dam_explorer_tile_size', String(this.tileSize)); } catch {}
         },
 
         findAppliedColumn(columnIndex) {

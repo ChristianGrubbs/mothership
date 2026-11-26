@@ -76,8 +76,7 @@ async function measureFolders(page,{panel,count}){
 }
 
 test('the Library folder grid fills its own width with cards at least 184px wide, and one card per row below that',async()=>{
-    const {chromium}=require(process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH);
-    const browser=await chromium.launch({headless:true,channel:process.env.MOTHERSHIP_BROWSER_CHANNEL||'chrome'});
+    const browser = await launchBrowser({playwrightPath: process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH});
     try {
         const page=await browser.newPage();
 
@@ -99,8 +98,7 @@ test('the Library folder grid fills its own width with cards at least 184px wide
 });
 
 test('the Library file grid keeps readable cards on an unfolded iPhone Duo and elsewhere',async()=>{
-    const {chromium}=require(process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH);
-    const browser=await chromium.launch({headless:true,channel:process.env.MOTHERSHIP_BROWSER_CHANNEL||'chrome'});
+    const browser = await launchBrowser({playwrightPath: process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH});
     try {
         const page=await browser.newPage();
         const sideways=await measure(page,{width:951,panel:321});
@@ -115,7 +113,7 @@ test('the Library file grid keeps readable cards on an unfolded iPhone Duo and e
     }
 });
 
-test('changing tile size resizes the Library cards, fits a narrow pane, and survives reopening', async () => {
+test('the preview size slider reflows Library cards before release and remembers the chosen size', async () => {
     const browser = await launchBrowser({playwrightPath: process.env.MOTHERSHIP_PLAYWRIGHT_MODULE_PATH});
     try {
         const page = await browser.newPage({viewport: {width: 1440, height: 800}});
@@ -160,22 +158,50 @@ test('changing tile size resizes the Library cards, fits a narrow pane, and surv
             }, {tabTemplate: tab.template, gridTemplate: grid.template});
         }
 
-        const size = page.getByRole('combobox');
+        const size = page.getByRole('slider', {name: 'Preview size'});
         const card = page.locator('[data-card]').first();
         const cardWidth = () => card.evaluate(el => el.getBoundingClientRect().width);
+        const columns = () => card.evaluate(el => getComputedStyle(el.parentElement).gridTemplateColumns.split(' ').length);
+        const moveSlider = value => size.evaluate((input, value) => {
+            input.value = value;
+            input.dispatchEvent(new Event('input', {bubbles: true}));
+        }, value);
+
         await openLibrary();
-        assert.equal(await size.inputValue(), 'medium');
+        await page.evaluate(() => localStorage.setItem('dam_explorer_tile_size', 'medium'));
+        await openLibrary();
+        assert.equal(await size.inputValue(), '100');
         const medium = await cardWidth();
-        await size.selectOption('small');
+        const mediumColumns = await columns();
+        await moveSlider('50');
         assert.ok(await cardWidth() < medium);
-        await size.selectOption('large');
+        assert.ok(await columns() > mediumColumns);
+        assert.equal(await page.evaluate(() => localStorage.getItem('dam_explorer_tile_size')), 'medium', 'wait for release to write storage');
+        await moveSlider('150');
         assert.ok(await cardWidth() > medium);
+        assert.ok(await columns() < mediumColumns);
+        await size.dispatchEvent('change');
         await openLibrary();
-        assert.equal(await size.inputValue(), 'large');
+        assert.equal(await size.inputValue(), '150');
+        await size.focus();
+        await page.keyboard.press('ArrowLeft');
+        assert.equal(await size.inputValue(), '145');
+        assert.equal(await size.getAttribute('aria-valuetext'), '145%');
+
+        // The responsive middle must not cause a reversal when crossing it.
+        await page.setViewportSize({width: 1190, height: 800});
+        let previous = Infinity;
+        for (let tick = 50; tick <= 150; tick += 5) {
+            await moveSlider(String(tick));
+            const shown = await columns();
+            assert.ok(shown <= previous, `a larger preview fits the same or fewer cards at ${tick}%`);
+            previous = shown;
+        }
+
         await page.setViewportSize({width: 375, height: 667});
         const largePhone = await cardWidth();
         assert.ok(largePhone <= 375);
-        await size.selectOption('small');
+        await moveSlider('50');
         assert.ok(await cardWidth() < largePhone);
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     } finally {

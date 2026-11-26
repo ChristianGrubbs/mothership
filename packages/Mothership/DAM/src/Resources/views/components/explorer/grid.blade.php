@@ -4,7 +4,7 @@
 <script type="text/x-template" id="v-dam-explorer-grid-template">
 
     <div ref="space" class="relative pr-4 min-h-72" @dragover.prevent @drop.prevent="onSpaceDrop($event)" @pointerdown="onSpacePointerDown">
-        <div v-if="isLoading" class="grid grid-cols-1 min-[380px]:grid-cols-2 xl:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3 min-[640px]:gap-5 xl:gap-6 animate-pulse" :style="tileGridStyle">
+        <div v-if="isLoading" class="dam-file-grid grid gap-3 min-[640px]:gap-5 xl:gap-6 animate-pulse" :style="tileGridStyle">
             <div v-for="n in 10" :key="n" class="aspect-square bg-gray-100 dark:bg-cherry-800 rounded-lg"></div>
         </div>
 
@@ -37,7 +37,7 @@
                 <p class="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">
                     @lang('dam::app.admin.explorer.sections.files')
                 </p>
-                <div class="grid grid-cols-1 min-[380px]:grid-cols-2 xl:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3 min-[640px]:gap-5 xl:gap-6" :style="tileGridStyle">
+                <div class="dam-file-grid grid gap-3 min-[640px]:gap-5 xl:gap-6" :style="tileGridStyle">
                     <v-dam-explorer-asset-card
                         v-for="asset in assets"
                         :key="asset.id"
@@ -103,7 +103,7 @@ app.component('v-dam-explorer-grid', {
     props: {
         directories:          { type: Array, default: () => [] },
         assets:               { type: Array, default: () => [] },
-        tileSize:             { type: String, default: 'medium' },
+        tileSize:             { type: Number, default: 100 },
         isLoading:            { type: Boolean, default: false },
         emptyState:           { type: Object, default: null },
         tabId:                { type: String, required: true },
@@ -132,8 +132,7 @@ app.component('v-dam-explorer-grid', {
 
     computed: {
         tileGridStyle() {
-            const width = {small: '8.5rem', large: '21rem'}[this.tileSize];
-            return width ? {gridTemplateColumns: `repeat(auto-fill, minmax(min(100%, ${width}), 1fr))`} : null;
+            return {'--dam-tile-scale': this.tileSize / 100};
         },
     },
 

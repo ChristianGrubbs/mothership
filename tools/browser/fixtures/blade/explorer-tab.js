@@ -42,6 +42,7 @@ app.component('v-dam-tab', {
         } catch {}
         let storedTileSize;
         try { storedTileSize = localStorage.getItem('dam_explorer_tile_size'); } catch {}
+        const rememberedTileSize = {small: 55, medium: 100, large: 140}[storedTileSize] ?? Number(storedTileSize);
         const sort = this.initialRecent ? 'created_at:desc' : window.MothershipLibraryNavigation.resolveSort(storedSort);
         const [initialSortBy, initialSortOrder] = sort.split(':');
         return {
@@ -68,7 +69,7 @@ app.component('v-dam-tab', {
             searchInput:  this.initialSearch,
             search:       this.initialSearch,
             viewMode:     storedView || this.initialViewMode,
-            tileSize:     ['small', 'large'].includes(storedTileSize) ? storedTileSize : 'medium',
+            tileSize:     rememberedTileSize >= 50 && rememberedTileSize <= 150 && rememberedTileSize % 5 === 0 ? rememberedTileSize : 100,
             groupBy:      storedGroupBy === 'stack' ? 'stack' : '',
             // VIS-11: on a phone the media chips and the sort/filter row sit behind one "Filter & sort" button.
             phoneFiltersOpen: false,
@@ -1674,9 +1675,8 @@ app.component('v-dam-tab', {
             this.sync();
         },
 
-        setTileSize(size) {
-            this.tileSize = size;
-            try { localStorage.setItem('dam_explorer_tile_size', size); } catch {}
+        saveTileSize() {
+            try { localStorage.setItem('dam_explorer_tile_size', String(this.tileSize)); } catch {}
         },
 
         findAppliedColumn(columnIndex) {
