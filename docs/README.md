@@ -24,6 +24,7 @@ One line per place under `docs/`. Repository-level guides sit at the root: [READ
 ## Generated and reference material
 
 - [api/](api/) — the generated route and contract inventory (`routes.json`, `openapi.json`, `acl-map.json` and friends). Built by `tools/docs/build_api.py`; refresh `routes.json` as CONTRIBUTING describes.
+  [api/chunked-upload.md](api/chunked-upload.md) is how a REST client sends a file larger than one request, in parts.
 - [architecture/](architecture/) — the documentation system's own source map and its standalone HTML artifact.
 - [reference/](reference/) — standing reference notes, for example [Adobe application marks](reference/adobe-application-marks.md).
 - [iconvault-api.md](iconvault-api.md) — integration notes for the Iconvault icon service.

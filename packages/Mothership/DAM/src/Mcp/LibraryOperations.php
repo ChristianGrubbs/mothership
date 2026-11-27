@@ -10,16 +10,19 @@ use Illuminate\Support\Facades\DB;
 use Mothership\DAM\Models\Asset;
 use Mothership\DAM\Models\AssetFile;
 use Mothership\DAM\Models\AssetRelationship;
+use Mothership\DAM\Models\ChunkUpload;
 use Mothership\DAM\Models\Directory;
 use Mothership\DAM\Models\FileObject;
 use Mothership\DAM\Models\Rendition;
 use Mothership\DAM\Models\Tag;
+use Mothership\DAM\Models\UploadTracker;
 use Mothership\DAM\Repositories\DirectoryRepository;
 use Mothership\DAM\Repositories\DirectoryRolePermissionRepository;
 use Mothership\DAM\Rules\TagNameRule;
 use Mothership\DAM\Services\Access\AccessContext;
 use Mothership\DAM\Services\Access\AccessModel;
 use Mothership\DAM\Services\Access\AssetAccessDecision;
+use Mothership\DAM\Services\ChunkUploadService;
 use Mothership\DAM\Services\ContentStore;
 use Mothership\DAM\Services\CreativeHub\CreativeHubSaver;
 use Mothership\DAM\Services\DirectoryPermissionService;
@@ -27,10 +30,13 @@ use Mothership\DAM\Services\FolderAccessService;
 use Mothership\DAM\Services\Lineage;
 use Mothership\DAM\Services\Stack\StackMembers;
 use Mothership\DAM\Services\Tags\AssetTagWriter;
+use Mothership\DAM\Support\ChunkUploadError;
 use Mothership\DAM\Support\ReservedDirectoryNames;
 use Mothership\DAM\Support\StackFileName;
+use Mothership\DAM\Support\UploadRefusal;
 use Mothership\DAM\Vectorization\AgentVectorizations;
 use Mothership\User\Models\Admin;
+use Ramsey\Uuid\Uuid;
 
 /**
  * The `mothership` library tools (docs/api/mothership-mcp.md). Every call acts as the one admin account named by
@@ -60,6 +66,7 @@ class LibraryOperations
         private StackMembers $members,
         private DirectoryRepository $directoryRepository,
         private AssetTagWriter $tags,
+        private ChunkUploadService $chunks,
     ) {}
 
     /**
@@ -612,20 +619,7 @@ class LibraryOperations
     private function save(Admin $actor, array $arguments): array
     {
         [$source, $size] = $this->localSource(path: (string) $arguments['local_path']);
-        $producer = $arguments['producer'];
-        $app = ['id' => $producer['tool'].(isset($producer['app']) ? ':'.$producer['app'] : ''), 'version' => (string) ($producer['version'] ?? '')];
-        $record = array_filter([
-            'producer'         => $producer['tool'],
-            'producer_app'     => $producer['app'] ?? null,
-            'producer_version' => $producer['version'] ?? null,
-            'provenance'       => $arguments['provenance'] ?? null,
-            'notes'            => $arguments['notes'] ?? null,
-            'evidence'         => $arguments['evidence'] ?? null,
-        ], fn (mixed $value): bool => $value !== null && $value !== '' && $value !== []);
-        if (($arguments['tags'] ?? []) !== []) {
-            abort_unless($this->can(actor: $actor, permission: 'dam.asset.tag'), 403);
-        }
-        $references = $this->references(actor: $actor, ids: $arguments['provenance']['reference_asset_ids'] ?? [], stackAssetId: isset($arguments['stack_asset_id']) ? (int) $arguments['stack_asset_id'] : null);
+        [$app, $record, $references] = $this->savePlan(actor: $actor, arguments: $arguments);
         if (isset($arguments['stack_asset_id'])) {
             // The Library's add-files rule, asked again by CreativeHubSaver::addToStack on the locked row.
             abort_unless($this->can(actor: $actor, permission: 'dam.asset.files.store') && $this->can(actor: $actor, permission: 'dam.asset.edit'), 403);
@@ -640,6 +634,162 @@ class LibraryOperations
         abort_unless($this->directories->forAdmin(admin: $actor)->canAccess(directoryId: (int) $folder->id), 404);
 
         return $this->withStagedFile(source: $source, size: $size, name: $arguments['name'] ?? null, use: fn (UploadedFile $file, string $name, string $sha256) => $this->saveNewFile(actor: $actor, arguments: $arguments, file: $file, name: $name, sha256: $sha256, size: $size, app: $app, record: $record, references: $references));
+    }
+
+    /**
+     * What every save checks and records before any bytes move: the producer's app id, the library record, and the
+     * provenance references (each checked). Refuses tags without the tag permission.
+     *
+     * @return array{0: array{id: string, version: string}, 1: array<string, mixed>, 2: list<int>}
+     */
+    private function savePlan(Admin $actor, array $arguments): array
+    {
+        $producer = $arguments['producer'];
+        $app = ['id' => $producer['tool'].(isset($producer['app']) ? ':'.$producer['app'] : ''), 'version' => (string) ($producer['version'] ?? '')];
+        $record = array_filter([
+            'producer'         => $producer['tool'],
+            'producer_app'     => $producer['app'] ?? null,
+            'producer_version' => $producer['version'] ?? null,
+            'provenance'       => $arguments['provenance'] ?? null,
+            'notes'            => $arguments['notes'] ?? null,
+            'evidence'         => $arguments['evidence'] ?? null,
+        ], fn (mixed $value): bool => $value !== null && $value !== '' && $value !== []);
+        if (($arguments['tags'] ?? []) !== []) {
+            abort_unless($this->can(actor: $actor, permission: 'dam.asset.tag'), 403);
+        }
+        $references = $this->references(actor: $actor, ids: $arguments['provenance']['reference_asset_ids'] ?? [], stackAssetId: isset($arguments['stack_asset_id']) ? (int) $arguments['stack_asset_id'] : null);
+
+        return [$app, $record, $references];
+    }
+
+    /**
+     * library_save over REST for a file too large for one request (docs/api/mothership-mcp.md, "Large files"). The
+     * launcher sends the arguments with the file's name, size, sha256 and modification time, and the bytes go up in
+     * parts through the REST chunked upload (docs/api/chunked-upload.md). The request_id names one create-only chunk
+     * upload into folder_id: until it is completed each call answers its status (LibraryUploadPending), so the
+     * launcher sends the missing parts, completes it and asks again. Once completed, the asset it published becomes
+     * this save, with the same claim, record, title, tags, links and replay as a save in one request. The heavy work
+     * (assembly, hashing, storage) runs in the upload's finalize job, so no call outlives the site's proxy timeout.
+     *
+     * Only a new asset: a stack member is saved in one request. The extension and playability checks of a one-request
+     * save need the whole file in one place and are not run; the upload's own forbidden-file check is.
+     *
+     * @param  array{name: string, size: int, sha256: string, last_modified: int}  $file
+     *
+     * @throws LibraryUploadPending
+     */
+    public function saveChunked(array $arguments, array $file, Admin $actor): array
+    {
+        $actor = $this->signIn(actor: $actor);
+        if (isset($arguments['stack_asset_id'])) {
+            throw new LibraryFailure('A file this large is saved as a new asset: pass folder_id instead of stack_asset_id. Joining a stack takes a file small enough for one request.');
+        }
+        [$app, $record, $references] = $this->savePlan(actor: $actor, arguments: $arguments);
+        abort_unless($this->can(actor: $actor, permission: 'dam.asset.upload'), 403);
+        $folder = Directory::query()->findOrFail((int) $arguments['folder_id']);
+        abort_unless($this->directories->forAdmin(admin: $actor)->canAccess(directoryId: (int) $folder->id), 404);
+        $name = CreativeHubSaver::cleanName(name: $arguments['name'] ?? $file['name']);
+        $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+        if ($extension === '') {
+            throw new LibraryFailure('The file name has no extension, so its type is unknown. Pass name with the right extension, such as render.mp4.');
+        }
+        $size = $file['size'];
+        $sha256 = strtolower($file['sha256']);
+        $limit = (int) config('dam.explorer.upload.max_file_bytes');
+        if ($size > $limit) {
+            throw new LibraryFailure(sprintf('The file is %s; the upload limit is %s, so nothing was saved.', self::megabytes(bytes: $size), self::megabytes(bytes: $limit)));
+        }
+        $requestId = strtolower((string) $arguments['request_id']);
+        $requestSha256 = CreativeHubSaver::newRequestSha256(appId: $app['id'], folderId: (int) $folder->id, name: $name, fileSha256: $sha256);
+        $claim = fn () => DB::table('dam_creative_hub_saves')->where('admin_id', (int) $actor->id)->where('request_id', $requestId)->first();
+        $finish = fn (Asset $asset, bool $replayed): array => $this->finishNewFile(actor: $actor, arguments: $arguments, asset: $asset, name: $name, sha256: $sha256, size: $size, record: $record, references: $references, replayed: $replayed);
+
+        $saved = $claim();
+        if ($saved === null) {
+            $upload = $this->chunkUpload(actor: $actor, folder: $folder, name: $name, file: $file, sha256: $sha256, requestId: $requestId);
+            if ($upload->state !== ChunkUpload::STATE_COMPLETED) {
+                throw new LibraryUploadPending(upload: $this->chunks->status($upload));
+            }
+            $asset = Asset::query()->find((int) $upload->asset_id);
+            if ($asset === null) {
+                throw new LibraryFailure('The asset this upload published has since been removed, so nothing was saved. Save again with a new request_id.');
+            }
+            // The stored bytes are the ones the launcher hashed; an SVG is normalized when published, so only its parts were checked.
+            $stored = (string) $this->content->current(asset: $asset)->sha256;
+            if ($extension !== 'svg' && ! hash_equals($sha256, $stored)) {
+                MothershipLog::decision(event: 'save_chunked_mismatch', loc: 'LibraryOperations::saveChunked', ctx: ['asset_id' => (int) $asset->id, 'size' => $size]);
+                throw new LibraryFailure('The assembled file of asset '.(int) $asset->id.' does not match the sha256 that was sent, so it was not saved as this request. Send that asset to Trash and save again with a new request_id.');
+            }
+            try {
+                DB::table('dam_creative_hub_saves')->insert([
+                    'admin_id'   => (int) $actor->id, 'request_id' => $requestId, 'request_sha256' => $requestSha256, 'asset_id' => (int) $asset->id,
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
+
+                return $finish($asset, false);
+            } catch (UniqueConstraintViolationException) {
+                // A concurrent call claimed it first; answer as its replay.
+                $saved = $claim();
+                if ($saved === null) {
+                    throw new LibraryFailure('The save could not be recorded. Try again with the same request_id.');
+                }
+            }
+        }
+        abort_unless(hash_equals((string) $saved->request_sha256, $requestSha256), 409, trans('dam::app.admin.creative-hub.errors.save-changed'));
+        $asset = Asset::query()->find((int) $saved->asset_id);
+        abort_if($asset === null, 409, trans('dam::app.admin.creative-hub.errors.saved-unavailable'));
+        // A retry answers only while the account can still see the asset (it may have moved since).
+        $asset = $this->access->for(context: AccessContext::forAdmin(admin: $actor, purpose: AccessContext::PURPOSE_LIST), asset: (int) $asset->id)->allowedOrFail();
+
+        return $finish($asset, true);
+    }
+
+    /**
+     * The create-only chunk upload a chunked save's request_id names, opened on the first call and resumed after. Its
+     * upload session is derived from the account and request_id, so the same request always reaches the same upload,
+     * and another file, name or folder under that request_id is refused like a changed one-request save.
+     *
+     * @param  array{name: string, size: int, sha256: string, last_modified: int}  $file
+     */
+    private function chunkUpload(Admin $actor, Directory $folder, string $name, array $file, string $sha256, string $requestId): ChunkUpload
+    {
+        $changed = 'This request_id was already used for a different file or destination. Use a new request_id for a new save.';
+        $tracker = UploadTracker::query()->firstOrCreate(['uuid' => Uuid::uuid5(Uuid::NAMESPACE_URL, 'mothership:library-save:'.(int) $actor->id.':'.$requestId)->toString()], [
+            'user_id'      => (int) $actor->id,
+            'directory_id' => (int) $folder->id,
+            'state'        => UploadTracker::STATE_PROCESSING,
+            'total_files'  => 1,
+            'started_at'   => now(),
+        ]);
+        abort_if((int) $tracker->user_id !== (int) $actor->id || (int) $tracker->directory_id !== (int) $folder->id, 409, $changed);
+        abort_if($tracker->chunkUploads()->where('original_name', '!=', $name)->exists(), 409, $changed);
+        try {
+            $upload = $this->chunks->initialize(metadata: [
+                'session_uuid'  => $tracker->uuid,
+                'directory_id'  => (int) $folder->id,
+                'original_name' => $name,
+                'mime_type'     => null,
+                'size'          => $file['size'],
+                'last_modified' => $file['last_modified'],
+                'fingerprint'   => $sha256,
+                'relative_path' => null,
+                'preserve_root' => false,
+                'create_only'   => true,
+            ], userId: (int) $actor->id);
+        } catch (ChunkUploadError $e) {
+            abort_if($e->status === 409, 409, $changed);
+            abort_if($e->status === 403, 403);
+            throw new LibraryFailure($e->getMessage().' Nothing was saved.');
+        }
+        if (in_array($upload->state, [ChunkUpload::STATE_CANCELLED, ChunkUpload::STATE_EXPIRED], true)) {
+            throw new LibraryFailure('The upload for this request_id was '.$upload->state.' before it finished, so nothing was saved. Save again with a new request_id.');
+        }
+        if ($upload->state === ChunkUpload::STATE_FAILED) {
+            $reason = UploadRefusal::payload($upload->failure_reason);
+            throw new LibraryFailure('The upload failed ('.$upload->failure_code.(is_array($reason) && isset($reason['message']) ? ': '.$reason['message'] : '').'), so nothing was saved. Save again with a new request_id.');
+        }
+
+        return $upload;
     }
 
     /**
@@ -791,6 +941,19 @@ class LibraryOperations
             // A retry answers only while the account can still see the asset (it may have moved since).
             $asset = $this->access->for(context: AccessContext::forAdmin(admin: $actor, purpose: AccessContext::PURPOSE_LIST), asset: (int) $asset->id)->allowedOrFail();
         }
+
+        return $this->finishNewFile(actor: $actor, arguments: $arguments, asset: $asset, name: $name, sha256: $sha256, size: $size, record: $record, references: $references, replayed: $replayed);
+    }
+
+    /**
+     * A new-asset save after its asset exists and its request is claimed: the record, title, tags and links, then
+     * the result. Shared by the one-request and the chunked save.
+     *
+     * @param  list<int>  $references
+     */
+    private function finishNewFile(Admin $actor, array $arguments, Asset $asset, string $name, string $sha256, int $size, array $record, array $references, bool $replayed): array
+    {
+        $requestId = strtolower((string) $arguments['request_id']);
         // The library record (producer, provenance, notes) rides on the request's own claim row. It is written in one
         // transaction with the title, tags and derived-from links: a failure leaves them all for the retry, a
         // concurrent retry waits on the row and then finds it done, and a finished save is never redone, so later

@@ -1,5 +1,228 @@
 [
   {
+    "id": "DELETE * /api/v1/rest/assets/upload/chunks/{uuid}",
+    "kind": "api",
+    "reason": "Supported DAM integration operation: large files in parts.",
+    "reviewed": true,
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/API/Asset/ChunkUploadController.php"
+    ],
+    "operation": {
+      "operationId": "admin.api.dam.assets.chunk_upload.cancel",
+      "summary": "Chunked upload: cancel",
+      "description": "REST twin of the Library's chunked upload (docs/api/chunked-upload.md), as the key's own admin with the upload scope: a file over the single-request limit (about 100 MB through the site's proxy) goes up in parts of chunk_size bytes, and the completed upload is the asset. Cancels an unfinished upload and deletes its parts. A completed upload is left as it is.",
+      "security": [
+        {
+          "integrationBearer": []
+        }
+      ],
+      "x-surface": "integration",
+      "x-permissions": [
+        "api.dam.assets.upload"
+      ],
+      "x-feature-flags": [],
+      "x-evidence": [
+        "packages/Mothership/DAM/src/Http/Controllers/API/Asset/ChunkUploadController.php",
+        "packages/Mothership/DAM/src/Http/Controllers/Asset/ChunkUploadController.php",
+        "packages/Mothership/DAM/src/Services/ChunkUploadService.php"
+      ],
+      "parameters": [
+        {
+          "name": "uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "The upload's status: state (receiving, queued, assembling, completed, failed, cancelled, expired), the part size and count, the indices received, and asset_id once completed.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "code": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "retryable": {
+                    "type": "boolean"
+                  },
+                  "upload": {
+                    "type": "object",
+                    "properties": {
+                      "uuid": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "expected_bytes": {
+                        "type": "integer"
+                      },
+                      "received_bytes": {
+                        "type": "integer"
+                      },
+                      "finalization_bytes": {
+                        "type": "integer"
+                      },
+                      "chunk_size": {
+                        "type": "integer"
+                      },
+                      "chunk_count": {
+                        "type": "integer"
+                      },
+                      "received_indices": {
+                        "type": "array",
+                        "items": {}
+                      },
+                      "asset_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "asset_file_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "failure_code": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "failure_reason": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "expires_at": {
+                        "type": "string"
+                      },
+                      "duplicate": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "similar": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "published_note": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "file_name": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "success": true,
+                "code": null,
+                "message": "Upload cancelled.",
+                "retryable": false,
+                "upload": {
+                  "uuid": "5f0c8a5e-2b7d-4c55-9a51-4c1f1d6d2f10",
+                  "state": "cancelled",
+                  "expected_bytes": 104857600,
+                  "received_bytes": 33554432,
+                  "finalization_bytes": 0,
+                  "chunk_size": 33554432,
+                  "chunk_count": 4,
+                  "received_indices": [],
+                  "asset_id": null,
+                  "asset_file_id": null,
+                  "failure_code": null,
+                  "failure_reason": null,
+                  "expires_at": "2026-11-28T12:00:00.000000Z",
+                  "duplicate": null,
+                  "similar": null,
+                  "published_note": null,
+                  "file_name": null
+                }
+              }
+            }
+          }
+        },
+        "401": {
+          "description": "Missing or invalid bearer authentication (integration routes).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "403": {
+          "description": "The key lacks this tool's scope, or the account may not do this.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "This action is unauthorized"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
     "id": "DELETE * /api/v1/rest/assets/{asset}/files/{file}",
     "kind": "api",
     "reason": "Supported DAM integration operation.",
@@ -4953,6 +5176,260 @@
               },
               "example": {
                 "message": "Request could not be completed"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "GET * /api/v1/rest/assets/upload/chunks/{uuid}",
+    "kind": "api",
+    "reason": "Supported DAM integration operation: large files in parts.",
+    "reviewed": true,
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/API/Asset/ChunkUploadController.php"
+    ],
+    "operation": {
+      "operationId": "admin.api.dam.assets.chunk_upload.status",
+      "summary": "Chunked upload: status",
+      "description": "REST twin of the Library's chunked upload (docs/api/chunked-upload.md), as the key's own admin with the upload scope: a file over the single-request limit (about 100 MB through the site's proxy) goes up in parts of chunk_size bytes, and the completed upload is the asset. The upload's state and the part indices received, for resuming and for polling after complete until state is completed (asset_id) or failed (failure_code, failure_reason).",
+      "security": [
+        {
+          "integrationBearer": []
+        }
+      ],
+      "x-surface": "integration",
+      "x-permissions": [
+        "api.dam.assets.upload"
+      ],
+      "x-feature-flags": [],
+      "x-evidence": [
+        "packages/Mothership/DAM/src/Http/Controllers/API/Asset/ChunkUploadController.php",
+        "packages/Mothership/DAM/src/Http/Controllers/Asset/ChunkUploadController.php",
+        "packages/Mothership/DAM/src/Services/ChunkUploadService.php"
+      ],
+      "parameters": [
+        {
+          "name": "uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "The upload's status: state (receiving, queued, assembling, completed, failed, cancelled, expired), the part size and count, the indices received, and asset_id once completed.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "code": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "retryable": {
+                    "type": "boolean"
+                  },
+                  "upload": {
+                    "type": "object",
+                    "properties": {
+                      "uuid": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "expected_bytes": {
+                        "type": "integer"
+                      },
+                      "received_bytes": {
+                        "type": "integer"
+                      },
+                      "finalization_bytes": {
+                        "type": "integer"
+                      },
+                      "chunk_size": {
+                        "type": "integer"
+                      },
+                      "chunk_count": {
+                        "type": "integer"
+                      },
+                      "received_indices": {
+                        "type": "array",
+                        "items": {}
+                      },
+                      "asset_id": {
+                        "type": "integer"
+                      },
+                      "asset_file_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "failure_code": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "failure_reason": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "expires_at": {
+                        "type": "string"
+                      },
+                      "duplicate": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "similar": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "published_note": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "file_name": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "success": true,
+                "code": null,
+                "message": "Upload status retrieved.",
+                "retryable": false,
+                "upload": {
+                  "uuid": "5f0c8a5e-2b7d-4c55-9a51-4c1f1d6d2f10",
+                  "state": "completed",
+                  "expected_bytes": 104857600,
+                  "received_bytes": 33554432,
+                  "finalization_bytes": 0,
+                  "chunk_size": 33554432,
+                  "chunk_count": 4,
+                  "received_indices": [],
+                  "asset_id": 41,
+                  "asset_file_id": null,
+                  "failure_code": null,
+                  "failure_reason": null,
+                  "expires_at": "2026-11-28T12:00:00.000000Z",
+                  "duplicate": null,
+                  "similar": null,
+                  "published_note": null,
+                  "file_name": "film.mov"
+                }
+              }
+            }
+          }
+        },
+        "401": {
+          "description": "Missing or invalid bearer authentication (integration routes).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "403": {
+          "description": "The key lacks this tool's scope, or the account may not do this.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "This action is unauthorized"
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "No such upload.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "retryable": {
+                    "type": "boolean"
+                  },
+                  "upload": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              },
+              "example": {
+                "success": false,
+                "code": "upload_not_found",
+                "message": "The upload was not found.",
+                "retryable": false,
+                "upload": null
               }
             }
           }
@@ -21883,6 +22360,926 @@
             "example": {
               "asset_id": 1,
               "file": "binary file"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "POST * /api/v1/rest/assets/upload/chunks",
+    "kind": "api",
+    "reason": "Supported DAM integration operation: large files in parts.",
+    "reviewed": true,
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/API/Asset/ChunkUploadController.php"
+    ],
+    "operation": {
+      "operationId": "admin.api.dam.assets.chunk_upload.initialize",
+      "summary": "Chunked upload: initialize",
+      "description": "REST twin of the Library's chunked upload (docs/api/chunked-upload.md), as the key's own admin with the upload scope: a file over the single-request limit (about 100 MB through the site's proxy) goes up in parts of chunk_size bytes, and the completed upload is the asset. Opens an upload into directory_id for one file, or resumes it: the same session_uuid, name, size, last_modified and fingerprint (the file's sha256 is recommended) answer the same upload with the parts already received. Without session_uuid a new upload session is opened. create_only always makes a new asset instead of a new version of a same-name file.",
+      "security": [
+        {
+          "integrationBearer": []
+        }
+      ],
+      "x-surface": "integration",
+      "x-permissions": [
+        "api.dam.assets.upload"
+      ],
+      "x-feature-flags": [],
+      "x-evidence": [
+        "packages/Mothership/DAM/src/Http/Controllers/API/Asset/ChunkUploadController.php",
+        "packages/Mothership/DAM/src/Http/Controllers/Asset/ChunkUploadController.php",
+        "packages/Mothership/DAM/src/Services/ChunkUploadService.php"
+      ],
+      "parameters": [],
+      "responses": {
+        "200": {
+          "description": "The upload's status: state (receiving, queued, assembling, completed, failed, cancelled, expired), the part size and count, the indices received, and asset_id once completed.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "code": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "retryable": {
+                    "type": "boolean"
+                  },
+                  "upload": {
+                    "type": "object",
+                    "properties": {
+                      "uuid": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "expected_bytes": {
+                        "type": "integer"
+                      },
+                      "received_bytes": {
+                        "type": "integer"
+                      },
+                      "finalization_bytes": {
+                        "type": "integer"
+                      },
+                      "chunk_size": {
+                        "type": "integer"
+                      },
+                      "chunk_count": {
+                        "type": "integer"
+                      },
+                      "received_indices": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        }
+                      },
+                      "asset_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "asset_file_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "failure_code": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "failure_reason": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "expires_at": {
+                        "type": "string"
+                      },
+                      "duplicate": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "similar": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "published_note": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "file_name": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "success": true,
+                "code": null,
+                "message": "Upload resumed.",
+                "retryable": false,
+                "upload": {
+                  "uuid": "5f0c8a5e-2b7d-4c55-9a51-4c1f1d6d2f10",
+                  "state": "receiving",
+                  "expected_bytes": 104857600,
+                  "received_bytes": 33554432,
+                  "finalization_bytes": 0,
+                  "chunk_size": 33554432,
+                  "chunk_count": 4,
+                  "received_indices": [
+                    0
+                  ],
+                  "asset_id": null,
+                  "asset_file_id": null,
+                  "failure_code": null,
+                  "failure_reason": null,
+                  "expires_at": "2026-11-28T12:00:00.000000Z",
+                  "duplicate": null,
+                  "similar": null,
+                  "published_note": null,
+                  "file_name": null
+                }
+              }
+            }
+          }
+        },
+        "201": {
+          "description": "The upload's status: state (receiving, queued, assembling, completed, failed, cancelled, expired), the part size and count, the indices received, and asset_id once completed.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "code": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "retryable": {
+                    "type": "boolean"
+                  },
+                  "upload": {
+                    "type": "object",
+                    "properties": {
+                      "uuid": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "expected_bytes": {
+                        "type": "integer"
+                      },
+                      "received_bytes": {
+                        "type": "integer"
+                      },
+                      "finalization_bytes": {
+                        "type": "integer"
+                      },
+                      "chunk_size": {
+                        "type": "integer"
+                      },
+                      "chunk_count": {
+                        "type": "integer"
+                      },
+                      "received_indices": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        }
+                      },
+                      "asset_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "asset_file_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "failure_code": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "failure_reason": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "expires_at": {
+                        "type": "string"
+                      },
+                      "duplicate": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "similar": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "published_note": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "file_name": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "success": true,
+                "code": null,
+                "message": "Upload initialized.",
+                "retryable": false,
+                "upload": {
+                  "uuid": "5f0c8a5e-2b7d-4c55-9a51-4c1f1d6d2f10",
+                  "state": "receiving",
+                  "expected_bytes": 104857600,
+                  "received_bytes": 33554432,
+                  "finalization_bytes": 0,
+                  "chunk_size": 33554432,
+                  "chunk_count": 4,
+                  "received_indices": [
+                    0
+                  ],
+                  "asset_id": null,
+                  "asset_file_id": null,
+                  "failure_code": null,
+                  "failure_reason": null,
+                  "expires_at": "2026-11-28T12:00:00.000000Z",
+                  "duplicate": null,
+                  "similar": null,
+                  "published_note": null,
+                  "file_name": null
+                }
+              }
+            }
+          }
+        },
+        "401": {
+          "description": "Missing or invalid bearer authentication (integration routes).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "403": {
+          "description": "The key lacks this tool's scope, or the account may not do this.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "This action is unauthorized"
+              }
+            }
+          }
+        },
+        "409": {
+          "description": "The session_uuid is another account's or another folder's, or the file changed (source_mismatch).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "retryable": {
+                    "type": "boolean"
+                  },
+                  "upload": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              },
+              "example": {
+                "success": false,
+                "code": "destination_mismatch",
+                "message": "The session_uuid belongs to another upload destination.",
+                "retryable": false,
+                "upload": null
+              }
+            }
+          }
+        },
+        "413": {
+          "description": "Larger than the upload limit (20 GiB by default).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "retryable": {
+                    "type": "boolean"
+                  },
+                  "upload": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              },
+              "example": {
+                "success": false,
+                "code": "file_too_large",
+                "message": "The file exceeds the upload limit.",
+                "retryable": false,
+                "upload": null
+              }
+            }
+          }
+        },
+        "422": {
+          "description": "A field is invalid.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "retryable": {
+                    "type": "boolean"
+                  },
+                  "upload": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              },
+              "example": {
+                "success": false,
+                "code": "invalid_upload_name",
+                "message": "The upload filename is invalid.",
+                "retryable": false,
+                "upload": null
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "description": "JSON request",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "session_uuid": {
+                  "type": "string"
+                },
+                "directory_id": {
+                  "type": "integer"
+                },
+                "original_name": {
+                  "type": "string"
+                },
+                "mime_type": {
+                  "type": "string"
+                },
+                "size": {
+                  "type": "integer"
+                },
+                "last_modified": {
+                  "type": "integer"
+                },
+                "fingerprint": {
+                  "type": "string"
+                },
+                "create_only": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "directory_id",
+                "original_name",
+                "size",
+                "last_modified",
+                "fingerprint"
+              ]
+            },
+            "example": {
+              "session_uuid": "9c7d8f0e-1f5b-4a3c-8e2d-6b1a0c9d7e54",
+              "directory_id": 12,
+              "original_name": "film.mov",
+              "mime_type": "video/quicktime",
+              "size": 104857600,
+              "last_modified": 1795600000000,
+              "fingerprint": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+              "create_only": false
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "POST * /api/v1/rest/assets/upload/chunks/{uuid}/complete",
+    "kind": "api",
+    "reason": "Supported DAM integration operation: large files in parts.",
+    "reviewed": true,
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/API/Asset/ChunkUploadController.php"
+    ],
+    "operation": {
+      "operationId": "admin.api.dam.assets.chunk_upload.complete",
+      "summary": "Chunked upload: complete",
+      "description": "REST twin of the Library's chunked upload (docs/api/chunked-upload.md), as the key's own admin with the upload scope: a file over the single-request limit (about 100 MB through the site's proxy) goes up in parts of chunk_size bytes, and the completed upload is the asset. Queues assembly once every part is received: answers 202 (queued) and the finalize job assembles, checks and publishes the file; poll status until completed. Asking again is harmless.",
+      "security": [
+        {
+          "integrationBearer": []
+        }
+      ],
+      "x-surface": "integration",
+      "x-permissions": [
+        "api.dam.assets.upload"
+      ],
+      "x-feature-flags": [],
+      "x-evidence": [
+        "packages/Mothership/DAM/src/Http/Controllers/API/Asset/ChunkUploadController.php",
+        "packages/Mothership/DAM/src/Http/Controllers/Asset/ChunkUploadController.php",
+        "packages/Mothership/DAM/src/Services/ChunkUploadService.php"
+      ],
+      "parameters": [
+        {
+          "name": "uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "The upload's status: state (receiving, queued, assembling, completed, failed, cancelled, expired), the part size and count, the indices received, and asset_id once completed.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "code": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "retryable": {
+                    "type": "boolean"
+                  },
+                  "upload": {
+                    "type": "object",
+                    "properties": {
+                      "uuid": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "expected_bytes": {
+                        "type": "integer"
+                      },
+                      "received_bytes": {
+                        "type": "integer"
+                      },
+                      "finalization_bytes": {
+                        "type": "integer"
+                      },
+                      "chunk_size": {
+                        "type": "integer"
+                      },
+                      "chunk_count": {
+                        "type": "integer"
+                      },
+                      "received_indices": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        }
+                      },
+                      "asset_id": {
+                        "type": "integer"
+                      },
+                      "asset_file_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "failure_code": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "failure_reason": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "expires_at": {
+                        "type": "string"
+                      },
+                      "duplicate": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "similar": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "published_note": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "file_name": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "success": true,
+                "code": null,
+                "message": "Upload completion accepted.",
+                "retryable": false,
+                "upload": {
+                  "uuid": "5f0c8a5e-2b7d-4c55-9a51-4c1f1d6d2f10",
+                  "state": "completed",
+                  "expected_bytes": 104857600,
+                  "received_bytes": 33554432,
+                  "finalization_bytes": 0,
+                  "chunk_size": 33554432,
+                  "chunk_count": 4,
+                  "received_indices": [
+                    0
+                  ],
+                  "asset_id": 41,
+                  "asset_file_id": null,
+                  "failure_code": null,
+                  "failure_reason": null,
+                  "expires_at": "2026-11-28T12:00:00.000000Z",
+                  "duplicate": null,
+                  "similar": null,
+                  "published_note": null,
+                  "file_name": null
+                }
+              }
+            }
+          }
+        },
+        "202": {
+          "description": "The upload's status: state (receiving, queued, assembling, completed, failed, cancelled, expired), the part size and count, the indices received, and asset_id once completed.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "code": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "retryable": {
+                    "type": "boolean"
+                  },
+                  "upload": {
+                    "type": "object",
+                    "properties": {
+                      "uuid": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "expected_bytes": {
+                        "type": "integer"
+                      },
+                      "received_bytes": {
+                        "type": "integer"
+                      },
+                      "finalization_bytes": {
+                        "type": "integer"
+                      },
+                      "chunk_size": {
+                        "type": "integer"
+                      },
+                      "chunk_count": {
+                        "type": "integer"
+                      },
+                      "received_indices": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        }
+                      },
+                      "asset_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "asset_file_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "failure_code": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "failure_reason": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "expires_at": {
+                        "type": "string"
+                      },
+                      "duplicate": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "similar": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "published_note": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "file_name": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "success": true,
+                "code": null,
+                "message": "Upload completion accepted.",
+                "retryable": false,
+                "upload": {
+                  "uuid": "5f0c8a5e-2b7d-4c55-9a51-4c1f1d6d2f10",
+                  "state": "queued",
+                  "expected_bytes": 104857600,
+                  "received_bytes": 104857600,
+                  "finalization_bytes": 0,
+                  "chunk_size": 33554432,
+                  "chunk_count": 4,
+                  "received_indices": [
+                    0,
+                    1,
+                    2,
+                    3
+                  ],
+                  "asset_id": null,
+                  "asset_file_id": null,
+                  "failure_code": null,
+                  "failure_reason": null,
+                  "expires_at": "2026-11-28T12:00:00.000000Z",
+                  "duplicate": null,
+                  "similar": null,
+                  "published_note": null,
+                  "file_name": null
+                }
+              }
+            }
+          }
+        },
+        "401": {
+          "description": "Missing or invalid bearer authentication (integration routes).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "403": {
+          "description": "The key lacks this tool's scope, or the account may not do this.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "This action is unauthorized"
+              }
+            }
+          }
+        },
+        "422": {
+          "description": "A part is missing.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "retryable": {
+                    "type": "boolean"
+                  },
+                  "upload": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              },
+              "example": {
+                "success": false,
+                "code": "upload_incomplete",
+                "message": "Not all chunks have been received.",
+                "retryable": false,
+                "upload": null
+              }
             }
           }
         }
@@ -41334,6 +42731,383 @@
                 "message": "Request could not be completed"
               }
             }
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "PUT * /api/v1/rest/assets/upload/chunks/{uuid}/{index}",
+    "kind": "api",
+    "reason": "Supported DAM integration operation: large files in parts.",
+    "reviewed": true,
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/API/Asset/ChunkUploadController.php"
+    ],
+    "operation": {
+      "operationId": "admin.api.dam.assets.chunk_upload.store",
+      "summary": "Chunked upload: send a part",
+      "description": "REST twin of the Library's chunked upload (docs/api/chunked-upload.md), as the key's own admin with the upload scope: a file over the single-request limit (about 100 MB through the site's proxy) goes up in parts of chunk_size bytes, and the completed upload is the asset. Sends part index as the raw request body (application/octet-stream), chunk_size bytes except the last. Content-Range names its bytes (bytes start-end/total) and X-Chunk-SHA256 its sha256 in hex; a part that does not match is refused and can be sent again. Sending a received part again replaces it.",
+      "security": [
+        {
+          "integrationBearer": []
+        }
+      ],
+      "x-surface": "integration",
+      "x-permissions": [
+        "api.dam.assets.upload"
+      ],
+      "x-feature-flags": [],
+      "x-evidence": [
+        "packages/Mothership/DAM/src/Http/Controllers/API/Asset/ChunkUploadController.php",
+        "packages/Mothership/DAM/src/Http/Controllers/Asset/ChunkUploadController.php",
+        "packages/Mothership/DAM/src/Services/ChunkUploadService.php"
+      ],
+      "parameters": [
+        {
+          "name": "uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "index",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        {
+          "name": "Content-Range",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "example": "bytes 0-33554431/104857600"
+        },
+        {
+          "name": "X-Chunk-SHA256",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "The upload's status: state (receiving, queued, assembling, completed, failed, cancelled, expired), the part size and count, the indices received, and asset_id once completed.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "code": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "retryable": {
+                    "type": "boolean"
+                  },
+                  "upload": {
+                    "type": "object",
+                    "properties": {
+                      "uuid": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "expected_bytes": {
+                        "type": "integer"
+                      },
+                      "received_bytes": {
+                        "type": "integer"
+                      },
+                      "finalization_bytes": {
+                        "type": "integer"
+                      },
+                      "chunk_size": {
+                        "type": "integer"
+                      },
+                      "chunk_count": {
+                        "type": "integer"
+                      },
+                      "received_indices": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        }
+                      },
+                      "asset_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "asset_file_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "failure_code": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "failure_reason": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "expires_at": {
+                        "type": "string"
+                      },
+                      "duplicate": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "similar": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "published_note": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "file_name": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "success": true,
+                "code": null,
+                "message": "Chunk accepted.",
+                "retryable": false,
+                "upload": {
+                  "uuid": "5f0c8a5e-2b7d-4c55-9a51-4c1f1d6d2f10",
+                  "state": "receiving",
+                  "expected_bytes": 104857600,
+                  "received_bytes": 33554432,
+                  "finalization_bytes": 0,
+                  "chunk_size": 33554432,
+                  "chunk_count": 4,
+                  "received_indices": [
+                    0
+                  ],
+                  "asset_id": null,
+                  "asset_file_id": null,
+                  "failure_code": null,
+                  "failure_reason": null,
+                  "expires_at": "2026-11-28T12:00:00.000000Z",
+                  "duplicate": null,
+                  "similar": null,
+                  "published_note": null,
+                  "file_name": null
+                }
+              }
+            }
+          }
+        },
+        "401": {
+          "description": "Missing or invalid bearer authentication (integration routes).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "object"
+                  },
+                  "analysis": {
+                    "type": "object"
+                  }
+                }
+              },
+              "example": {
+                "message": "Request could not be completed"
+              }
+            }
+          }
+        },
+        "403": {
+          "description": "The key lacks this tool's scope, or the account may not do this.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "error": "This action is unauthorized"
+              }
+            }
+          }
+        },
+        "409": {
+          "description": "The upload is completing, completed, cancelled or expired.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "retryable": {
+                    "type": "boolean"
+                  },
+                  "upload": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              },
+              "example": {
+                "success": false,
+                "code": "upload_not_receiving",
+                "message": "The upload is not accepting chunks.",
+                "retryable": false,
+                "upload": null
+              }
+            }
+          }
+        },
+        "422": {
+          "description": "The range, length or checksum does not match the part.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "retryable": {
+                    "type": "boolean"
+                  },
+                  "upload": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              },
+              "example": {
+                "success": false,
+                "code": "chunk_checksum_mismatch",
+                "message": "The chunk checksum does not match.",
+                "retryable": false,
+                "upload": null
+              }
+            }
+          }
+        },
+        "507": {
+          "description": "The part could not be stored; retryable is true.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "retryable": {
+                    "type": "boolean"
+                  },
+                  "upload": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              },
+              "example": {
+                "success": false,
+                "code": "chunk_storage_failed",
+                "message": "The chunk could not be stored.",
+                "retryable": false,
+                "upload": null
+              }
+            }
+          }
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "description": "The part's bytes.",
+        "content": {
+          "application/octet-stream": {
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            },
+            "example": "<part bytes>"
           }
         }
       }

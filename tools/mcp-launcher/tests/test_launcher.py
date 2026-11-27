@@ -438,6 +438,86 @@ class SaveTest(LauncherCase):
         self.assertEqual("draft\\hero.png", self.site.saved[0]["name"])
 
 
+class SaveInPartsTest(LauncherCase):
+    """A file above MOTHERSHIP_MCP_CHUNKED_ABOVE_BYTES goes up in parts through the REST chunked upload."""
+
+    def parts_session(self, **settings):
+        return self.session(MOTHERSHIP_MCP_CHUNKED_ABOVE_BYTES="16", MOTHERSHIP_MCP_POLL_SECONDS="0.01", **settings)
+
+    def test_a_large_file_is_sent_in_parts_and_saved_with_a_matching_sha256(self):
+        data = bytes(range(30))
+        result = self.parts_session().call("library_save", self.save_arguments(path=self.local_file("film.mov", data), title="Film"))
+
+        self.assertNotIn("isError", result)
+        self.assertEqual((7, sha256(data), False), (result["structuredContent"]["asset_id"], result["structuredContent"]["sha256"], result["structuredContent"]["replayed"]))
+        saved = self.site.saved[0]
+        self.assertEqual(("film.mov", sha256(data), 30, True), (saved["name"], saved["sha256"], saved["size"], saved["parts"]))
+        self.assertEqual("Film", saved["arguments"]["title"])
+        self.assertEqual([0, 1, 2, 3], self.site.part_puts)
+        # Nothing is copied aside: the parts are read from local_path.
+        self.assertEqual([], os.listdir(self.temporary))
+
+    def test_a_part_the_site_could_not_store_is_sent_again(self):
+        self.site.fail_parts = 1
+        data = b"x" * 20
+        result = self.parts_session().call("library_save", self.save_arguments(path=self.local_file("film.mov", data)))
+
+        self.assertNotIn("isError", result)
+        self.assertEqual([0, 0, 1, 2], self.site.part_puts)
+        self.assertEqual(sha256(data), self.site.saved[0]["sha256"])
+
+    def test_the_same_request_id_replays_without_sending_parts_again(self):
+        path = self.local_file("film.mov", b"y" * 20)
+        session = self.parts_session()
+        session.call("library_save", self.save_arguments(path=path))
+        sent = list(self.site.part_puts)
+        again = session.call("library_save", self.save_arguments(path=path))
+
+        self.assertEqual((7, True), (again["structuredContent"]["asset_id"], again["structuredContent"]["replayed"]))
+        self.assertEqual(sent, self.site.part_puts)
+        self.assertEqual(1, len(self.site.saved))
+
+    def test_a_save_resumes_an_upload_that_already_has_parts(self):
+        data = b"z" * 20
+        path = self.local_file("film.mov", data)
+        self.site.uploads[REQUEST_ID] = {
+            "uuid": "00000000-0000-4000-8000-000000000099", "state": "receiving", "size": 20, "sha256": sha256(data), "name": "film.mov",
+            "chunk_size": 8, "chunk_count": 3, "parts": {0: data[:8]}, "polls": 0,
+        }
+        result = self.parts_session().call("library_save", self.save_arguments(path=path))
+
+        self.assertNotIn("isError", result)
+        self.assertEqual([1, 2], self.site.part_puts)
+
+    def test_parts_follow_the_part_size_the_site_names(self):
+        self.site.chunk_bytes = 7
+        result = self.parts_session().call("library_save", self.save_arguments(path=self.local_file("film.mov", b"w" * 20)))
+
+        self.assertNotIn("isError", result)
+        self.assertEqual([0, 1, 2], self.site.part_puts)
+
+    def test_a_refused_part_ends_the_save_with_the_sites_words(self):
+        self.site.refuse_parts = True
+        result = self.parts_session().call("library_save", self.save_arguments(path=self.local_file("film.mov", b"v" * 20)))
+
+        self.assert_refused(result, "refused a part of the upload (The chunk checksum does not match.)")
+        self.assertEqual([0], self.site.part_puts)
+        self.assertEqual([], self.site.saved)
+
+    def test_vectorize_refuses_a_file_above_the_part_size_without_a_call(self):
+        result = self.parts_session().call("library_vectorize", {"local_path": self.local_file("huge.png", b"p" * 20), "request_id": REQUEST_ID})
+
+        self.assert_refused(result, "converts images up to 20 MiB")
+        self.assertEqual([], self.site.tool_calls())
+
+    def test_the_default_limit_is_the_apps_upload_limit(self):
+        spec = importlib.util.spec_from_file_location("bridge_under_test", os.path.join(os.path.dirname(HERE), "bridge.py"))
+        bridge = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(bridge)
+        settings = bridge.Settings({})
+        self.assertEqual((21474836480, 64 * 1024 * 1024), (settings.max_file_bytes, settings.chunked_above_bytes))
+
+
 class FetchTest(LauncherCase):
     def destination(self):
         return os.path.join(self.local, "out")

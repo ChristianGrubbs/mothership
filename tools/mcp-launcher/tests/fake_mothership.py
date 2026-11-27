@@ -15,6 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 CREDENTIALS = {"client_id": "client-1", "client_secret": "client-secret-1", "username": "agent@example.test", "password": "agent-password-1"}
 ROUTE_PREFIX = "/api/v1/rest/library/tools/"
+CHUNK_PREFIX = "/api/v1/rest/assets/upload/chunks/"
 VECTORIZATION_ID = "00000000-0000-4000-8000-0000000000aa"
 
 
@@ -35,6 +36,14 @@ class FakeMothership:
         # (tool, request_id) -> the first result of a save or vectorize, which a repeat replays.
         self.saves_by_request = {}
         self.elsewhere_hits = 0
+        # Saves in parts (LibraryOperations::saveChunked): request_id -> the upload, and what reached the part routes.
+        self.chunk_bytes = 8
+        self.uploads = {}
+        self.part_puts = []
+        self.fail_parts = 0
+        self.refuse_parts = False
+        # How many polls a completed upload stays "assembling" before it is done.
+        self.assembly_polls = 1
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
         self.server.daemon_threads = True
         self.server.fake = self
@@ -65,6 +74,15 @@ class FakeMothership:
             answers = self.scripts.get(tool)
             return answers.pop(0) if answers else None
 
+    def upload_by_uuid(self, uuid):
+        with self.lock:
+            return next((upload for upload in self.uploads.values() if upload["uuid"] == uuid), None)
+
+    def upload_status(self, upload):
+        received = sorted(upload["parts"])
+        return {"uuid": upload["uuid"], "state": upload["state"], "expected_bytes": upload["size"], "chunk_size": upload["chunk_size"],
+                "chunk_count": upload["chunk_count"], "received_indices": received, "asset_id": None}
+
     def tool_calls(self, tool=None):
         return [call for call in self.calls if tool is None or call == tool]
 
@@ -75,10 +93,47 @@ class _Handler(BaseHTTPRequestHandler):
     def log_message(self, *_arguments):
         pass
 
+    def do_PUT(self):  # noqa: N802
+        fake = self.server.fake
+        body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        path = urllib.parse.urlsplit(self.path).path
+        if not self._authorized(fake=fake):
+            return self._json(status=401, payload={"message": "Unauthenticated."})
+        uuid, _, index = path[len(CHUNK_PREFIX):].partition("/")
+        upload = fake.upload_by_uuid(uuid)
+        if upload is None or not index.isdigit():
+            return self._json(status=404, payload={"success": False, "code": "upload_not_found", "message": "The upload was not found.", "retryable": False})
+        index = int(index)
+        with fake.lock:
+            fake.part_puts.append(index)
+            failing = fake.fail_parts > 0
+            if failing:
+                fake.fail_parts -= 1
+        if fake.refuse_parts:
+            return self._json(status=422, payload={"success": False, "code": "chunk_checksum_mismatch", "message": "The chunk checksum does not match.", "retryable": False})
+        if failing:
+            return self._json(status=507, payload={"success": False, "code": "chunk_storage_failed", "message": "The chunk could not be stored.", "retryable": True})
+        start = index * upload["chunk_size"]
+        expected = "bytes %d-%d/%d" % (start, start + len(body) - 1, upload["size"])
+        if self.headers.get("Content-Range") != expected or self.headers.get("X-Chunk-SHA256") != hashlib.sha256(body).hexdigest():
+            return self._json(status=422, payload={"success": False, "code": "invalid_chunk_range", "message": "The chunk range is invalid.", "retryable": False})
+        upload["parts"][index] = body
+        return self._json(status=200, payload={"success": True, "upload": fake.upload_status(upload)})
+
     def do_POST(self):  # noqa: N802
         fake = self.server.fake
         body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
         path = urllib.parse.urlsplit(self.path).path
+        if path.startswith(CHUNK_PREFIX) and path.endswith("/complete"):
+            if not self._authorized(fake=fake):
+                return self._json(status=401, payload={"message": "Unauthenticated."})
+            upload = fake.upload_by_uuid(path[len(CHUNK_PREFIX):-len("/complete")])
+            if upload is None:
+                return self._json(status=404, payload={"success": False, "code": "upload_not_found", "message": "The upload was not found.", "retryable": False})
+            if sorted(upload["parts"]) != list(range(upload["chunk_count"])):
+                return self._json(status=422, payload={"success": False, "code": "upload_incomplete", "message": "Not all chunks have been received.", "retryable": False})
+            upload["state"] = "queued"
+            return self._json(status=202, payload={"success": True, "upload": fake.upload_status(upload)})
         if path == "/oauth/token":
             return self._grant(fake=fake, body=body)
         if path == "/elsewhere":
@@ -101,6 +156,10 @@ class _Handler(BaseHTTPRequestHandler):
             fake.json_bodies.append(arguments)
         return self._tool(fake=fake, tool=tool, arguments=arguments, upload=upload)
 
+    def _authorized(self, fake):
+        authorization = self.headers.get("Authorization", "")
+        return authorization.startswith("Bearer ") and authorization[7:] in fake.tokens
+
     def _grant(self, fake, body):
         form = dict(urllib.parse.parse_qsl(body.decode("utf-8")))
         if fake.refuse_grant:
@@ -116,6 +175,10 @@ class _Handler(BaseHTTPRequestHandler):
         kind = self.headers.get("Content-Type", "")
         if kind.startswith("application/json"):
             return json.loads(body.decode("utf-8") or "{}"), None
+        if kind.startswith("application/x-www-form-urlencoded"):
+            # A save in parts: the arguments and the file's name, size and sha256, and no file.
+            form = dict(urllib.parse.parse_qsl(body.decode("utf-8")))
+            return json.loads(form["arguments"]), ("chunked", json.loads(form["upload"]))
         boundary = kind.split("boundary=", 1)[1].strip('"').encode("ascii")
         arguments, meta, file_name, data_in = {}, {}, None, None
         for chunk in body.split(b"--" + boundary)[1:-1]:
@@ -135,6 +198,8 @@ class _Handler(BaseHTTPRequestHandler):
         return arguments, (meta.get("name") or file_name, data_in)
 
     def _tool(self, fake, tool, arguments, upload):
+        if tool == "save" and upload is not None and upload[0] == "chunked":
+            return self._save_in_parts(fake=fake, arguments=arguments, meta=upload[1])
         if tool in ("save", "vectorize") and upload is not None:
             file_name, data = upload
             with fake.lock:
@@ -156,6 +221,39 @@ class _Handler(BaseHTTPRequestHandler):
         if tool == "search" and str(arguments.get("query", "")).startswith("sleep:"):
             time.sleep(float(arguments["query"].split(":")[1]))
         return self._json(status=200, payload={"result": {"folders": [{"id": 1, "name": "Renders"}], "next_after_id": None}})
+
+    def _save_in_parts(self, fake, arguments, meta):
+        """As LibraryOperations::saveChunked: 202 with the upload's status until it is assembled, then the save."""
+        key = ("save", arguments.get("request_id"))
+        if key in fake.saves_by_request:
+            return self._replay(fake=fake, tool="save", arguments=arguments, first=None)
+        chunked = meta["chunked"]
+        with fake.lock:
+            upload = fake.uploads.get(arguments.get("request_id"))
+            if upload is None:
+                count = -(-chunked["size"] // fake.chunk_bytes)
+                upload = {"uuid": "00000000-0000-4000-8000-%012d" % (len(fake.uploads) + 100), "state": "receiving", "size": chunked["size"],
+                          "sha256": chunked["sha256"], "name": meta["name"], "chunk_size": fake.chunk_bytes, "chunk_count": count, "parts": {}, "polls": 0}
+                fake.uploads[arguments.get("request_id")] = upload
+        if upload["state"] == "queued":
+            upload["polls"] += 1
+            if upload["polls"] > fake.assembly_polls:
+                upload["state"] = "completed"
+            else:
+                upload["state"] = "assembling"
+                return self._json(status=202, payload={"upload": fake.upload_status(upload)})
+        elif upload["state"] == "assembling":
+            upload["state"] = "completed"
+        if upload["state"] != "completed":
+            return self._json(status=202, payload={"upload": fake.upload_status(upload)})
+        data = b"".join(upload["parts"][index] for index in range(upload["chunk_count"]))
+        digest = hashlib.sha256(data).hexdigest()
+        if digest != upload["sha256"]:
+            return self._json(status=422, payload={"error": "The assembled file does not match the sha256 that was sent."})
+        with fake.lock:
+            fake.saved.append({"tool": "save", "name": upload["name"], "sha256": digest, "size": len(data), "arguments": arguments, "parts": True})
+        first = {"asset_id": 7 + len(fake.saves_by_request), "name": arguments.get("name", upload["name"]), "sha256": digest, "source_sha256": digest, "size": len(data)}
+        return self._replay(fake=fake, tool="save", arguments=arguments, first=first)
 
     def _replay(self, fake, tool, arguments, first):
         """A save or vectorize: the first call with a request_id is applied once, a repeat answers that first result

@@ -14,6 +14,7 @@ use Mothership\DAM\Mcp\LibraryOperations;
 use Mothership\DAM\Mcp\LibraryRefusal;
 use Mothership\DAM\Mcp\LibraryTool;
 use Mothership\DAM\Mcp\LibraryTransfer;
+use Mothership\DAM\Mcp\LibraryUploadPending;
 use Mothership\User\Models\Admin;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -42,6 +43,11 @@ class LibraryToolController extends Controller
         try {
             $input = $this->input(request: $request);
             $outcome = (new LibraryTool(action: $tool))->perform(input: $input, via: 'rest', run: function (array $arguments) use ($request, $tool, $admin): array|LibraryTransfer {
+                // A large save's bytes arrive in parts, through the REST chunked upload, not with this call.
+                $chunked = $tool === 'save' && array_key_exists('local_path', $arguments) ? $this->chunked(request: $request) : null;
+                if ($chunked !== null) {
+                    return $this->operations->saveChunked(arguments: $arguments, file: $chunked, actor: $admin);
+                }
                 // Checked after the field rules, so a call with bad arguments reads the same refusal as on stdio.
                 $upload = $this->upload(request: $request, tool: $tool, arguments: $arguments);
                 if ($tool === 'fetch' || ($tool === 'vectorization' && isset($arguments['format']))) {
@@ -61,6 +67,8 @@ class LibraryToolController extends Controller
             return $this->refuse(message: ValidationMessages::from($e), status: 422);
         } catch (LibraryRefusal $e) {
             return $this->refuse(message: $e->getMessage(), status: $e->status);
+        } catch (LibraryUploadPending $pending) {
+            return response()->json(['upload' => $pending->upload], 202)->header('Cache-Control', 'private, no-store');
         }
 
         return $outcome instanceof LibraryTransfer
@@ -111,6 +119,35 @@ class LibraryToolController extends Controller
         }
 
         return $file;
+    }
+
+    /**
+     * A large save's file, from the JSON field upload: {"name": ..., "chunked": {"size", "sha256", "last_modified"}};
+     * null for a save whose file comes with the call. A chunked save never carries the file itself.
+     *
+     * @return array{name: string, size: int, sha256: string, last_modified: int}|null
+     */
+    private function chunked(Request $request): ?array
+    {
+        $raw = $request->request->all()['upload'] ?? null;
+        $meta = is_string($raw) ? json_decode($raw, true) : null;
+        if (! is_array($meta) || ! array_key_exists('chunked', $meta)) {
+            return null;
+        }
+        if ($request->file('file') !== null) {
+            throw new LibraryRefusal(message: 'Send a large file either in parts (upload.chunked) or with the call (the field file), not both.', status: 422);
+        }
+        $chunked = $meta['chunked'];
+        $name = $meta['name'] ?? null;
+        $valid = is_array($chunked) && is_string($name) && $name !== ''
+            && is_int($chunked['size'] ?? null) && $chunked['size'] > 0
+            && is_string($chunked['sha256'] ?? null) && preg_match('/\A[a-f0-9]{64}\z/i', $chunked['sha256']) === 1
+            && is_int($chunked['last_modified'] ?? null) && $chunked['last_modified'] >= 0;
+        if (! $valid) {
+            throw new LibraryRefusal(message: 'upload.chunked needs the file\'s size (bytes), sha256 (hex) and last_modified (ms), and upload.name its name.', status: 422);
+        }
+
+        return ['name' => $name, 'size' => $chunked['size'], 'sha256' => $chunked['sha256'], 'last_modified' => $chunked['last_modified']];
     }
 
     /**

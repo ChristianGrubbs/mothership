@@ -119,6 +119,19 @@ final class CreativeHubSaver
     }
 
     /**
+     * What a new-asset save's request_id is bound to (app, folder, name, source, opened bytes, file bytes): a retry
+     * must send the same, or it is refused. Shared by saveNew and the library's chunked save, so a request_id means
+     * the same save whichever way its bytes arrived.
+     */
+    public static function newRequestSha256(string $appId, int $folderId, string $name, string $fileSha256, ?int $sourceId = null, ?string $openedSha256 = null, ?int $sourceAttachmentId = null): string
+    {
+        return hash('sha256', json_encode([
+            $appId, $folderId, $name, $sourceId, $openedSha256, $fileSha256,
+            ...($sourceAttachmentId === null ? [] : [$sourceAttachmentId]),
+        ], JSON_THROW_ON_ERROR));
+    }
+
+    /**
      * Publishes $file as a new asset in $folder under the first free name. `existing_asset => null` is the create-only
      * switch: the publisher then never looks for a same-name asset to overwrite. The publisher attaches the folder,
      * inherits its access list (ADR 0010), queues thumbnails and flags non-admin uploads.
@@ -139,10 +152,7 @@ final class CreativeHubSaver
         $requestId = strtolower($requestId);
         $fileSha256 = hash_file('sha256', $file->getRealPath());
         abort_if($fileSha256 === false, 422);
-        $requestSha256 = hash('sha256', json_encode([
-            $app['id'], (int) $folder->id, $name, $source === null ? null : (int) $source->id, $openedSha256, $fileSha256,
-            ...($sourceFile === null ? [] : [(int) $sourceFile->attachment_id]),
-        ], JSON_THROW_ON_ERROR));
+        $requestSha256 = self::newRequestSha256(appId: (string) $app['id'], folderId: (int) $folder->id, name: $name, fileSha256: $fileSha256, sourceId: $source === null ? null : (int) $source->id, openedSha256: $openedSha256, sourceAttachmentId: $sourceFile === null ? null : (int) $sourceFile->attachment_id);
         $finalizationKey = hash('sha256', 'creative-hub:'.$actorId.':'.$requestId);
         $marker = fn () => DB::table('dam_creative_hub_saves')
             ->where('admin_id', $actorId)->where('request_id', $requestId)->first();

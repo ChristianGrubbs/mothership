@@ -13,6 +13,7 @@ import http.client
 import json
 import os
 import queue
+import re
 import threading
 import time
 import urllib.error
@@ -24,8 +25,17 @@ CHECKOUT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 SERVER_COMMAND = ("artisan", "mcp:start", "mothership")
 ROUTE_PREFIX = "/api/v1/rest/library/tools/"
 TOOL_PREFIX = "library_"
-# The deployed stack's PHP upload_max_filesize (96M; post_max_size 100M, under Cloudflare's ~100 MB body cap): the largest file one HTTPS upload carries.
-DEFAULT_MAX_FILE_BYTES = 96 * 1024 * 1024
+# The app's upload limit (DAM_UPLOAD_MAX_FILE_BYTES): the largest file library_save takes.
+DEFAULT_MAX_FILE_BYTES = 20 * 1024 * 1024 * 1024
+# A larger file goes up in parts (docs/api/chunked-upload.md): one HTTPS request carries at most the stack's PHP
+# upload_max_filesize (96M) under the site proxy's ~100 MB body cap, so a save in one request stays well below it.
+DEFAULT_CHUNKED_ABOVE_BYTES = 64 * 1024 * 1024
+CHUNK_ROUTE = "/api/v1/rest/assets/upload/chunks/"
+# How often a save in parts asks again while the site assembles the file, and how long it waits for that.
+DEFAULT_POLL_SECONDS = 2.0
+DEFAULT_ASSEMBLY_SECONDS = 3600.0
+# Rounds of sending missing parts before a save in parts gives up (the site lost parts it had acknowledged).
+PART_ROUNDS = 3
 CHUNK_BYTES = 1024 * 1024
 # LibraryOperations::MAX_NAME_TRIES: how many name, name-2, name-3 ... a copy tries before giving up.
 MAX_NAME_TRIES = 1000
@@ -64,6 +74,13 @@ class Settings:
         self.fetch_dir = environ.get("MOTHERSHIP_MCP_FETCH_DIR") or temporary + "/mothership-library"
         self.max_file_bytes = _positive_int(
             environ=environ, key="MOTHERSHIP_MCP_MAX_FILE_BYTES", default=DEFAULT_MAX_FILE_BYTES
+        )
+        self.chunked_above_bytes = _positive_int(
+            environ=environ, key="MOTHERSHIP_MCP_CHUNKED_ABOVE_BYTES", default=DEFAULT_CHUNKED_ABOVE_BYTES
+        )
+        self.poll_seconds = _positive_float(environ=environ, key="MOTHERSHIP_MCP_POLL_SECONDS", default=DEFAULT_POLL_SECONDS)
+        self.assembly_seconds = _positive_float(
+            environ=environ, key="MOTHERSHIP_MCP_ASSEMBLY_SECONDS", default=DEFAULT_ASSEMBLY_SECONDS
         )
         self.idle_seconds = _positive_float(environ=environ, key="MOTHERSHIP_MCP_IDLE_SECONDS", default=15.0)
         self.timeout_seconds = _positive_float(environ=environ, key="MOTHERSHIP_MCP_TIMEOUT_SECONDS", default=120.0)
@@ -372,6 +389,24 @@ class LocalFiles:
             )
         return real, details.st_size
 
+    def fingerprint(self, real_path: str, size: int) -> tuple:
+        """The sha256 of a file sent in parts, read in full once, and its (size, mtime_ns). A file that changes while
+        it is read is refused."""
+        digest = hashlib.sha256()
+        read = 0
+        try:
+            with open(real_path, "rb") as source:
+                before = os.fstat(source.fileno())
+                for chunk in iter(lambda: source.read(CHUNK_BYTES), b""):
+                    digest.update(chunk)
+                    read += len(chunk)
+                after = os.fstat(source.fileno())
+        except OSError:
+            raise LauncherFailure("The file at local_path could not be read in full, so nothing was saved.") from None
+        if read != size or (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
+            raise LauncherFailure("The file at local_path changed while it was being read. Save it again once it is finished.")
+        return digest.hexdigest(), (after.st_size, after.st_mtime_ns)
+
     def snapshot(self, real_path: str, size: int) -> tuple:
         """A private copy of the file to upload, so a tool still writing the original cannot change what is sent.
 
@@ -571,6 +606,13 @@ class Library:
         import shutil
 
         real_path, size = self.files.source(path=arguments["local_path"])
+        if size > self.settings.chunked_above_bytes:
+            if tool != "save":
+                raise LauncherFailure(
+                    "library_vectorize converts images up to 20 MiB; this file is %s, so nothing was sent."
+                    % _megabytes(bytes_count=size)
+                )
+            return self._save_in_parts(arguments=arguments, real_path=real_path, size=size)
         folder, snapshot = self.files.snapshot(real_path=real_path, size=size)
         started = time.monotonic()
         try:
@@ -604,6 +646,116 @@ class Library:
             return self._answer(tool=tool, status=status, payload=payload)
         finally:
             shutil.rmtree(folder, True)
+
+    def _save_in_parts(self, arguments: dict, real_path: str, size: int) -> dict:
+        """library_save of a file too large for one request (LibraryOperations::saveChunked). Each call sends the
+        arguments with the file's size and sha256: until its upload is completed the site answers 202 with the upload's
+        status, and the launcher sends the missing parts, completes it, and asks again with the same request_id. The
+        bytes are read straight from local_path, each part with its own sha256; the site compares the assembled file
+        with the whole file's sha256, and a file that changes while it is sent is refused here.
+        """
+        started = time.monotonic()
+        digest, fingerprint = self.files.fingerprint(real_path=real_path, size=size)
+        upload = {"name": os.path.basename(real_path), "chunked": {"size": size, "sha256": digest, "last_modified": fingerprint[1] // 1000000}}
+        form = urllib.parse.urlencode(
+            {"arguments": json.dumps(arguments, ensure_ascii=False), "upload": json.dumps(upload, ensure_ascii=False)}
+        ).encode("utf-8")
+
+        def build(token: str) -> urllib.request.Request:
+            return self._request(tool="save", token=token, data=form, content_type="application/x-www-form-urlencoded")
+
+        rounds = 0
+        parts = 0
+        assembling_since = None
+        while True:
+            status, _, response, payload = self._exchange(tool="save", build=build)
+            if response is not None:
+                response.close()
+                raise LauncherFailure("The Mothership answered in a shape the launcher does not know (HTTP %d). Try again." % status)
+            if status != 202:
+                self.log.event(
+                    "info", "transfer.in", "Library._save_in_parts",
+                    {"status": status, "size": size, "parts": parts, "seconds": round(time.monotonic() - started, 3)},
+                )
+                answer = self._answer(tool="save", status=status, payload=payload)
+                stored = answer["structuredContent"].get("source_sha256")
+                if stored is not None and stored != digest:
+                    raise LauncherFailure("The Mothership recorded a different sha256 for this file than the one read here. Check the saved asset.")
+                return answer
+            state = _upload_status(payload=payload)
+            if state["state"] == "receiving":
+                rounds += 1
+                if rounds > PART_ROUNDS:
+                    raise LauncherFailure("The Mothership kept asking for parts it had already been sent, so the save stopped. Try again with the same request_id.")
+                parts += self._send_parts(real_path=real_path, size=size, fingerprint=fingerprint, state=state)
+                self._chunk_call(method="POST", path=state["uuid"] + "/complete", data=None, headers={})
+                continue
+            if state["state"] in ("queued", "assembling"):
+                assembling_since = assembling_since or time.monotonic()
+                if time.monotonic() - assembling_since > self.settings.assembly_seconds:
+                    raise LauncherFailure(
+                        "The Mothership is still assembling the file. Call library_save again with the same request_id to collect the result."
+                    )
+                time.sleep(self.settings.poll_seconds)
+                continue
+            raise LauncherFailure("The upload stopped in the state %s, so nothing was saved. Save again with a new request_id." % state["state"])
+
+    def _send_parts(self, real_path: str, size: int, fingerprint: tuple, state: dict) -> int:
+        """Sends each part the site has not received, read from local_path. Returns how many were sent."""
+        chunk_size, received = state["chunk_size"], set(state["received_indices"])
+        sent = 0
+        with open(real_path, "rb") as source:
+            for index in range(state["chunk_count"]):
+                if index in received:
+                    continue
+                offset = index * chunk_size
+                source.seek(offset)
+                data = source.read(min(chunk_size, size - offset))
+                details = os.fstat(source.fileno())
+                if (details.st_size, details.st_mtime_ns) != fingerprint or len(data) != min(chunk_size, size - offset):
+                    raise LauncherFailure(
+                        "The file at local_path changed while it was being sent, so nothing was saved. Save it again with a new request_id once it is finished."
+                    )
+                self._chunk_call(
+                    method="PUT", path="%s/%d" % (state["uuid"], index), data=data,
+                    headers={
+                        "Content-Type": "application/octet-stream",
+                        "Content-Range": "bytes %d-%d/%d" % (offset, offset + len(data) - 1, size),
+                        "X-Chunk-SHA256": hashlib.sha256(data).hexdigest(),
+                    },
+                )
+                sent += 1
+        return sent
+
+    def _chunk_call(self, method: str, path: str, data, headers: dict) -> dict:
+        """One call to the REST chunked upload; a refusal it marks retryable (a part not stored) is sent again."""
+        for attempt in range(1, ATTEMPTS + 1):
+
+            def build(token: str) -> urllib.request.Request:
+                request = urllib.request.Request(
+                    self.settings.base_url + CHUNK_ROUTE + path, data=data, method=method,
+                    headers=dict(headers, **{"Accept": "application/json", "Authorization": "Bearer " + token, "User-Agent": USER_AGENT}),
+                )
+                return request
+
+            status, _, response, payload = self._exchange(tool="chunk_upload", build=build)
+            if response is not None:
+                response.close()
+                raise LauncherFailure("The Mothership answered a part in a shape the launcher does not know (HTTP %d). Try again." % status)
+            if status in (200, 201, 202) and isinstance(payload, dict) and payload.get("success") is True:
+                return payload
+            retryable = isinstance(payload, dict) and payload.get("retryable") is True
+            if retryable and attempt < ATTEMPTS:
+                time.sleep(_backoff(retry_after=None, attempt=attempt))
+                continue
+            message = payload.get("message") if isinstance(payload, dict) else None
+            if status == 403 and isinstance(payload, dict) and payload.get("error") == "This action is unauthorized":
+                message = "the library's API key lacks the upload scope (api.dam.assets.upload)"
+            raise LauncherFailure(
+                "The Mothership refused a part of the upload (%s), so nothing was saved. Try again with the same request_id."
+                % (message if isinstance(message, str) and message else "HTTP %d" % status)
+            )
+        raise LauncherFailure(NOT_ANSWERING % "a part was not stored")
 
     def _copy_out(self, response, headers, requested) -> dict:
         """library_fetch, or library_vectorization with format: the bytes stream back, the result in X-Library-Result."""
@@ -694,6 +846,20 @@ class Library:
         if status == 200 and isinstance(result, dict):
             return structured(result=result)
         raise LauncherFailure(_refusal(tool=tool, status=status, payload=payload))
+
+
+def _upload_status(payload) -> dict:
+    """The upload status of a 202 from a save in parts, checked before anything is sent from it."""
+    upload = payload.get("upload") if isinstance(payload, dict) else None
+    usable = (
+        isinstance(upload, dict) and isinstance(upload.get("uuid"), str) and re.fullmatch(r"[0-9a-fA-F-]{36}", upload["uuid"]) is not None
+        and isinstance(upload.get("state"), str) and isinstance(upload.get("chunk_size"), int) and upload["chunk_size"] > 0
+        and isinstance(upload.get("chunk_count"), int) and upload["chunk_count"] > 0
+        and isinstance(upload.get("received_indices"), list) and all(isinstance(index, int) for index in upload["received_indices"])
+    )
+    if not usable:
+        raise LauncherFailure("The Mothership answered a save in parts without a usable upload status. Try again.")
+    return upload
 
 
 def _backoff(retry_after, attempt: int) -> float:
