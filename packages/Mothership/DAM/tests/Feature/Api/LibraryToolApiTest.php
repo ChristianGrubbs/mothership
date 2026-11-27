@@ -15,10 +15,14 @@ use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Laravel\Passport\ClientRepository;
 use Mothership\AdminApi\Models\Apikey;
+use Mothership\DAM\Jobs\FinalizeChunkUpload;
 use Mothership\DAM\Mcp\LibraryTool;
 use Mothership\DAM\Mcp\MothershipServer;
 use Mothership\DAM\Models\Asset;
+use Mothership\DAM\Models\ChunkUpload;
 use Mothership\DAM\Models\Directory;
+use Mothership\DAM\Services\ChunkUploadService;
+use Mothership\DAM\Services\ContentStore;
 use Mothership\DAM\Services\DirectoryPermissionService;
 use Mothership\DAM\Vectorization\AgentVectorizations;
 use Mothership\User\Models\Admin;
@@ -227,4 +231,102 @@ it('answers another account\'s conversion like a missing one over REST', functio
     ($this->send)('admin.api.dam.library_tools.vectorization', ['id' => (string) $row->id], null, $headers)->assertNotFound()->assertExactJson(['error' => 'Not found.']);
     ($this->send)('admin.api.dam.library_tools.vectorization', ['id' => (string) $row->id, 'format' => 'svg'], null, $headers)->assertNotFound()->assertExactJson(['error' => 'Not found.']);
     expect(DB::table('dam_vectorizations')->where('id', $row->id)->value('admin_id'))->toBe((int) $owner->id);
+});
+
+/*
+ * Large files (docs/api/chunked-upload.md): the REST chunked upload, and a chunked library_save over it. Parts of 64
+ * bytes here; the finalize job is run by hand (the queue is faked).
+ */
+function restChunkParts(string $uuid, string $bytes, int $chunkBytes, array $headers): void
+{
+    foreach (str_split($bytes, $chunkBytes) as $index => $chunk) {
+        $start = $index * $chunkBytes;
+        test()->withHeaders($headers)->call('PUT', route('admin.api.dam.assets.chunk_upload.store', [$uuid, $index]), server: [
+            'CONTENT_TYPE'        => 'application/octet-stream',
+            'HTTP_CONTENT_RANGE'  => sprintf('bytes %d-%d/%d', $start, $start + strlen($chunk) - 1, strlen($bytes)),
+            'HTTP_X_CHUNK_SHA256' => hash('sha256', $chunk),
+        ], content: $chunk)->assertOk()->assertJsonPath('success', true);
+    }
+}
+
+function finalizeRestChunks(string $uuid): void
+{
+    $upload = ChunkUpload::query()->where('uuid', $uuid)->firstOrFail();
+    (new FinalizeChunkUpload($upload->id))->handle(app(ChunkUploadService::class));
+}
+
+it('uploads a file in parts over REST and publishes it as an asset, behind the upload scope', function () {
+    config(['dam.explorer.upload.chunk_bytes' => 64]);
+    $bytes = (string) file_get_contents(($this->png)('parts.png', 32));
+    $init = ['directory_id' => (int) $this->folder->id, 'original_name' => 'parts.png', 'size' => strlen($bytes), 'last_modified' => 1_788_864_000_000, 'fingerprint' => hash('sha256', $bytes)];
+
+    $reader = libraryToolHeaders(hubMember($this->folder, LIBRARY_REST_KEYS), 'custom', ['api.dam', 'api.dam.assets']);
+    $this->withHeaders($reader)->postJson(route('admin.api.dam.assets.chunk_upload.initialize'), $init)->assertForbidden();
+    // The api guard keeps the user it resolved; forget it before calling with another key.
+    app('auth')->forgetGuards();
+
+    $upload = $this->withHeaders($this->headers)->postJson(route('admin.api.dam.assets.chunk_upload.initialize'), $init)
+        ->assertCreated()->assertJsonPath('upload.state', 'receiving')->json('upload');
+    expect($upload['chunk_size'])->toBe(64)->and($upload['chunk_count'])->toBe(intdiv(strlen($bytes) + 63, 64));
+    restChunkParts($upload['uuid'], $bytes, 64, $this->headers);
+    $this->withHeaders($this->headers)->postJson(route('admin.api.dam.assets.chunk_upload.complete', $upload['uuid']))->assertAccepted();
+    finalizeRestChunks($upload['uuid']);
+
+    $status = $this->withHeaders($this->headers)->getJson(route('admin.api.dam.assets.chunk_upload.status', $upload['uuid']))
+        ->assertOk()->assertJsonPath('upload.state', 'completed')->json('upload');
+    $asset = Asset::query()->findOrFail($status['asset_id']);
+    expect($asset->file_name)->toBe('parts.png')
+        ->and((int) $asset->created_by)->toBe((int) $this->member->id)
+        ->and((string) app(ContentStore::class)->current($asset)->sha256)->toBe(hash('sha256', $bytes));
+
+    // Another account's upload is not reachable with this key.
+    $other = libraryToolHeaders(hubMember($this->folder, LIBRARY_REST_KEYS));
+    app('auth')->forgetGuards();
+    $this->withHeaders($other)->getJson(route('admin.api.dam.assets.chunk_upload.status', $upload['uuid']))->assertForbidden();
+});
+
+it('saves a large file through library_save in parts, then replays the request_id', function () {
+    config(['dam.explorer.upload.chunk_bytes' => 64]);
+    $path = ($this->png)('big-render.png', 32);
+    $bytes = (string) file_get_contents($path);
+    $arguments = ($this->saveArguments)($path, ['title' => 'Big render', 'tags' => ['Lobby'], 'producer' => ['tool' => 'blender', 'version' => '4.4']]);
+    $chunked = ['size' => strlen($bytes), 'sha256' => hash('sha256', $bytes), 'last_modified' => 1_788_864_000_000];
+    $save = fn (array $meta = [], array $extra = []) => $this->withHeaders($this->headers)->post(route('admin.api.dam.library_tools.save'), [
+        'arguments' => json_encode([...$arguments, ...$extra]),
+        'upload'    => json_encode(['name' => 'big-render.png', 'chunked' => [...$chunked, ...$meta]]),
+    ]);
+
+    $pending = $save()->assertStatus(202)->assertJsonPath('upload.state', 'receiving')->json('upload');
+    // Asking again before any part arrives reaches the same upload.
+    expect($save()->assertStatus(202)->json('upload.uuid'))->toBe($pending['uuid']);
+    restChunkParts($pending['uuid'], $bytes, 64, $this->headers);
+    $this->withHeaders($this->headers)->postJson(route('admin.api.dam.assets.chunk_upload.complete', $pending['uuid']))->assertAccepted();
+    $save()->assertStatus(202)->assertJsonPath('upload.state', 'queued');
+    finalizeRestChunks($pending['uuid']);
+
+    $first = $save()->assertOk()->json('result');
+    expect($first)->toMatchArray(['name' => 'big-render.png', 'title' => 'Big render', 'sha256' => $chunked['sha256'], 'source_sha256' => $chunked['sha256'], 'size' => strlen($bytes), 'replayed' => false, 'tags' => ['Lobby']]);
+    $again = $save()->assertOk()->json('result');
+    expect($again['asset_id'])->toBe($first['asset_id'])->and($again['replayed'])->toBeTrue()
+        ->and(Asset::query()->where('file_name', 'like', 'big-render%')->count())->toBe(1);
+    $record = json_decode((string) DB::table('dam_creative_hub_saves')->where('request_id', strtolower($arguments['request_id']))->value('evidence'), true);
+    expect($record)->toMatchArray(['producer' => 'blender', 'producer_version' => '4.4']);
+
+    // The same request_id with other bytes is a different save.
+    $save(['sha256' => str_repeat('a', 64)])->assertStatus(409);
+});
+
+it('refuses a chunked library_save that names a stack, or sends the file as well', function () {
+    $path = ($this->png)('stack-part.png');
+    $bytes = (string) file_get_contents($path);
+    $upload = json_encode(['name' => 'stack-part.png', 'chunked' => ['size' => strlen($bytes), 'sha256' => hash('sha256', $bytes), 'last_modified' => 0]]);
+    $stack = hubAsset($this->folder);
+    $arguments = ['local_path' => $path, 'stack_asset_id' => (int) $stack->id, 'producer' => ['tool' => 'blender'], 'request_id' => (string) Str::uuid()];
+
+    $this->withHeaders($this->headers)->post(route('admin.api.dam.library_tools.save'), ['arguments' => json_encode($arguments), 'upload' => $upload])
+        ->assertStatus(422)->assertJsonPath('error', 'A file this large is saved as a new asset: pass folder_id instead of stack_asset_id. Joining a stack takes a file small enough for one request.');
+    $this->withHeaders($this->headers)->post(route('admin.api.dam.library_tools.save'), [
+        'arguments' => json_encode(($this->saveArguments)($path)), 'upload' => $upload, 'file' => new UploadedFile($path, 'stack-part.png', null, null, true),
+    ])->assertStatus(422);
+    expect(ChunkUpload::query()->count())->toBe(0);
 });

@@ -40,7 +40,7 @@ class ChunkUploadController extends Controller
         ]);
 
         try {
-            $upload = $this->service->initialize($metadata, (int) auth('admin')->id());
+            $upload = $this->service->initialize($metadata, $this->actorId());
 
             return $this->success(
                 upload: $this->statusOf($upload),
@@ -55,7 +55,7 @@ class ChunkUploadController extends Controller
     public function status(string $uuid): JsonResponse
     {
         try {
-            $upload = $this->service->findAuthorized($uuid, (int) auth('admin')->id());
+            $upload = $this->service->findAuthorized($uuid, $this->actorId());
 
             return $this->success($this->statusOf($upload), 200, 'Upload status retrieved.');
         } catch (ChunkUploadError $error) {
@@ -66,7 +66,7 @@ class ChunkUploadController extends Controller
     public function store(Request $request, string $uuid, int $index): JsonResponse
     {
         try {
-            $upload = $this->service->findAuthorized($uuid, (int) auth('admin')->id());
+            $upload = $this->service->findAuthorized($uuid, $this->actorId());
             $this->service->storePart(
                 upload: $upload,
                 index: $index,
@@ -86,7 +86,7 @@ class ChunkUploadController extends Controller
     public function complete(string $uuid): JsonResponse
     {
         try {
-            $upload = $this->service->findAuthorized($uuid, (int) auth('admin')->id());
+            $upload = $this->service->findAuthorized($uuid, $this->actorId());
             $upload = $this->service->queueCompletion($upload);
             $status = $upload->state === ChunkUpload::STATE_COMPLETED ? 200 : 202;
 
@@ -99,7 +99,7 @@ class ChunkUploadController extends Controller
     public function cancel(string $uuid): JsonResponse
     {
         try {
-            $upload = $this->service->findAuthorized($uuid, (int) auth('admin')->id());
+            $upload = $this->service->findAuthorized($uuid, $this->actorId());
             $this->service->cancel($upload);
 
             return $this->success($this->statusOf($upload->refresh()), 200, 'Upload cancelled.');
@@ -123,7 +123,7 @@ class ChunkUploadController extends Controller
         );
 
         // P5c (D16): the near-duplicate hint, pairs the admin can see both sides of; null when there is none.
-        $viewer = auth('admin')->user();
+        $viewer = $this->actor();
         $hints = $receipt === null || ! $viewer instanceof Admin ? [] : app(SimilarImages::class)->hints(
             receipts: [$receipt],
             viewer: $viewer,
@@ -140,6 +140,19 @@ class ChunkUploadController extends Controller
         );
 
         return [...$this->service->status($upload), 'duplicate' => $notices[0] ?? null, 'similar' => $hints[0] ?? null, 'published_note' => $note, 'file_name' => $publishedName];
+    }
+
+    /** The signed-in uploader: the admin session here; the API key's admin on the REST twin. */
+    protected function actor(): ?Admin
+    {
+        $admin = auth('admin')->user();
+
+        return $admin instanceof Admin ? $admin : null;
+    }
+
+    protected function actorId(): int
+    {
+        return (int) $this->actor()?->id;
     }
 
     protected function success(array $upload, int $status, string $message): JsonResponse

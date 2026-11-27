@@ -7430,6 +7430,15 @@
     "reviewed": true
   },
   {
+    "id": "HEAD * /api/v1/rest/assets/upload/chunks/{uuid}",
+    "kind": "head-alias",
+    "reason": "Laravel HEAD alias; see corresponding GET identity.",
+    "sources": [
+      "packages/Mothership/DAM/src/Http/Controllers/Asset/ChunkUploadController.php"
+    ],
+    "reviewed": true
+  },
+  {
     "id": "HEAD * /api/v1/rest/assets/{asset}/attachments/{attachment}/revisions",
     "kind": "head-alias",
     "reason": "Laravel HEAD alias; see corresponding GET identity.",

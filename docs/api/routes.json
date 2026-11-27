@@ -1075,6 +1075,26 @@
         "source": "packages/Mothership/Admin/src/Http/Controllers/Settings/UserController.php"
     },
     {
+        "id": "DELETE * /api/v1/rest/assets/upload/chunks/{uuid}",
+        "method": "DELETE",
+        "domain": "*",
+        "uri": "/api/v1/rest/assets/upload/chunks/{uuid}",
+        "name": "admin.api.dam.assets.chunk_upload.cancel",
+        "action": "Mothership\\DAM\\Http\\Controllers\\API\\Asset\\ChunkUploadController@cancel",
+        "middleware": [
+            "api",
+            "auth:api",
+            "api.scope",
+            "accept.json",
+            "request.locale"
+        ],
+        "wheres": {
+            "id": "[0-9]+",
+            "uuid": "[\\da-fA-F]{8}-[\\da-fA-F]{4}-[\\da-fA-F]{4}-[\\da-fA-F]{4}-[\\da-fA-F]{12}"
+        },
+        "source": "packages/Mothership/DAM/src/Http/Controllers/Asset/ChunkUploadController.php"
+    },
+    {
         "id": "DELETE * /api/v1/rest/assets/{asset}/files/{file}",
         "method": "DELETE",
         "domain": "*",
@@ -7847,6 +7867,26 @@
             "id": "[0-9]+"
         },
         "source": "packages/Mothership/DAM/src/Http/Controllers/API/Asset/AssetController.php"
+    },
+    {
+        "id": "GET * /api/v1/rest/assets/upload/chunks/{uuid}",
+        "method": "GET",
+        "domain": "*",
+        "uri": "/api/v1/rest/assets/upload/chunks/{uuid}",
+        "name": "admin.api.dam.assets.chunk_upload.status",
+        "action": "Mothership\\DAM\\Http\\Controllers\\API\\Asset\\ChunkUploadController@status",
+        "middleware": [
+            "api",
+            "auth:api",
+            "api.scope",
+            "accept.json",
+            "request.locale"
+        ],
+        "wheres": {
+            "id": "[0-9]+",
+            "uuid": "[\\da-fA-F]{8}-[\\da-fA-F]{4}-[\\da-fA-F]{4}-[\\da-fA-F]{4}-[\\da-fA-F]{12}"
+        },
+        "source": "packages/Mothership/DAM/src/Http/Controllers/Asset/ChunkUploadController.php"
     },
     {
         "id": "GET * /api/v1/rest/assets/{asset}/attachments/{attachment}/revisions",
@@ -16341,6 +16381,26 @@
         "source": "packages/Mothership/DAM/src/Http/Controllers/API/Asset/AssetController.php"
     },
     {
+        "id": "HEAD * /api/v1/rest/assets/upload/chunks/{uuid}",
+        "method": "HEAD",
+        "domain": "*",
+        "uri": "/api/v1/rest/assets/upload/chunks/{uuid}",
+        "name": "admin.api.dam.assets.chunk_upload.status",
+        "action": "Mothership\\DAM\\Http\\Controllers\\API\\Asset\\ChunkUploadController@status",
+        "middleware": [
+            "api",
+            "auth:api",
+            "api.scope",
+            "accept.json",
+            "request.locale"
+        ],
+        "wheres": {
+            "id": "[0-9]+",
+            "uuid": "[\\da-fA-F]{8}-[\\da-fA-F]{4}-[\\da-fA-F]{4}-[\\da-fA-F]{4}-[\\da-fA-F]{12}"
+        },
+        "source": "packages/Mothership/DAM/src/Http/Controllers/Asset/ChunkUploadController.php"
+    },
+    {
         "id": "HEAD * /api/v1/rest/assets/{asset}/attachments/{attachment}/revisions",
         "method": "HEAD",
         "domain": "*",
@@ -23641,6 +23701,45 @@
         "source": "packages/Mothership/DAM/src/Http/Controllers/API/Asset/AssetController.php"
     },
     {
+        "id": "POST * /api/v1/rest/assets/upload/chunks",
+        "method": "POST",
+        "domain": "*",
+        "uri": "/api/v1/rest/assets/upload/chunks",
+        "name": "admin.api.dam.assets.chunk_upload.initialize",
+        "action": "Mothership\\DAM\\Http\\Controllers\\API\\Asset\\ChunkUploadController@initialize",
+        "middleware": [
+            "api",
+            "auth:api",
+            "api.scope",
+            "accept.json",
+            "request.locale"
+        ],
+        "wheres": {
+            "id": "[0-9]+"
+        },
+        "source": "packages/Mothership/DAM/src/Http/Controllers/API/Asset/ChunkUploadController.php"
+    },
+    {
+        "id": "POST * /api/v1/rest/assets/upload/chunks/{uuid}/complete",
+        "method": "POST",
+        "domain": "*",
+        "uri": "/api/v1/rest/assets/upload/chunks/{uuid}/complete",
+        "name": "admin.api.dam.assets.chunk_upload.complete",
+        "action": "Mothership\\DAM\\Http\\Controllers\\API\\Asset\\ChunkUploadController@complete",
+        "middleware": [
+            "api",
+            "auth:api",
+            "api.scope",
+            "accept.json",
+            "request.locale"
+        ],
+        "wheres": {
+            "id": "[0-9]+",
+            "uuid": "[\\da-fA-F]{8}-[\\da-fA-F]{4}-[\\da-fA-F]{4}-[\\da-fA-F]{4}-[\\da-fA-F]{12}"
+        },
+        "source": "packages/Mothership/DAM/src/Http/Controllers/Asset/ChunkUploadController.php"
+    },
+    {
         "id": "POST * /api/v1/rest/assets/{asset}/attachments/{attachment}/promote",
         "method": "POST",
         "domain": "*",
@@ -26874,6 +26973,27 @@
             "id": "[0-9]+"
         },
         "source": "packages/Mothership/DAM/src/Http/Controllers/API/Asset/AssetController.php"
+    },
+    {
+        "id": "PUT * /api/v1/rest/assets/upload/chunks/{uuid}/{index}",
+        "method": "PUT",
+        "domain": "*",
+        "uri": "/api/v1/rest/assets/upload/chunks/{uuid}/{index}",
+        "name": "admin.api.dam.assets.chunk_upload.store",
+        "action": "Mothership\\DAM\\Http\\Controllers\\API\\Asset\\ChunkUploadController@store",
+        "middleware": [
+            "api",
+            "auth:api",
+            "api.scope",
+            "accept.json",
+            "request.locale"
+        ],
+        "wheres": {
+            "id": "[0-9]+",
+            "uuid": "[\\da-fA-F]{8}-[\\da-fA-F]{4}-[\\da-fA-F]{4}-[\\da-fA-F]{4}-[\\da-fA-F]{12}",
+            "index": "[0-9]+"
+        },
+        "source": "packages/Mothership/DAM/src/Http/Controllers/Asset/ChunkUploadController.php"
     },
     {
         "id": "PUT * /api/v1/rest/assets/{asset}/attachments/order",

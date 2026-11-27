@@ -55,6 +55,31 @@ return [
         'route' => 'admin.api.dam.library_tools.save',
         'sort'  => 3,
     ], [
+        'key'   => 'api.dam.assets.upload',
+        'name'  => 'dam::app.admin.acl.upload',
+        'route' => 'admin.api.dam.assets.chunk_upload.initialize',
+        'sort'  => 3,
+    ], [
+        'key'   => 'api.dam.assets.upload',
+        'name'  => 'dam::app.admin.acl.upload',
+        'route' => 'admin.api.dam.assets.chunk_upload.status',
+        'sort'  => 3,
+    ], [
+        'key'   => 'api.dam.assets.upload',
+        'name'  => 'dam::app.admin.acl.upload',
+        'route' => 'admin.api.dam.assets.chunk_upload.store',
+        'sort'  => 3,
+    ], [
+        'key'   => 'api.dam.assets.upload',
+        'name'  => 'dam::app.admin.acl.upload',
+        'route' => 'admin.api.dam.assets.chunk_upload.complete',
+        'sort'  => 3,
+    ], [
+        'key'   => 'api.dam.assets.upload',
+        'name'  => 'dam::app.admin.acl.upload',
+        'route' => 'admin.api.dam.assets.chunk_upload.cancel',
+        'sort'  => 3,
+    ], [
         'key'   => 'api.dam.assets.re-upload',
         'name'  => 'dam::app.admin.acl.re_upload',
         'route' => 'admin.api.dam.assets.reUpload',

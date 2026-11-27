@@ -1,9 +1,9 @@
 {
-  "accounted": 1615,
+  "accounted": 1621,
   "counts": {
-    "api": 302,
+    "api": 307,
     "authentication": 10,
-    "head-alias": 497,
+    "head-alias": 498,
     "health": 1,
     "internal": 761,
     "page": 2,
@@ -12,7 +12,7 @@
     "unsupported": 0
   },
   "missing": [],
-  "registered": 1615,
+  "registered": 1621,
   "routes": [
     {
       "id": "DELETE * /admin/ai-agent/agents/{id}",
@@ -333,6 +333,11 @@
       "id": "DELETE * /admin/settings/users/edit/{id}",
       "kind": "internal",
       "reason": "Browser/session, installer or framework implementation interface; not a supported bearer integration operation. Actual middleware remains in the route inventory."
+    },
+    {
+      "id": "DELETE * /api/v1/rest/assets/upload/chunks/{uuid}",
+      "kind": "api",
+      "reason": "Supported DAM integration operation: large files in parts."
     },
     {
       "id": "DELETE * /api/v1/rest/assets/{asset}/files/{file}",
@@ -2368,6 +2373,11 @@
       "id": "GET * /api/v1/rest/assets/signUrlDownload/{id}",
       "kind": "api",
       "reason": "Supported DAM integration operation."
+    },
+    {
+      "id": "GET * /api/v1/rest/assets/upload/chunks/{uuid}",
+      "kind": "api",
+      "reason": "Supported DAM integration operation: large files in parts."
     },
     {
       "id": "GET * /api/v1/rest/assets/{asset}/attachments/{attachment}/revisions",
@@ -4870,6 +4880,11 @@
       "reason": "Laravel HEAD alias; see corresponding GET identity."
     },
     {
+      "id": "HEAD * /api/v1/rest/assets/upload/chunks/{uuid}",
+      "kind": "head-alias",
+      "reason": "Laravel HEAD alias; see corresponding GET identity."
+    },
+    {
       "id": "HEAD * /api/v1/rest/assets/{asset}/attachments/{attachment}/revisions",
       "kind": "head-alias",
       "reason": "Laravel HEAD alias; see corresponding GET identity."
@@ -6985,6 +7000,16 @@
       "reason": "Supported DAM integration operation."
     },
     {
+      "id": "POST * /api/v1/rest/assets/upload/chunks",
+      "kind": "api",
+      "reason": "Supported DAM integration operation: large files in parts."
+    },
+    {
+      "id": "POST * /api/v1/rest/assets/upload/chunks/{uuid}/complete",
+      "kind": "api",
+      "reason": "Supported DAM integration operation: large files in parts."
+    },
+    {
       "id": "POST * /api/v1/rest/assets/{asset}/attachments/{attachment}/promote",
       "kind": "api",
       "reason": "Supported DAM integration operation."
@@ -7868,6 +7893,11 @@
       "id": "PUT * /api/v1/rest/assets/edit/{id}",
       "kind": "api",
       "reason": "Supported DAM integration operation."
+    },
+    {
+      "id": "PUT * /api/v1/rest/assets/upload/chunks/{uuid}/{index}",
+      "kind": "api",
+      "reason": "Supported DAM integration operation: large files in parts."
     },
     {
       "id": "PUT * /api/v1/rest/assets/{asset}/attachments/order",

@@ -57,9 +57,24 @@ runs one copy per open agent session, and at about 100 MB of PHP per copy that i
   arguments, then answers with the file's bytes and the result in the `X-Library-Result` header (base64 JSON). The
   launcher then checks `dest_dir` on this machine, streams into a hidden partial file there, verifies size and sha256,
   and names the copy under the server's rules (below). A mismatch writes nothing.
-- **Size ceiling: 96 MiB.** That is the deployed stack's PHP `upload_max_filesize`, the most one upload carries (`post_max_size` is 100M, under Cloudflare's ~100 MB body cap). A larger
-  file is refused before anything is sent; a file the server still finds too large is refused with HTTP 413. Fetches have
-  no such limit.
+- **Large files go up in parts.** A file over `MOTHERSHIP_MCP_CHUNKED_ABOVE_BYTES` (64 MiB) is too large for one
+  request through the site's proxy (~100 MB body cap), so `library_save` sends it through the REST chunked upload
+  ([chunked-upload.md](chunked-upload.md)), up to the app's upload limit (20 GiB):
+  1. The launcher reads the file once for its sha256, then posts the arguments with the JSON field `upload` set to
+     `{"name", "chunked": {"size", "sha256", "last_modified"}}` and no file (form-encoded).
+  2. Until the save's upload is completed the server answers **202** `{"upload": status}`: the `request_id` names one
+     create-only chunk upload into `folder_id`, opened on the first call and resumed on every later one.
+  3. The launcher sends each part the status does not list as received, straight from `local_path` (no snapshot), each
+     with its own `X-Chunk-SHA256`, then completes the upload, and polls the same call while the site assembles it.
+  4. Once completed, the server checks the stored bytes against the sent sha256 and makes the published asset this
+     save: the same claim, record, title, tags, links and `replayed` as a save in one request. A retry with the same
+     `request_id`, even from a new launcher process, resumes or replays it; a file that changes while it is sent is
+     refused.
+
+  Only a new asset (`folder_id`): `stack_asset_id` needs a file small enough for one request. A save in parts skips the
+  extension-content and playability checks of a one-request save, which need the whole file on the server before it is
+  published; the upload's own forbidden-file check applies. `library_vectorize` takes images up to 20 MiB and refuses a
+  larger file before anything is sent. Fetches have no size limit.
 - **The tool list cannot drift unnoticed.** `tests/Feature/MothershipMcpLibraryTest.php` compares the manifest with the
   server's code. After a change to the tools, regenerate it in a full checkout with `launcher.py --write-manifest`, which
   runs that checkout's stdio server; `launcher.py --check-manifest` exits 1 when the two differ.
@@ -67,7 +82,10 @@ runs one copy per open agent session, and at about 100 MB of PHP per copy that i
 | Launcher setting | Meaning |
 | --- | --- |
 | `MOTHERSHIP_URL` | Required: the site's address, such as `https://library.example`. Without it every tool call is refused with a message naming this setting; `initialize` and `tools/list` still answer. |
-| `MOTHERSHIP_MCP_MAX_FILE_BYTES` | The largest file `library_save` or `library_vectorize` sends (default 96 MiB). |
+| `MOTHERSHIP_MCP_MAX_FILE_BYTES` | The largest file `library_save` sends (default 20 GiB, the app's upload limit); a larger one is refused before anything is sent. |
+| `MOTHERSHIP_MCP_CHUNKED_ABOVE_BYTES` | A file above this size is saved in parts (default 64 MiB). Keep it under the single-request limit (96 MiB). |
+| `MOTHERSHIP_MCP_POLL_SECONDS` | How often a save in parts asks again while the site assembles the file (default 2). |
+| `MOTHERSHIP_MCP_ASSEMBLY_SECONDS` | How long a save in parts waits for assembly before it returns, asking for a retry with the same `request_id` (default 3600). |
 | `MOTHERSHIP_MCP_FETCH_DIR` | The folder copies go to when a call names no `dest_dir` (default `$TMPDIR/mothership-library`). |
 | `MOTHERSHIP_MCP_IDLE_SECONDS` | Idle time before the launcher returns to its idle size (default 15). |
 | `MOTHERSHIP_MCP_TIMEOUT_SECONDS` | How long one network read or write may stall before the attempt fails (default 120). |

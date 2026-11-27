@@ -8,6 +8,7 @@ use Mothership\DAM\Http\Controllers\API\Asset\AssetEmbedController;
 use Mothership\DAM\Http\Controllers\API\Asset\AssetRelationshipController;
 use Mothership\DAM\Http\Controllers\API\Asset\AttachmentController;
 use Mothership\DAM\Http\Controllers\API\Asset\AutomationRuleController;
+use Mothership\DAM\Http\Controllers\API\Asset\ChunkUploadController;
 use Mothership\DAM\Http\Controllers\API\Asset\CollectionController;
 use Mothership\DAM\Http\Controllers\API\Asset\CommentController;
 use Mothership\DAM\Http\Controllers\API\Asset\DirectoryController;
@@ -46,6 +47,15 @@ Route::group([
                 ->name('admin.api.dam.assets.'.$name.'model-thumbnail.store');
         });
     }
+
+    // A file over the single-request limit, in parts (docs/api/chunked-upload.md); the upload scope, like assets.upload.
+    Route::controller(ChunkUploadController::class)->prefix('assets/upload/chunks')->group(function () {
+        Route::post('', 'initialize')->name('admin.api.dam.assets.chunk_upload.initialize');
+        Route::get('/{uuid}', 'status')->whereUuid('uuid')->name('admin.api.dam.assets.chunk_upload.status');
+        Route::put('/{uuid}/{index}', 'store')->whereUuid('uuid')->whereNumber('index')->name('admin.api.dam.assets.chunk_upload.store');
+        Route::post('/{uuid}/complete', 'complete')->whereUuid('uuid')->name('admin.api.dam.assets.chunk_upload.complete');
+        Route::delete('/{uuid}', 'cancel')->whereUuid('uuid')->name('admin.api.dam.assets.chunk_upload.cancel');
+    });
 
     Route::controller(AssetController::class)->prefix('assets')->group(function () {
         Route::get('', 'index')->name('admin.api.dam.assets.index');
