@@ -21,7 +21,7 @@ return array_replace_recursive([
     'exports_directory_id'   => (int) env('SPHERESEAM_EXPORTS_DIRECTORY_ID', 0),
     'dam_directory_id'       => (int) env('SPHERESEAM_DAM_DIRECTORY_ID', env('STYLEPRESS_DAM_DIRECTORY_ID', 1)),
     // Upload ceilings in kilobytes, matching Laravel's `max:` rule. These are the REAL limits the
-    // image ships (dockerfiles/php.ini: upload_max_filesize 50M, post_max_size 55M; nginx already
+    // image ships (dockerfiles/php.ini: upload_max_filesize 96M, post_max_size 100M; nginx already
     // allows 200M), not the 32 MB placeholder they replaced on 2026-09-16. PHP discards a body
     // over post_max_size before Laravel sees it, so a too-large panorama used to surface as "The
     // panorama field is required", which named neither the size nor the limit. generate() posts
