@@ -156,7 +156,13 @@ return [
             'chunk_bytes'   => (int) env('DAM_UPLOAD_CHUNK_BYTES', 33_554_432),
             'stale_hours'   => (int) env('DAM_UPLOAD_STALE_HOURS', 12),
             'retry_attempts'=> (int) env('DAM_UPLOAD_RETRY_ATTEMPTS', 3),
-            'verbose_log'   => env('DAM_UPLOAD_VERBOSE_LOG', false),
+            // FinalizeChunkUpload assembles and hashes the whole file, minutes for a file of several GB. It runs on
+            // the panorama connection, whose retry_after (6 h) exceeds the job's timeout, on the video-preview queue
+            // its worker already consumes (as batch items do). On the default connection (retry_after 90 s) a
+            // second worker re-reserved an assembly still running, hit its lock and failed the upload.
+            'finalize_connection' => env('DAM_UPLOAD_FINALIZE_QUEUE_CONNECTION', 'panorama'),
+            'finalize_queue'      => env('DAM_UPLOAD_FINALIZE_QUEUE', 'video-preview'),
+            'verbose_log'         => env('DAM_UPLOAD_VERBOSE_LOG', false),
 
             // Finalize hashing (2026-09-26 perf fix): a part at most this size is read whole and verified
             // with openssl_digest() (hardware SHA-256); a larger one streams through hash_update() as before,

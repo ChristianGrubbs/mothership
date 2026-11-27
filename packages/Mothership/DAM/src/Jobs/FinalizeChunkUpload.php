@@ -45,6 +45,17 @@ class FinalizeChunkUpload implements ShouldBeUniqueUntilProcessing, ShouldQueue
     ) {
         $this->replaySessionId = ReplaySession::validate(value: $replaySessionId);
         $this->actor = $actor;
+        $this->onConnection(self::connectionName());
+        $this->onQueue((string) config('dam.explorer.upload.finalize_queue', 'video-preview'));
+    }
+
+    /**
+     * A connection whose retry_after exceeds $timeout (Config/dam.php explorer.upload.finalize_connection), or sync
+     * when the app runs every job inline (tests, a bare local checkout).
+     */
+    public static function connectionName(): string
+    {
+        return config('queue.default') === 'sync' ? 'sync' : (string) config('dam.explorer.upload.finalize_connection', 'panorama');
     }
 
     public function uniqueId(): string

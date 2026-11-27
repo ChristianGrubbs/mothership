@@ -95,6 +95,22 @@ beforeEach(function () {
     };
 });
 
+// A finalize of several GB outlives the default connection's 90-second retry_after: a second worker re-reserved it,
+// hit the first one's lock and failed the upload. It goes where retry_after exceeds its timeout, like batch items.
+it('queues finalization on the long-job connection unless jobs run inline', function () {
+    Queue::fake();
+    $upload = ($this->initializeCompletionUpload)();
+    ($this->uploadAllCompletionParts)($upload);
+    config(['queue.default' => 'redis']);
+    $this->postJson(route('admin.dam.assets.chunk-upload.complete', $upload->uuid))->assertAccepted();
+
+    Queue::assertPushed(FinalizeChunkUpload::class, fn (FinalizeChunkUpload $job) => $job->connection === 'panorama' && $job->queue === 'video-preview');
+    expect(config('queue.connections.panorama.retry_after'))->toBeGreaterThan((new FinalizeChunkUpload(uploadId: 1))->timeout);
+
+    config(['queue.default' => 'sync']);
+    expect((new FinalizeChunkUpload(uploadId: 1))->connection)->toBe('sync');
+});
+
 it('retains the initiating replay session through serialized chunk finalization without inventing a worker session', function () {
     config(['dam_events.enabled'    => true, 'dam_events.posthog.enabled' => true, 'dam_events.posthog.key' => 'fixture',
         'dam_events.replay.enabled' => true]);
