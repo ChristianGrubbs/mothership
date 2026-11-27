@@ -24,8 +24,8 @@ CHECKOUT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 SERVER_COMMAND = ("artisan", "mcp:start", "mothership")
 ROUTE_PREFIX = "/api/v1/rest/library/tools/"
 TOOL_PREFIX = "library_"
-# The deployed stack's PHP upload_max_filesize: the largest file one HTTPS upload carries.
-DEFAULT_MAX_FILE_BYTES = 50 * 1024 * 1024
+# The deployed stack's PHP upload_max_filesize (96M; post_max_size 100M, under Cloudflare's ~100 MB body cap): the largest file one HTTPS upload carries.
+DEFAULT_MAX_FILE_BYTES = 96 * 1024 * 1024
 CHUNK_BYTES = 1024 * 1024
 # LibraryOperations::MAX_NAME_TRIES: how many name, name-2, name-3 ... a copy tries before giving up.
 MAX_NAME_TRIES = 1000

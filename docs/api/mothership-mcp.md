@@ -57,7 +57,7 @@ runs one copy per open agent session, and at about 100 MB of PHP per copy that i
   arguments, then answers with the file's bytes and the result in the `X-Library-Result` header (base64 JSON). The
   launcher then checks `dest_dir` on this machine, streams into a hidden partial file there, verifies size and sha256,
   and names the copy under the server's rules (below). A mismatch writes nothing.
-- **Size ceiling: 50 MiB.** That is the deployed stack's PHP `upload_max_filesize`, the most one upload carries. A larger
+- **Size ceiling: 96 MiB.** That is the deployed stack's PHP `upload_max_filesize`, the most one upload carries (`post_max_size` is 100M, under Cloudflare's ~100 MB body cap). A larger
   file is refused before anything is sent; a file the server still finds too large is refused with HTTP 413. Fetches have
   no such limit.
 - **The tool list cannot drift unnoticed.** `tests/Feature/MothershipMcpLibraryTest.php` compares the manifest with the
@@ -67,7 +67,7 @@ runs one copy per open agent session, and at about 100 MB of PHP per copy that i
 | Launcher setting | Meaning |
 | --- | --- |
 | `MOTHERSHIP_URL` | Required: the site's address, such as `https://library.example`. Without it every tool call is refused with a message naming this setting; `initialize` and `tools/list` still answer. |
-| `MOTHERSHIP_MCP_MAX_FILE_BYTES` | The largest file `library_save` or `library_vectorize` sends (default 50 MiB). |
+| `MOTHERSHIP_MCP_MAX_FILE_BYTES` | The largest file `library_save` or `library_vectorize` sends (default 96 MiB). |
 | `MOTHERSHIP_MCP_FETCH_DIR` | The folder copies go to when a call names no `dest_dir` (default `$TMPDIR/mothership-library`). |
 | `MOTHERSHIP_MCP_IDLE_SECONDS` | Idle time before the launcher returns to its idle size (default 15). |
 | `MOTHERSHIP_MCP_TIMEOUT_SECONDS` | How long one network read or write may stall before the attempt fails (default 120). |
